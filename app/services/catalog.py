@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 from app.connectors.ckan import CkanClient
-from app.core.envelope import Freshness, Pagination, Source, success_envelope
+from app.core.envelope import Freshness, Pagination, Source, error_envelope, success_envelope
+from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
 from app.core.validation import validate_limit
 from app.storage.catalog import CatalogRepository
@@ -35,7 +36,10 @@ class CatalogService:
         limit: int | None = None,
     ) -> dict[str, Any]:
         safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
-        result = await self.client.package_search(query=query, rows=safe_limit, formats=formats)
+        try:
+            result = await self.client.package_search(query=query, rows=safe_limit, formats=formats)
+        except SourceRateLimitExceeded as exc:
+            return self._rate_limited("CKAN package_search", exc)
         datasets = result.get("results", [])
         for dataset in datasets:
             self.repository.upsert_dataset(dataset)
@@ -50,7 +54,10 @@ class CatalogService:
         )
 
     async def get_dataset(self, dataset_id: str) -> dict[str, Any]:
-        dataset = await self.client.package_show(dataset_id)
+        try:
+            dataset = await self.client.package_show(dataset_id)
+        except SourceRateLimitExceeded as exc:
+            return self._rate_limited("CKAN package_show", exc)
         self.repository.upsert_dataset(dataset)
         return success_envelope(
             summary=f"Dataset '{dataset.get('title') or dataset_id}' metadata retrieved.",
@@ -61,7 +68,10 @@ class CatalogService:
         )
 
     async def get_resource_schema(self, resource_id: str) -> dict[str, Any]:
-        result = await self.client.datastore_search(resource_id=resource_id, limit=0)
+        try:
+            result = await self.client.datastore_search(resource_id=resource_id, limit=0)
+        except SourceRateLimitExceeded as exc:
+            return self._rate_limited("CKAN datastore_search", exc)
         fields = result.get("fields", [])
         return success_envelope(
             summary=f"Resource '{resource_id}' schema has {len(fields)} field(s).",
@@ -79,11 +89,14 @@ class CatalogService:
         limit: int | None = None,
     ) -> dict[str, Any]:
         safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
-        result = await self.client.datastore_search(
-            resource_id=resource_id,
-            filters=filters,
-            limit=safe_limit,
-        )
+        try:
+            result = await self.client.datastore_search(
+                resource_id=resource_id,
+                filters=filters,
+                limit=safe_limit,
+            )
+        except SourceRateLimitExceeded as exc:
+            return self._rate_limited("CKAN datastore_search", exc)
         records = result.get("records", [])
         return success_envelope(
             summary=f"{len(records)} record(s) returned from resource '{resource_id}'.",
@@ -120,3 +133,14 @@ class CatalogService:
             for resource in dataset.get("resources", [])
         ]
         return detail
+
+    def _rate_limited(self, action: str, exc: SourceRateLimitExceeded) -> dict[str, Any]:
+        retry_after = round(exc.retry_after_seconds, 3)
+        return error_envelope(
+            summary=f"{action} is temporarily rate limited.",
+            warning=f"Local back-pressure is active for {exc.source}; retry after {retry_after} seconds.",
+            sources=[IBB_SOURCE],
+            freshness_status="stale",
+            data=[{"source": exc.source, "retry_after_seconds": retry_after}],
+            limits=[f"rate_limited_source={exc.source}", f"retry_after_seconds={retry_after}"],
+        )

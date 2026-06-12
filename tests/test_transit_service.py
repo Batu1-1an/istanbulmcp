@@ -1,5 +1,6 @@
 import pytest
 
+from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
 from app.services.transit import TransitService
 from app.storage.geo import GeoRepository
@@ -32,6 +33,14 @@ class FailingIett:
 
     async def stops_for_line(self, line_code):
         raise RuntimeError("down")
+
+
+class RateLimitedIett:
+    async def line_info(self, _line_code):
+        raise SourceRateLimitExceeded(source="iett", retry_after_seconds=2.5)
+
+    async def stops_for_line(self, _line_code):
+        raise SourceRateLimitExceeded(source="iett", retry_after_seconds=2.5)
 
 
 def service(tmp_path):
@@ -75,3 +84,20 @@ async def test_line_info_failure_returns_structured_error(tmp_path):
     assert result["ok"] is False
     assert result["freshness"]["status"] == "broken"
     assert result["warnings"]
+
+
+@pytest.mark.asyncio
+async def test_line_info_rate_limit_returns_retry_after_envelope(tmp_path):
+    settings = Settings(database_path=tmp_path / "transit.sqlite3")
+    svc = TransitService(
+        settings=settings,
+        iett_client=RateLimitedIett(),
+        geo_repository=GeoRepository(settings.database_path),
+    )
+
+    result = await svc.line_info("34A")
+
+    assert result["ok"] is False
+    assert result["freshness"]["status"] == "stale"
+    assert result["data"][0]["source"] == "iett"
+    assert result["data"][0]["retry_after_seconds"] == 2.5

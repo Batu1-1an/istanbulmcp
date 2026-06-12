@@ -16,6 +16,12 @@ class Settings:
     default_limit: int = 20
     max_limit: int = 100
     request_timeout_seconds: float = 15.0
+    ckan_rate_capacity: int = 6
+    ckan_rate_refill_per_second: float = 2.0
+    ckan_rate_max_wait_seconds: float = 0.5
+    iett_rate_capacity: int = 2
+    iett_rate_refill_per_second: float = 0.5
+    iett_rate_max_wait_seconds: float = 0.2
 
 
 def _int_env(name: str, default: int) -> int:
@@ -43,4 +49,10 @@ def get_settings() -> Settings:
         default_limit=_int_env("DEFAULT_LIMIT", 20),
         max_limit=_int_env("MAX_LIMIT", 100),
         request_timeout_seconds=_float_env("REQUEST_TIMEOUT_SECONDS", 15.0),
+        ckan_rate_capacity=_int_env("CKAN_RATE_CAPACITY", 6),
+        ckan_rate_refill_per_second=_float_env("CKAN_RATE_REFILL_PER_SECOND", 2.0),
+        ckan_rate_max_wait_seconds=_float_env("CKAN_RATE_MAX_WAIT_SECONDS", 0.5),
+        iett_rate_capacity=_int_env("IETT_RATE_CAPACITY", 2),
+        iett_rate_refill_per_second=_float_env("IETT_RATE_REFILL_PER_SECOND", 0.5),
+        iett_rate_max_wait_seconds=_float_env("IETT_RATE_MAX_WAIT_SECONDS", 0.2),
     )

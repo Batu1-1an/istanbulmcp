@@ -4,6 +4,7 @@ from typing import Any
 
 from app.connectors.iett import IettClient
 from app.core.envelope import Freshness, Source, error_envelope, success_envelope
+from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
 from app.storage.geo import GeoRepository
 
@@ -30,6 +31,8 @@ class TransitService:
         safe_line_code = line_code.strip().upper()
         try:
             rows = await self.iett.line_info(safe_line_code)
+        except SourceRateLimitExceeded as exc:
+            return self._rate_limited("IETT line info", exc)
         except Exception as exc:
             return error_envelope(
                 summary=f"IETT line info is unavailable for {safe_line_code}.",
@@ -58,6 +61,8 @@ class TransitService:
         safe_line_code = line_code.strip().upper()
         try:
             rows = await self.iett.stops_for_line(safe_line_code)
+        except SourceRateLimitExceeded as exc:
+            return self._rate_limited("IETT stops", exc)
         except Exception as exc:
             return error_envelope(
                 summary=f"IETT stops are unavailable for line {safe_line_code}.",
@@ -114,3 +119,14 @@ class TransitService:
         if value in (None, ""):
             return None
         return float(value)
+
+    def _rate_limited(self, action: str, exc: SourceRateLimitExceeded) -> dict[str, Any]:
+        retry_after = round(exc.retry_after_seconds, 3)
+        return error_envelope(
+            summary=f"{action} is temporarily rate limited.",
+            warning=f"Local back-pressure is active for {exc.source}; retry after {retry_after} seconds.",
+            sources=[IETT_SOURCE],
+            freshness_status="stale",
+            data=[{"source": exc.source, "retry_after_seconds": retry_after}],
+            limits=[f"rate_limited_source={exc.source}", f"retry_after_seconds={retry_after}"],
+        )

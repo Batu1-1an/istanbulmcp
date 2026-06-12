@@ -2,9 +2,17 @@
 
 All tools are read-only and return a standard envelope with `summary`, `data`, `freshness`, `sources`, `limits`, and `warnings`.
 
+When local source back-pressure is active, affected tools return `ok=false` with `retry_after_seconds` in `data[0]`.
+
 ## Core
 
 - `istanbul_health()` — service and SQLite readiness.
+
+HTTP status endpoints:
+
+- `GET /healthz`
+- `GET /readyz`
+- `GET /status` — version, tool inventory, source groups, and runtime limits.
 
 ## Catalog
 

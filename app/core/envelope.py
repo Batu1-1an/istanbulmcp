@@ -79,12 +79,16 @@ def error_envelope(
     warning: str,
     sources: list[Source] | None = None,
     freshness_status: FreshnessStatus = "broken",
+    data: list[dict[str, Any]] | None = None,
+    limits: list[str] | None = None,
 ) -> dict[str, Any]:
     envelope = ResponseEnvelope(
         ok=False,
         summary=summary,
+        data=data or [],
         freshness=Freshness(status=freshness_status),
         sources=sources or [],
+        limits=limits or [],
         warnings=[warning],
     )
     return envelope.model_dump(mode="json")

@@ -2,6 +2,7 @@ import httpx
 import pytest
 
 from app.connectors.ckan import CkanClient
+from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
 from app.services.catalog import CatalogService
 from app.storage.catalog import CatalogRepository
@@ -26,6 +27,17 @@ def _dataset():
             }
         ],
     }
+
+
+class RateLimitedCkan:
+    async def package_search(self, **_kwargs):
+        raise SourceRateLimitExceeded(source="ckan", retry_after_seconds=1.25)
+
+    async def package_show(self, _dataset_id):
+        raise SourceRateLimitExceeded(source="ckan", retry_after_seconds=1.25)
+
+    async def datastore_search(self, **_kwargs):
+        raise SourceRateLimitExceeded(source="ckan", retry_after_seconds=1.25)
 
 
 @pytest.mark.asyncio
@@ -76,3 +88,20 @@ async def test_query_resource_returns_records(tmp_path):
 
     assert result["data"] == [{"ILCE": "Kadikoy"}]
     assert result["pagination"]["total_estimate"] == 1
+
+
+@pytest.mark.asyncio
+async def test_search_datasets_rate_limit_returns_retry_after_envelope(tmp_path):
+    settings = Settings(database_path=tmp_path / "catalog.sqlite3")
+    service = CatalogService(
+        settings=settings,
+        client=RateLimitedCkan(),
+        repository=CatalogRepository(settings.database_path),
+    )
+
+    result = await service.search_datasets(query="trafik", limit=5)
+
+    assert result["ok"] is False
+    assert result["freshness"]["status"] == "stale"
+    assert result["data"][0]["source"] == "ckan"
+    assert result["data"][0]["retry_after_seconds"] == 1.25

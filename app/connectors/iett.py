@@ -7,6 +7,9 @@ from typing import Any
 
 import httpx
 
+from app.core.rate_limit import RateLimiter
+from app.core.source_limits import iett_rate_limiter
+
 
 class IettSoapError(RuntimeError):
     pass
@@ -20,11 +23,13 @@ class IettClient:
         ibb_url: str = "https://api.ibb.gov.tr/iett/ibb/ibb.asmx",
         timeout: float = 20.0,
         http_client: httpx.AsyncClient | None = None,
+        rate_limiter: RateLimiter | None = None,
     ):
         self.ulasim_url = ulasim_url
         self.ibb_url = ibb_url
         self.timeout = timeout
         self._client = http_client
+        self._rate_limiter = rate_limiter or iett_rate_limiter()
 
     async def line_info(self, line_code: str) -> list[dict[str, Any]]:
         text = await self._soap_call(
@@ -58,11 +63,14 @@ class IettClient:
             "Content-Type": "text/xml; charset=utf-8",
             "SOAPAction": f"http://tempuri.org/{method}",
         }
+        await self._rate_limiter.acquire("iett")
         if self._client is None:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(url, content=body, headers=headers)
         else:
             response = await self._client.post(url, content=body, headers=headers)
+        if response.status_code == 429:
+            self._rate_limiter.penalize(_retry_after_seconds(response.headers.get("retry-after")))
         response.raise_for_status()
         root = ET.fromstring(response.text)
         result = self._find_result(root, method)
@@ -98,3 +106,12 @@ class IettClient:
 
     def _local_name(self, tag: str) -> str:
         return tag.split("}", 1)[-1]
+
+
+def _retry_after_seconds(value: str | None) -> float:
+    if not value:
+        return 1.0
+    try:
+        return max(0.0, float(value))
+    except ValueError:
+        return 1.0

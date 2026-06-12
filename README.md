@@ -16,7 +16,16 @@ The local server exposes:
 
 - `GET /healthz`
 - `GET /readyz`
-- `POST /mcp`
+- `GET /status`
+- `POST /mcp/` (canonical Streamable HTTP MCP endpoint; `/mcp` redirects to `/mcp/`)
+
+Quick remote smoke test:
+
+```bash
+curl -fsS https://istanbulmcp-production.up.railway.app/healthz
+curl -fsS https://istanbulmcp-production.up.railway.app/status
+curl -i https://istanbulmcp-production.up.railway.app/mcp
+```
 
 ## Tools
 

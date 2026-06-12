@@ -15,4 +15,31 @@ Set environment variables from `.env.example` as needed. At minimum, Railway sho
 
 - `/healthz` confirms the process is up.
 - `/readyz` initializes/checks SQLite and returns readiness details.
-- `/mcp` is the Streamable HTTP MCP endpoint.
+- `/status` returns version, tool inventory, source group, and runtime limits.
+- `/mcp/` is the canonical Streamable HTTP MCP endpoint.
+- `/mcp` returns a relative `308` redirect to `/mcp/`.
+
+## Production Smoke Checks
+
+Replace `BASE_URL` if Railway assigns a new domain.
+
+```bash
+BASE_URL=https://istanbulmcp-production.up.railway.app
+
+curl -fsS "$BASE_URL/healthz"
+curl -fsS "$BASE_URL/readyz"
+curl -fsS "$BASE_URL/status"
+curl -i "$BASE_URL/mcp"
+
+curl -fsS "$BASE_URL/mcp/" \
+  -H 'accept: application/json, text/event-stream' \
+  -H 'content-type: application/json' \
+  --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"smoke","version":"1.0"}}}'
+
+curl -i "$BASE_URL/mcp/" \
+  -H 'accept: application/json, text/event-stream' \
+  -H 'content-type: application/json' \
+  --data '{"jsonrpc":"2.0","id":null,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"smoke","version":"1.0"}}}'
+```
+
+The final command should return HTTP `400` with JSON-RPC error code `-32600`.
