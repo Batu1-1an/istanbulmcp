@@ -10,7 +10,7 @@
 |-------|------|------|--------------|
 | 1 | MCP Foundation | Complete — remote server skeleton, storage base, envelope, validation, and health checks | CORE-01..CORE-04 |
 | 2 | Catalog Core | Complete — CKAN catalog ingestion, search, metadata, schema, and guarded querying | CAT-01..CAT-04 |
-| 3 | Geo & City Services | Normalized geo search plus parking, traffic, metro, and air-quality tools | GEO-01..GEO-03, CITY-01..CITY-04 |
+| 3 | Geo & City Services | Complete — normalized geo search plus parking, traffic, metro, and air-quality tools | GEO-01..GEO-03, CITY-01..CITY-04 |
 | 4 | Transit & Release | Narrow IETT SOAP integration, tests, docs, and Railway release | TRN-01..TRN-03, REL-01..REL-03 |
 
 ## Phase Details
@@ -47,6 +47,7 @@
 
 **Goal:** Deliver the main user-facing Istanbul city-data demo path.
 **Mode:** mvp
+**Status:** Complete
 
 **Requirements:** GEO-01, GEO-02, GEO-03, CITY-01, CITY-02, CITY-03, CITY-04
 
@@ -75,4 +76,4 @@
 All v1 requirements are mapped in `.planning/REQUIREMENTS.md`; coverage is 21/21.
 
 ---
-*Last updated: 2026-06-12 after Phase 2 completion*
+*Last updated: 2026-06-12 after Phase 3 completion*
