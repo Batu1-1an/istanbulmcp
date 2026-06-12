@@ -4,77 +4,44 @@
 **Mode:** Vertical MVP
 **Granularity:** Coarse
 
-## Phase Overview
+## Milestones
 
-| Phase | Name | Goal | Requirements |
-|-------|------|------|--------------|
-| 1 | MCP Foundation | Complete — remote server skeleton, storage base, envelope, validation, and health checks | CORE-01..CORE-04 |
-| 2 | Catalog Core | Complete — CKAN catalog ingestion, search, metadata, schema, and guarded querying | CAT-01..CAT-04 |
-| 3 | Geo & City Services | Complete — normalized geo search plus parking, traffic, metro, and air-quality tools | GEO-01..GEO-03, CITY-01..CITY-04 |
-| 4 | Transit & Release | Complete — narrow IETT SOAP integration, tests, docs, and Railway release config | TRN-01..TRN-03, REL-01..REL-03 |
+- ✅ **v1.0 MVP** — Phases 1-4 shipped 2026-06-12
+- 📋 **v1.1 Operations & Discovery** — candidate next milestone
 
-## Phase Details
+## Phases
 
-### Phase 1: MCP Foundation
+<details>
+<summary>✅ v1.0 MVP (Phases 1-4) — SHIPPED 2026-06-12</summary>
 
-**Goal:** Establish the deployable FastMCP server and shared safety contracts.
-**Mode:** mvp
-**Status:** Complete
+- [x] Phase 1: MCP Foundation (1/1 plans) — remote server, shared envelope, validation, SQLite WAL, health checks
+- [x] Phase 2: Catalog Core (1/1 plans) — CKAN search, dataset metadata, schema, guarded DataStore query
+- [x] Phase 3: Geo & City Services (1/1 plans) — radius/bbox geo search, parking, traffic, Metro, air quality
+- [x] Phase 4: Transit & Release (1/1 plans) — IETT line/stops, release docs, Docker/Railway config
 
-**Requirements:** CORE-01, CORE-02, CORE-03, CORE-04
+Archive:
+- `.planning/milestones/v1.0-ROADMAP.md`
+- `.planning/milestones/v1.0-REQUIREMENTS.md`
+- `.planning/milestones/v1.0-MILESTONE-AUDIT.md`
 
-**Success Criteria**:
-1. MCP Inspector or an MCP client can list and call at least one tool through `/mcp`.
-2. `/healthz` and `/readyz` return meaningful service/cache status.
-3. Response envelope, freshness model, input validation, and limits are implemented and tested.
-4. SQLite starts in WAL mode with initial migrations.
+</details>
 
-### Phase 2: Catalog Core
+## Progress
 
-**Goal:** Make the IBB open-data catalog searchable and inspectable.
-**Mode:** mvp
-**Status:** Complete
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 1. MCP Foundation | v1.0 | 1/1 | Complete | 2026-06-12 |
+| 2. Catalog Core | v1.0 | 1/1 | Complete | 2026-06-12 |
+| 3. Geo & City Services | v1.0 | 1/1 | Complete | 2026-06-12 |
+| 4. Transit & Release | v1.0 | 1/1 | Complete | 2026-06-12 |
 
-**Requirements:** CAT-01, CAT-02, CAT-03, CAT-04
+## Candidate Backlog
 
-**Success Criteria**:
-1. CKAN package/resource snapshots are stored locally.
-2. Dataset search returns relevant results with source and freshness.
-3. Dataset and resource metadata tools expose formats, license, URLs, and schema when available.
-4. DataStore querying is guarded by filters, limits, and safe errors.
-
-### Phase 3: Geo & City Services
-
-**Goal:** Deliver the main user-facing Istanbul city-data demo path.
-**Mode:** mvp
-**Status:** Complete
-
-**Requirements:** GEO-01, GEO-02, GEO-03, CITY-01, CITY-02, CITY-03, CITY-04
-
-**Success Criteria**:
-1. Radius and bbox search return normalized city features ordered by distance or geometry match.
-2. ISPark nearby returns parking data with capacity/availability when provided.
-3. Traffic status and Metro station tools work from validated REST/XML/JSON sources.
-4. Air-quality tools report station/readings plus clear warnings when readings are stale or null.
-
-### Phase 4: Transit & Release
-
-**Goal:** Add narrow IETT transit capability and ship a documented Railway MVP.
-**Mode:** mvp
-**Status:** Complete
-
-**Requirements:** TRN-01, TRN-02, TRN-03, REL-01, REL-02, REL-03
-
-**Success Criteria**:
-1. IETT line info and stops-for-line tools work for validated sample lines.
-2. SOAP failures and nightly downtime produce structured errors or stale fallback.
-3. README, tool reference, `.env.example`, and Railway deploy notes are complete.
-4. Unit tests cover core connectors, parsers, validation, envelope, freshness, and error states.
-5. Railway deploy serves `/mcp`, `/healthz`, and `/readyz`.
-
-## Traceability
-
-All v1 requirements are mapped in `.planning/REQUIREMENTS.md`; coverage is 21/21.
+- Live Railway deploy after `railway login` and `railway link`.
+- Istanbul place-name resolution.
+- Source-health and freshness diagnostics.
+- Deeper GTFS route/trip support.
+- Re-evaluate ISbike only if the source returns usable station data.
 
 ---
-*Last updated: 2026-06-12 after Phase 4 completion*
+*Last updated: 2026-06-12 after v1.0 milestone*

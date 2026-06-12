@@ -12,16 +12,19 @@ AI assistants should answer Istanbul city-data questions with real sources, fres
 
 ### Validated
 
-(None yet — ship to validate)
+- ✓ Remote MCP endpoint works from MCP clients using Streamable HTTP — v1.0
+- ✓ IBB CKAN catalog can be searched and inspected — v1.0
+- ✓ Responses use a consistent source/freshness/limits envelope — v1.0
+- ✓ Geo search supports radius and bbox queries over normalized city features — v1.0
+- ✓ MVP city services cover ISPark parking, traffic status, Metro stations, air quality stations/readings where available, and basic IETT line/stop data — v1.0
+- ✓ MVP includes Railway deployment configuration and documented safe defaults — v1.0
 
 ### Active
 
-- [ ] Remote MCP endpoint works from MCP clients using Streamable HTTP.
-- [ ] IBB CKAN catalog can be searched and inspected.
-- [ ] Responses use a consistent source/freshness/limits envelope.
-- [ ] Geo search supports radius and bbox queries over normalized city features.
-- [ ] MVP city services cover ISPark parking, traffic status, Metro stations, air quality stations/readings where available, and basic IETT line/stop data.
-- [ ] MVP deploys to Railway with documented setup and safe defaults.
+- [ ] Re-authenticate and link Railway, then run live Railway deployment verification.
+- [ ] Resolve common Istanbul place names to coordinates.
+- [ ] Add source-health and freshness diagnostics for operators.
+- [ ] Evaluate deeper GTFS route/trip support for transit v2.
 
 ### Out of Scope
 
@@ -33,14 +36,14 @@ AI assistants should answer Istanbul city-data questions with real sources, fres
 
 ## Context
 
-The repository currently contains research and planning documents only. Live validation found that CKAN, ISPark, traffic, Metro, and air-quality station endpoints are reachable without auth, while SOAP is limited mainly to IETT. ISbike was documented as useful but returned empty data during validation, so it should be optional rather than MVP-blocking.
+v1.0 shipped a Python/FastMCP remote MCP server with 2,067 lines of Python across app and test code. The implementation includes CKAN catalog tools, normalized geo storage, ISPark parking, Istanbul traffic, Metro station, air-quality, and narrow IETT line/stop tools. Unit tests and live source smoke checks passed; Docker runtime was verified. Live Railway deployment remains an operator task because local Railway auth returned `invalid_grant` and no project is currently linked.
 
 The agreed stack is Python 3.11+, FastMCP/Python MCP SDK, `httpx`, `zeep` for IETT SOAP only, SQLite WAL with FTS5 and RTree, `pydantic`, `pytest`, and Railway. `ctx7` documentation lookup confirmed the official Python MCP SDK exposes FastMCP tools/resources/prompts and Streamable HTTP with stateless JSON-friendly deployment patterns.
 
 ## Constraints
 
 - **Tech stack**: Python/FastMCP first — strongest fit for SOAP, CSV, GTFS, and geo processing.
-- **Deployment**: Railway — CLI is authenticated locally and should be used for deploy workflows.
+- **Deployment**: Railway — target platform; run `railway login` and `railway link` before live deploy workflows.
 - **Reliability**: Every tool must return source, freshness, limits, and warnings when relevant.
 - **Safety**: Read-only MCP tools; no unrestricted SQL; validate radius, bbox, limits, and user inputs.
 - **Testing**: Unit tests should use fixtures rather than live IBB endpoints.
@@ -50,12 +53,12 @@ The agreed stack is Python 3.11+, FastMCP/Python MCP SDK, `httpx`, `zeep` for IE
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Build MVP as "City Data Core" | Keeps first release useful without drowning in 550 datasets | — Pending |
-| Use Python + FastMCP | Official SDK supports tools/resources/prompts and Streamable HTTP; Python fits data processing | — Pending |
-| Use Railway for deploy | Matches project goal of one remote URL and local CLI is authenticated | — Pending |
-| Use SQLite for MVP | WAL, FTS5, and RTree cover the first data volume without PostGIS overhead | — Pending |
-| Treat ISbike as optional | Live service returned empty data during validation | — Pending |
-| Keep IETT SOAP narrow | SOAP risk is real but limited to IETT; avoid broad realtime transit scope | — Pending |
+| Build MVP as "City Data Core" | Keeps first release useful without drowning in 550 datasets | ✓ Good |
+| Use Python + FastMCP | Official SDK supports tools/resources/prompts and Streamable HTTP; Python fits data processing | ✓ Good |
+| Use Railway for deploy | Matches project goal of one remote URL, but local auth must be refreshed | ⚠ Revisit auth |
+| Use SQLite for MVP | WAL, FTS5, and RTree cover the first data volume without PostGIS overhead | ✓ Good |
+| Treat ISbike as optional | Live service returned empty data during validation | ✓ Good |
+| Keep IETT SOAP narrow | SOAP risk is real but limited to IETT; avoid broad realtime transit scope | ✓ Good |
 
 ## Evolution
 
@@ -75,4 +78,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state.
 
 ---
-*Last updated: 2026-06-12 after initialization*
+*Last updated: 2026-06-12 after v1.0 milestone*
