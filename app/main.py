@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+
 import uvicorn
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
@@ -20,12 +22,18 @@ async def readyz(_request):
 
 
 def create_app() -> Starlette:
+    @contextlib.asynccontextmanager
+    async def lifespan(_app: Starlette):
+        async with mcp.session_manager.run():
+            yield
+
     return Starlette(
         routes=[
             Route("/healthz", healthz, methods=["GET"]),
             Route("/readyz", readyz, methods=["GET"]),
             Mount("/mcp", app=mcp.streamable_http_app()),
-        ]
+        ],
+        lifespan=lifespan,
     )
 
 
