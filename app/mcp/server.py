@@ -13,6 +13,7 @@ settings = get_settings()
 
 mcp = FastMCP(
     "istanbul-mcp",
+    host=settings.host,
     stateless_http=True,
     json_response=True,
     streamable_http_path="/",
