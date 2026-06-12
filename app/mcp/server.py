@@ -4,6 +4,7 @@ from mcp.server.fastmcp import FastMCP
 
 from app.core.envelope import Freshness, Source, success_envelope
 from app.core.settings import get_settings
+from app.services.city import CityService
 from app.services.catalog import CatalogService
 from app.storage.db import readiness
 
@@ -79,3 +80,89 @@ async def istanbul_query_resource(
         filters=filters,
         limit=limit,
     )
+
+
+@mcp.tool()
+async def istanbul_nearby(
+    lat: float,
+    lon: float,
+    types: list[str] | None = None,
+    radius_m: int = 1000,
+    limit: int | None = None,
+) -> dict:
+    """Find nearby Istanbul city features by coordinate."""
+    return await CityService(settings=get_settings()).nearby(
+        lat=lat,
+        lon=lon,
+        types=types,
+        radius_m=radius_m,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+async def istanbul_bbox_search(
+    bbox: list[float],
+    types: list[str] | None = None,
+    limit: int | None = None,
+) -> dict:
+    """Find Istanbul city features inside a bbox."""
+    return await CityService(settings=get_settings()).bbox_search(
+        bbox=bbox,
+        types=types,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+async def istanbul_parking_nearby(
+    lat: float,
+    lon: float,
+    radius_m: int = 1000,
+    limit: int | None = None,
+) -> dict:
+    """Find nearby ISPark parking lots."""
+    return await CityService(settings=get_settings()).parking_nearby(
+        lat=lat,
+        lon=lon,
+        radius_m=radius_m,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+async def istanbul_metro_stations_nearby(
+    lat: float,
+    lon: float,
+    radius_m: int = 1000,
+    limit: int | None = None,
+) -> dict:
+    """Find nearby Metro Istanbul stations."""
+    return await CityService(settings=get_settings()).metro_stations_nearby(
+        lat=lat,
+        lon=lon,
+        radius_m=radius_m,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+async def istanbul_air_quality_nearby(
+    lat: float,
+    lon: float,
+    radius_m: int = 5000,
+    limit: int | None = None,
+) -> dict:
+    """Find nearby air quality stations and latest readings."""
+    return await CityService(settings=get_settings()).air_quality_nearby(
+        lat=lat,
+        lon=lon,
+        radius_m=radius_m,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+async def istanbul_traffic_status() -> dict:
+    """Return Istanbul citywide traffic index."""
+    return await CityService(settings=get_settings()).traffic_status()

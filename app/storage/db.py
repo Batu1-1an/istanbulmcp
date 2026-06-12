@@ -81,6 +81,30 @@ def init_database(database_path: Path) -> dict[str, str | int]:
               description,
               tags
             );
+
+            CREATE TABLE IF NOT EXISTS geo_features (
+              id TEXT PRIMARY KEY,
+              source TEXT NOT NULL,
+              feature_type TEXT NOT NULL,
+              source_id TEXT NOT NULL,
+              name TEXT NOT NULL,
+              lat REAL NOT NULL,
+              lon REAL NOT NULL,
+              geometry_json TEXT,
+              district TEXT,
+              neighborhood TEXT,
+              properties_json TEXT,
+              valid_at TEXT,
+              retrieved_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE VIRTUAL TABLE IF NOT EXISTS geo_features_rtree USING rtree(
+              rowid,
+              min_lon,
+              max_lon,
+              min_lat,
+              max_lat
+            );
             """
         )
         conn.execute(
