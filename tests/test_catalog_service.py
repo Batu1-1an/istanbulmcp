@@ -1,0 +1,78 @@
+import httpx
+import pytest
+
+from app.connectors.ckan import CkanClient
+from app.core.settings import Settings
+from app.services.catalog import CatalogService
+from app.storage.catalog import CatalogRepository
+
+
+def _dataset():
+    return {
+        "id": "dataset-1",
+        "name": "trafik-verisi",
+        "title": "Trafik Verisi",
+        "notes": "Saatlik trafik",
+        "license_title": "IBB License",
+        "metadata_modified": "2026-06-12T00:00:00",
+        "tags": [{"name": "trafik"}],
+        "resources": [
+            {
+                "id": "resource-1",
+                "name": "Trafik CSV",
+                "format": "CSV",
+                "url": "https://example.test/trafik.csv",
+                "datastore_active": True,
+            }
+        ],
+    }
+
+
+@pytest.mark.asyncio
+async def test_search_datasets_snapshots_results(tmp_path):
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"success": True, "result": {"count": 1, "results": [_dataset()]}},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        settings = Settings(database_path=tmp_path / "catalog.sqlite3")
+        service = CatalogService(
+            settings=settings,
+            client=CkanClient(base_url="https://example.test/api/3/action", http_client=http_client),
+            repository=CatalogRepository(settings.database_path),
+        )
+        result = await service.search_datasets(query="trafik", limit=5)
+
+    assert result["ok"] is True
+    assert result["data"][0]["title"] == "Trafik Verisi"
+    assert result["freshness"]["status"] == "fresh"
+
+
+@pytest.mark.asyncio
+async def test_query_resource_returns_records(tmp_path):
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "success": True,
+                "result": {
+                    "total": 1,
+                    "records": [{"ILCE": "Kadikoy"}],
+                    "fields": [{"id": "ILCE", "type": "text"}],
+                },
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        settings = Settings(database_path=tmp_path / "catalog.sqlite3")
+        service = CatalogService(
+            settings=settings,
+            client=CkanClient(base_url="https://example.test/api/3/action", http_client=http_client),
+            repository=CatalogRepository(settings.database_path),
+        )
+        result = await service.query_resource(resource_id="resource-1", filters={"ILCE": "Kadikoy"})
+
+    assert result["data"] == [{"ILCE": "Kadikoy"}]
+    assert result["pagination"]["total_estimate"] == 1
