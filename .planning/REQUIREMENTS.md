@@ -7,42 +7,42 @@
 
 ### Core MCP
 
-- [ ] **CORE-01**: User can connect an MCP client to a remote Streamable HTTP `/mcp` endpoint.
-- [ ] **CORE-02**: Operator can check `/healthz` and `/readyz` for service and cache readiness.
-- [ ] **CORE-03**: Every tool response includes summary, source, freshness, limits, and warnings when relevant.
-- [ ] **CORE-04**: Tools validate inputs and enforce max radius, bbox, timeout, and result limits.
+- [x] **CORE-01**: User can connect an MCP client to a remote Streamable HTTP `/mcp` endpoint.
+- [x] **CORE-02**: Operator can check `/healthz` and `/readyz` for service and cache readiness.
+- [x] **CORE-03**: Every tool response includes summary, source, freshness, limits, and warnings when relevant.
+- [x] **CORE-04**: Tools validate inputs and enforce max radius, bbox, timeout, and result limits.
 
 ### Catalog
 
-- [ ] **CAT-01**: User can search the IBB CKAN catalog by query and format filters.
-- [ ] **CAT-02**: User can inspect a dataset's metadata, resources, license, and source URL.
-- [ ] **CAT-03**: User can inspect a resource's schema or format when available.
-- [ ] **CAT-04**: User can query supported DataStore resources through guarded filters and limits.
+- [x] **CAT-01**: User can search the IBB CKAN catalog by query and format filters.
+- [x] **CAT-02**: User can inspect a dataset's metadata, resources, license, and source URL.
+- [x] **CAT-03**: User can inspect a resource's schema or format when available.
+- [x] **CAT-04**: User can query supported DataStore resources through guarded filters and limits.
 
 ### Geo
 
-- [ ] **GEO-01**: User can find nearby city features by coordinate, type, radius, and limit.
-- [ ] **GEO-02**: User can search city features inside a bbox.
-- [ ] **GEO-03**: System stores normalized city features in SQLite with queryable coordinates.
+- [x] **GEO-01**: User can find nearby city features by coordinate, type, radius, and limit.
+- [x] **GEO-02**: User can search city features inside a bbox.
+- [x] **GEO-03**: System stores normalized city features in SQLite with queryable coordinates.
 
 ### City Services
 
-- [ ] **CITY-01**: User can find nearby ISPark parking lots with capacity/availability fields when provided.
-- [ ] **CITY-02**: User can get Istanbul traffic status from the validated traffic source.
-- [ ] **CITY-03**: User can find nearby Metro Istanbul stations and line metadata.
-- [ ] **CITY-04**: User can find nearby air-quality stations and latest readings when the source provides them.
+- [x] **CITY-01**: User can find nearby ISPark parking lots with capacity/availability fields when provided.
+- [x] **CITY-02**: User can get Istanbul traffic status from the validated traffic source.
+- [x] **CITY-03**: User can find nearby Metro Istanbul stations and line metadata.
+- [x] **CITY-04**: User can find nearby air-quality stations and latest readings when the source provides them.
 
 ### Transit
 
-- [ ] **TRN-01**: User can retrieve basic IETT line information by line code.
-- [ ] **TRN-02**: User can retrieve stops for an IETT line when source data supports the mapping.
-- [ ] **TRN-03**: IETT SOAP failures produce structured errors or stale cache fallback.
+- [x] **TRN-01**: User can retrieve basic IETT line information by line code.
+- [x] **TRN-02**: User can retrieve stops for an IETT line when source data supports the mapping.
+- [x] **TRN-03**: IETT SOAP failures produce structured errors or stale cache fallback.
 
 ### Release
 
-- [ ] **REL-01**: Project includes README, tool reference, `.env.example`, and Railway deployment notes.
-- [ ] **REL-02**: Unit tests cover connectors, parsers, response envelope, validation, and freshness states.
-- [ ] **REL-03**: Railway deployment runs with documented environment configuration.
+- [x] **REL-01**: Project includes README, tool reference, `.env.example`, and Railway deployment notes.
+- [x] **REL-02**: Unit tests cover connectors, parsers, response envelope, validation, and freshness states.
+- [x] **REL-03**: Railway deployment runs with documented environment configuration.
 
 ## v2 Requirements
 
