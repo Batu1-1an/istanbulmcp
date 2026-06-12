@@ -1,0 +1,122 @@
+from __future__ import annotations
+
+from typing import Any
+
+from app.connectors.ckan import CkanClient
+from app.core.envelope import Freshness, Pagination, Source, success_envelope
+from app.core.settings import Settings
+from app.core.validation import validate_limit
+from app.storage.catalog import CatalogRepository
+
+IBB_SOURCE = Source(
+    name="IBB Open Data Portal",
+    publisher="Istanbul Metropolitan Municipality",
+    url="https://data.ibb.gov.tr",
+)
+
+
+class CatalogService:
+    def __init__(
+        self,
+        *,
+        settings: Settings,
+        client: CkanClient | None = None,
+        repository: CatalogRepository | None = None,
+    ):
+        self.settings = settings
+        self.client = client or CkanClient(timeout=settings.request_timeout_seconds)
+        self.repository = repository or CatalogRepository(settings.database_path)
+
+    async def search_datasets(
+        self,
+        *,
+        query: str,
+        formats: list[str] | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
+        result = await self.client.package_search(query=query, rows=safe_limit, formats=formats)
+        datasets = result.get("results", [])
+        for dataset in datasets:
+            self.repository.upsert_dataset(dataset)
+        data = [self._dataset_summary(dataset) for dataset in datasets]
+        return success_envelope(
+            summary=f"{len(data)} dataset result(s) found for '{query}'.",
+            data=data,
+            sources=[IBB_SOURCE],
+            freshness=Freshness(status="fresh", ttl_seconds=60 * 60 * 6),
+            pagination=Pagination(limit=safe_limit, total_estimate=result.get("count")),
+            limits=[f"limit={safe_limit}", "source=CKAN package_search"],
+        )
+
+    async def get_dataset(self, dataset_id: str) -> dict[str, Any]:
+        dataset = await self.client.package_show(dataset_id)
+        self.repository.upsert_dataset(dataset)
+        return success_envelope(
+            summary=f"Dataset '{dataset.get('title') or dataset_id}' metadata retrieved.",
+            data=[self._dataset_detail(dataset)],
+            sources=[IBB_SOURCE],
+            freshness=Freshness(status="fresh", ttl_seconds=60 * 60 * 6),
+            limits=["source=CKAN package_show"],
+        )
+
+    async def get_resource_schema(self, resource_id: str) -> dict[str, Any]:
+        result = await self.client.datastore_search(resource_id=resource_id, limit=0)
+        fields = result.get("fields", [])
+        return success_envelope(
+            summary=f"Resource '{resource_id}' schema has {len(fields)} field(s).",
+            data=[{"resource_id": resource_id, "fields": fields}],
+            sources=[IBB_SOURCE],
+            freshness=Freshness(status="fresh", ttl_seconds=60 * 60 * 6),
+            limits=["source=CKAN datastore_search", "limit=0"],
+        )
+
+    async def query_resource(
+        self,
+        *,
+        resource_id: str,
+        filters: dict[str, Any] | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
+        result = await self.client.datastore_search(
+            resource_id=resource_id,
+            filters=filters,
+            limit=safe_limit,
+        )
+        records = result.get("records", [])
+        return success_envelope(
+            summary=f"{len(records)} record(s) returned from resource '{resource_id}'.",
+            data=records,
+            sources=[IBB_SOURCE],
+            freshness=Freshness(status="fresh", ttl_seconds=60 * 60 * 6),
+            pagination=Pagination(limit=safe_limit, total_estimate=result.get("total")),
+            limits=[f"limit={safe_limit}", "source=CKAN datastore_search", "filters only"],
+        )
+
+    def _dataset_summary(self, dataset: dict[str, Any]) -> dict[str, Any]:
+        resources = dataset.get("resources") or []
+        return {
+            "id": dataset.get("id"),
+            "slug": dataset.get("name"),
+            "title": dataset.get("title"),
+            "notes": dataset.get("notes"),
+            "license": dataset.get("license_title") or dataset.get("license_id"),
+            "metadata_modified": dataset.get("metadata_modified"),
+            "formats": sorted({(r.get("format") or "").upper() for r in resources if r.get("format")}),
+            "resource_count": len(resources),
+        }
+
+    def _dataset_detail(self, dataset: dict[str, Any]) -> dict[str, Any]:
+        detail = self._dataset_summary(dataset)
+        detail["resources"] = [
+            {
+                "id": resource.get("id"),
+                "name": resource.get("name") or resource.get("description"),
+                "format": (resource.get("format") or "").upper(),
+                "url": resource.get("url"),
+                "datastore_active": bool(resource.get("datastore_active")),
+            }
+            for resource in dataset.get("resources", [])
+        ]
+        return detail

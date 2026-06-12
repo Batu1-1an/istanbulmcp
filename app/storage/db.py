@@ -43,6 +43,44 @@ def init_database(database_path: Path) -> dict[str, str | int]:
               duration_ms INTEGER,
               warning TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS datasets (
+              id TEXT PRIMARY KEY,
+              ckan_id TEXT,
+              slug TEXT,
+              title TEXT NOT NULL,
+              description TEXT,
+              organization TEXT,
+              groups_json TEXT,
+              tags_json TEXT,
+              license TEXT,
+              source_url TEXT,
+              metadata_json TEXT,
+              last_modified TEXT,
+              retrieved_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS resources (
+              id TEXT PRIMARY KEY,
+              dataset_id TEXT NOT NULL,
+              ckan_resource_id TEXT,
+              name TEXT,
+              format TEXT,
+              url TEXT,
+              datastore_active INTEGER NOT NULL DEFAULT 0,
+              schema_json TEXT,
+              size_bytes INTEGER,
+              hash TEXT,
+              retrieved_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              FOREIGN KEY(dataset_id) REFERENCES datasets(id) ON DELETE CASCADE
+            );
+
+            CREATE VIRTUAL TABLE IF NOT EXISTS dataset_fts USING fts5(
+              dataset_id UNINDEXED,
+              title,
+              description,
+              tags
+            );
             """
         )
         conn.execute(
