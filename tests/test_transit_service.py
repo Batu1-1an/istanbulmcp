@@ -26,6 +26,14 @@ class FakeIett:
         ]
 
 
+class FailingIett:
+    async def line_info(self, line_code):
+        raise RuntimeError("down")
+
+    async def stops_for_line(self, line_code):
+        raise RuntimeError("down")
+
+
 def service(tmp_path):
     settings = Settings(database_path=tmp_path / "transit.sqlite3")
     return TransitService(
@@ -51,3 +59,19 @@ async def test_stops_for_line_upserts_bus_stop(tmp_path):
     assert result["data"][0]["stop_code"] == "100"
     nearby = svc.geo.nearby(lat=41.0, lon=29.0, radius_m=100, limit=5, types=["bus_stop"])
     assert nearby[0]["name"] == "Stop"
+
+
+@pytest.mark.asyncio
+async def test_line_info_failure_returns_structured_error(tmp_path):
+    settings = Settings(database_path=tmp_path / "transit.sqlite3")
+    svc = TransitService(
+        settings=settings,
+        iett_client=FailingIett(),
+        geo_repository=GeoRepository(settings.database_path),
+    )
+
+    result = await svc.line_info("34A")
+
+    assert result["ok"] is False
+    assert result["freshness"]["status"] == "broken"
+    assert result["warnings"]

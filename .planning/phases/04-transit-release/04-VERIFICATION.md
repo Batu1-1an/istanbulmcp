@@ -15,7 +15,8 @@ Passed with deployment note.
 - `app/services/transit.py` exposes line info and stops-for-line envelopes.
 - `app/mcp/server.py` registers transit tools.
 - `docs/tool-reference.md`, `docs/deploy-railway.md`, `.env.example`, `Dockerfile`, and `railway.json` exist.
-- `.venv/bin/pytest` passed: 28 tests.
+- `.venv/bin/pytest` passed: 29 tests.
+- SOAP failure paths return structured error envelopes with `freshness.status=broken`.
 - Live IETT `34A` smoke returned one line record and 38 stop records.
 - Docker image build and container `/healthz` + `/readyz` smoke checks passed.
 

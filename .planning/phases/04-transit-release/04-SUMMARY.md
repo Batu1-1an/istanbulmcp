@@ -14,7 +14,7 @@
 
 ```txt
 .venv/bin/pytest
-28 passed, 1 warning
+29 passed, 1 warning
 ```
 
 Live IETT smoke check:

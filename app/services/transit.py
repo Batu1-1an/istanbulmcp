@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.connectors.iett import IettClient
-from app.core.envelope import Freshness, Source, success_envelope
+from app.core.envelope import Freshness, Source, error_envelope, success_envelope
 from app.core.settings import Settings
 from app.storage.geo import GeoRepository
 
@@ -27,7 +27,15 @@ class TransitService:
         self.geo = geo_repository or GeoRepository(settings.database_path)
 
     async def line_info(self, line_code: str) -> dict[str, Any]:
-        rows = await self.iett.line_info(line_code.strip().upper())
+        safe_line_code = line_code.strip().upper()
+        try:
+            rows = await self.iett.line_info(safe_line_code)
+        except Exception as exc:
+            return error_envelope(
+                summary=f"IETT line info is unavailable for {safe_line_code}.",
+                warning=f"IETT SOAP request failed: {type(exc).__name__}",
+                sources=[IETT_SOURCE],
+            )
         data = [
             {
                 "line_code": row.get("SHATKODU") or row.get("HAT_KODU"),
@@ -39,7 +47,7 @@ class TransitService:
             for row in rows
         ]
         return success_envelope(
-            summary=f"{len(data)} IETT line record(s) found for {line_code}.",
+            summary=f"{len(data)} IETT line record(s) found for {safe_line_code}.",
             data=data,
             sources=[IETT_SOURCE],
             freshness=Freshness(status="fresh", ttl_seconds=60 * 60 * 6),
@@ -47,12 +55,20 @@ class TransitService:
         )
 
     async def stops_for_line(self, line_code: str) -> dict[str, Any]:
-        rows = await self.iett.stops_for_line(line_code.strip().upper())
+        safe_line_code = line_code.strip().upper()
+        try:
+            rows = await self.iett.stops_for_line(safe_line_code)
+        except Exception as exc:
+            return error_envelope(
+                summary=f"IETT stops are unavailable for line {safe_line_code}.",
+                warning=f"IETT SOAP request failed: {type(exc).__name__}",
+                sources=[IETT_SOURCE],
+            )
         rows.sort(key=lambda row: (row.get("YON") or "", int(row.get("SIRANO") or 0)))
         data = [self._stop_row(row) for row in rows]
         self.geo.upsert_features([self._stop_feature(row) for row in data if row.get("lat") and row.get("lon")])
         return success_envelope(
-            summary=f"{len(data)} stop record(s) found for line {line_code}.",
+            summary=f"{len(data)} stop record(s) found for line {safe_line_code}.",
             data=data,
             sources=[IETT_SOURCE],
             freshness=Freshness(status="fresh", ttl_seconds=60 * 60 * 6),
