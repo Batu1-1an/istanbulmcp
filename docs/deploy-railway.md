@@ -43,3 +43,14 @@ curl -i "$BASE_URL/mcp/" \
 ```
 
 The final command should return HTTP `400` with JSON-RPC error code `-32600`.
+
+## Live Regression
+
+Run the opt-in live regression suite after production deploys:
+
+```bash
+RUN_LIVE_MCP_TESTS=1 pytest tests/live
+python scripts/live_mcp_uat.py --base-url "$BASE_URL/mcp/"
+```
+
+The script writes timestamped JSON and Markdown reports under `.planning/reports/`.

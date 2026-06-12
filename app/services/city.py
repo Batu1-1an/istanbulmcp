@@ -7,9 +7,11 @@ from app.connectors.ispark import IsparkClient
 from app.connectors.metro import MetroClient
 from app.connectors.traffic import TrafficClient
 from app.core.envelope import Freshness, Source, success_envelope
+from app.core.error_responses import source_error_envelope, validation_error_envelope
 from app.core.geo import parse_wkt_point
 from app.core.settings import Settings
-from app.core.validation import validate_bbox, validate_lat_lon, validate_limit, validate_radius
+from app.core.source_cache import cached_source_data
+from app.core.validation import InputValidationError, validate_bbox, validate_lat_lon, validate_limit, validate_radius
 from app.storage.geo import GeoRepository
 
 
@@ -39,8 +41,13 @@ class CityService:
         self.traffic = traffic_client or TrafficClient(timeout=settings.request_timeout_seconds)
 
     async def parking_nearby(self, *, lat: float, lon: float, radius_m: int = 1000, limit: int | None = None) -> dict:
-        safe_limit = self._validate_geo(lat, lon, radius_m, limit)
-        parks = await self.ispark.parks()
+        try:
+            safe_limit = self._validate_geo(lat, lon, radius_m, limit)
+            parks = await self._parks()
+        except InputValidationError as exc:
+            return validation_error_envelope(exc, sources=[CITY_SOURCE])
+        except Exception as exc:
+            return self._source_error("Parking source is unavailable.", exc)
         self.geo.upsert_features([self._ispark_feature(park) for park in parks if park.get("lat") and park.get("lng")])
         data = self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=safe_limit, types=["parking"])
         return success_envelope(
@@ -53,8 +60,13 @@ class CityService:
         )
 
     async def metro_stations_nearby(self, *, lat: float, lon: float, radius_m: int = 1000, limit: int | None = None) -> dict:
-        safe_limit = self._validate_geo(lat, lon, radius_m, limit)
-        stations = await self.metro.stations()
+        try:
+            safe_limit = self._validate_geo(lat, lon, radius_m, limit)
+            stations = await self._metro_stations()
+        except InputValidationError as exc:
+            return validation_error_envelope(exc, sources=[CITY_SOURCE])
+        except Exception as exc:
+            return self._source_error("Metro source is unavailable.", exc)
         self.geo.upsert_features([self._metro_feature(station) for station in stations if self._metro_coordinates(station)])
         data = self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=safe_limit, types=["metro_station"])
         return success_envelope(
@@ -66,15 +78,29 @@ class CityService:
         )
 
     async def air_quality_nearby(self, *, lat: float, lon: float, radius_m: int = 5000, limit: int | None = None) -> dict:
-        safe_limit = self._validate_geo(lat, lon, radius_m, limit)
-        stations = await self.air_quality.stations()
+        try:
+            safe_limit = self._validate_geo(lat, lon, radius_m, limit)
+            stations = await self._air_quality_stations()
+        except InputValidationError as exc:
+            return validation_error_envelope(exc, sources=[CITY_SOURCE])
+        except Exception as exc:
+            return self._source_error("Air quality station source is unavailable.", exc)
         self.geo.upsert_features([self._aq_feature(station) for station in stations if parse_wkt_point(station.get("Location"))])
         nearby = self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=safe_limit, types=["air_quality_station"])
         warnings = []
         for station in nearby:
-            readings = await self.air_quality.readings(station["source_id"])
+            try:
+                readings = await self._air_quality_readings(station["source_id"])
+            except Exception as exc:
+                return self._source_error(f"Air quality readings are unavailable for {station['name']}.", exc)
             latest = readings[0] if readings else {}
             station["latest_reading"] = latest
+            station["latest_reading_quality"] = {
+                "has_reading": bool(latest),
+                "has_aqi": latest.get("AQI") is not None,
+                "has_concentration": latest.get("Concentration") is not None,
+                "read_time": latest.get("ReadTime"),
+            }
             if latest.get("AQI") is None:
                 warnings.append(f"{station['name']} has no AQI value in the latest source reading.")
         return success_envelope(
@@ -87,7 +113,10 @@ class CityService:
         )
 
     async def traffic_status(self) -> dict:
-        records = await self.traffic.index_history()
+        try:
+            records = await self._traffic_index_history()
+        except Exception as exc:
+            return self._source_error("Traffic source is unavailable.", exc)
         latest = records[0] if records else {}
         index = latest.get("TrafficIndex")
         try:
@@ -95,7 +124,17 @@ class CityService:
         except (TypeError, ValueError):
             numeric_index = None
         label = self._traffic_label(numeric_index)
-        data = [{"traffic_index": numeric_index, "label": label, "measured_at": latest.get("TrafficIndexDate")}]
+        data = [
+            {
+                "traffic_index": numeric_index,
+                "label": label,
+                "measured_at": latest.get("TrafficIndexDate"),
+                "capabilities": {
+                    "supports": ["citywide traffic index"],
+                    "does_not_support": ["road-level congestion", "incident details", "crash reports"],
+                },
+            }
+        ]
         return success_envelope(
             summary=f"Istanbul traffic index is {numeric_index} ({label})." if numeric_index is not None else "Traffic source returned no index.",
             data=data,
@@ -114,8 +153,13 @@ class CityService:
         radius_m: int = 1000,
         limit: int | None = None,
     ) -> dict:
-        safe_limit = self._validate_geo(lat, lon, radius_m, limit)
-        await self._refresh_requested(types)
+        try:
+            safe_limit = self._validate_geo(lat, lon, radius_m, limit)
+            await self._refresh_requested(types)
+        except InputValidationError as exc:
+            return validation_error_envelope(exc, sources=[CITY_SOURCE])
+        except Exception as exc:
+            return self._source_error("City feature sources are unavailable.", exc)
         data = self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=safe_limit, types=types)
         return success_envelope(
             summary=f"{len(data)} city feature(s) found within {radius_m} meters.",
@@ -126,9 +170,14 @@ class CityService:
         )
 
     async def bbox_search(self, *, bbox: list[float], types: list[str] | None = None, limit: int | None = None) -> dict:
-        min_lon, min_lat, max_lon, max_lat = validate_bbox(bbox)
-        safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
-        await self._refresh_requested(types)
+        try:
+            min_lon, min_lat, max_lon, max_lat = validate_bbox(bbox)
+            safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
+            await self._refresh_requested(types)
+        except InputValidationError as exc:
+            return validation_error_envelope(exc, sources=[CITY_SOURCE])
+        except Exception as exc:
+            return self._source_error("City feature sources are unavailable.", exc)
         data = self.geo.bbox_search(
             min_lon=min_lon,
             min_lat=min_lat,
@@ -153,14 +202,49 @@ class CityService:
     async def _refresh_requested(self, types: list[str] | None) -> None:
         requested = set(types or ["parking", "metro_station", "air_quality_station"])
         if "parking" in requested:
-            parks = await self.ispark.parks()
+            parks = await self._parks()
             self.geo.upsert_features([self._ispark_feature(park) for park in parks if park.get("lat") and park.get("lng")])
         if "metro_station" in requested:
-            stations = await self.metro.stations()
+            stations = await self._metro_stations()
             self.geo.upsert_features([self._metro_feature(station) for station in stations if self._metro_coordinates(station)])
         if "air_quality_station" in requested:
-            stations = await self.air_quality.stations()
+            stations = await self._air_quality_stations()
             self.geo.upsert_features([self._aq_feature(station) for station in stations if parse_wkt_point(station.get("Location"))])
+
+    async def _parks(self) -> list[dict[str, Any]]:
+        return await cached_source_data(
+            "ispark.parks",
+            ttl_seconds=self.settings.ispark_cache_ttl_seconds,
+            loader=self.ispark.parks,
+        )
+
+    async def _metro_stations(self) -> list[dict[str, Any]]:
+        return await cached_source_data(
+            "metro.stations",
+            ttl_seconds=self.settings.metro_cache_ttl_seconds,
+            loader=self.metro.stations,
+        )
+
+    async def _air_quality_stations(self) -> list[dict[str, Any]]:
+        return await cached_source_data(
+            "air_quality.stations",
+            ttl_seconds=self.settings.air_quality_station_cache_ttl_seconds,
+            loader=self.air_quality.stations,
+        )
+
+    async def _air_quality_readings(self, station_id: str) -> list[dict[str, Any]]:
+        return await cached_source_data(
+            f"air_quality.readings.{station_id}",
+            ttl_seconds=self.settings.air_quality_reading_cache_ttl_seconds,
+            loader=lambda: self.air_quality.readings(station_id),
+        )
+
+    async def _traffic_index_history(self) -> list[dict[str, Any]]:
+        return await cached_source_data(
+            "traffic.index_history",
+            ttl_seconds=self.settings.traffic_cache_ttl_seconds,
+            loader=self.traffic.index_history,
+        )
 
     def _ispark_feature(self, park: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -229,3 +313,11 @@ class CityService:
         if index < 60:
             return "moderate"
         return "high"
+
+    def _source_error(self, summary: str, exc: Exception) -> dict[str, Any]:
+        return source_error_envelope(
+            summary=summary,
+            warning=f"IBB source request failed: {type(exc).__name__}",
+            sources=[CITY_SOURCE],
+            exception=exc,
+        )

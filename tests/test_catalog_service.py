@@ -59,6 +59,9 @@ async def test_search_datasets_snapshots_results(tmp_path):
 
     assert result["ok"] is True
     assert result["data"][0]["title"] == "Trafik Verisi"
+    assert result["data"][0]["relevance"]["matched_query_terms"] == ["trafik"]
+    assert result["data"][0]["relevance"]["has_datastore"] is True
+    assert result["data"][0]["preferred_resources"][0]["id"] == "resource-1"
     assert result["freshness"]["status"] == "fresh"
 
 
@@ -105,3 +108,20 @@ async def test_search_datasets_rate_limit_returns_retry_after_envelope(tmp_path)
     assert result["freshness"]["status"] == "stale"
     assert result["data"][0]["source"] == "ckan"
     assert result["data"][0]["retry_after_seconds"] == 1.25
+
+
+@pytest.mark.asyncio
+async def test_search_datasets_limit_validation_returns_envelope(tmp_path):
+    settings = Settings(database_path=tmp_path / "catalog.sqlite3", max_limit=10)
+    service = CatalogService(
+        settings=settings,
+        client=RateLimitedCkan(),
+        repository=CatalogRepository(settings.database_path),
+    )
+
+    result = await service.search_datasets(query="trafik", limit=11)
+
+    assert result["ok"] is False
+    assert result["data"][0]["error_code"] == "validation_error"
+    assert result["data"][0]["field"] == "limit"
+    assert result["data"][0]["allowed_max"] == 10

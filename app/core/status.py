@@ -4,6 +4,7 @@ from importlib import metadata
 from typing import Any
 
 from app.core.settings import Settings
+from app.core.source_cache import source_cache_snapshot
 from app.mcp.server import mcp
 from app.storage.db import readiness
 
@@ -53,6 +54,7 @@ def build_status(settings: Settings) -> dict[str, Any]:
             },
         },
         "database": readiness(settings.database_path),
+        "source_cache": source_cache_snapshot(),
         "tool_count": len(tools),
         "tools": tools,
     }

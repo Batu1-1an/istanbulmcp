@@ -4,9 +4,10 @@ from typing import Any
 
 from app.connectors.ckan import CkanClient
 from app.core.envelope import Freshness, Pagination, Source, error_envelope, success_envelope
+from app.core.error_responses import validation_error_envelope
 from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
-from app.core.validation import validate_limit
+from app.core.validation import InputValidationError, validate_limit
 from app.storage.catalog import CatalogRepository
 
 IBB_SOURCE = Source(
@@ -35,7 +36,10 @@ class CatalogService:
         formats: list[str] | None = None,
         limit: int | None = None,
     ) -> dict[str, Any]:
-        safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
+        try:
+            safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
+        except InputValidationError as exc:
+            return validation_error_envelope(exc, sources=[IBB_SOURCE])
         try:
             result = await self.client.package_search(query=query, rows=safe_limit, formats=formats)
         except SourceRateLimitExceeded as exc:
@@ -43,7 +47,11 @@ class CatalogService:
         datasets = result.get("results", [])
         for dataset in datasets:
             self.repository.upsert_dataset(dataset)
-        data = [self._dataset_summary(dataset) for dataset in datasets]
+        data = sorted(
+            [self._dataset_summary(dataset, query=query) for dataset in datasets],
+            key=lambda item: item["relevance"]["score"],
+            reverse=True,
+        )
         return success_envelope(
             summary=f"{len(data)} dataset result(s) found for '{query}'.",
             data=data,
@@ -88,7 +96,10 @@ class CatalogService:
         filters: dict[str, Any] | None = None,
         limit: int | None = None,
     ) -> dict[str, Any]:
-        safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
+        try:
+            safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
+        except InputValidationError as exc:
+            return validation_error_envelope(exc, sources=[IBB_SOURCE])
         try:
             result = await self.client.datastore_search(
                 resource_id=resource_id,
@@ -107,8 +118,9 @@ class CatalogService:
             limits=[f"limit={safe_limit}", "source=CKAN datastore_search", "filters only"],
         )
 
-    def _dataset_summary(self, dataset: dict[str, Any]) -> dict[str, Any]:
+    def _dataset_summary(self, dataset: dict[str, Any], *, query: str | None = None) -> dict[str, Any]:
         resources = dataset.get("resources") or []
+        datastore_resources = [resource for resource in resources if resource.get("datastore_active")]
         return {
             "id": dataset.get("id"),
             "slug": dataset.get("name"),
@@ -118,6 +130,17 @@ class CatalogService:
             "metadata_modified": dataset.get("metadata_modified"),
             "formats": sorted({(r.get("format") or "").upper() for r in resources if r.get("format")}),
             "resource_count": len(resources),
+            "datastore_active_count": len(datastore_resources),
+            "preferred_resources": [
+                {
+                    "id": resource.get("id"),
+                    "name": resource.get("name") or resource.get("description"),
+                    "format": (resource.get("format") or "").upper(),
+                    "datastore_active": bool(resource.get("datastore_active")),
+                }
+                for resource in datastore_resources[:3]
+            ],
+            "relevance": self._relevance(dataset, query),
         }
 
     def _dataset_detail(self, dataset: dict[str, Any]) -> dict[str, Any]:
@@ -133,6 +156,24 @@ class CatalogService:
             for resource in dataset.get("resources", [])
         ]
         return detail
+
+    def _relevance(self, dataset: dict[str, Any], query: str | None) -> dict[str, Any]:
+        terms = [term.casefold() for term in (query or "").split() if term.strip()]
+        haystack_parts = [
+            dataset.get("title") or "",
+            dataset.get("name") or "",
+            dataset.get("notes") or "",
+            " ".join(tag.get("name", "") for tag in dataset.get("tags", []) if isinstance(tag, dict)),
+        ]
+        haystack = " ".join(haystack_parts).casefold()
+        matched_terms = [term for term in terms if term in haystack]
+        datastore_bonus = 2 if any(resource.get("datastore_active") for resource in dataset.get("resources", [])) else 0
+        score = len(matched_terms) + datastore_bonus
+        return {
+            "score": score,
+            "matched_query_terms": matched_terms,
+            "has_datastore": datastore_bonus > 0,
+        }
 
     def _rate_limited(self, action: str, exc: SourceRateLimitExceeded) -> dict[str, Any]:
         retry_after = round(exc.retry_after_seconds, 3)

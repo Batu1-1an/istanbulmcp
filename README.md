@@ -27,6 +27,13 @@ curl -fsS https://istanbulmcp-production.up.railway.app/status
 curl -i https://istanbulmcp-production.up.railway.app/mcp
 ```
 
+Opt-in live MCP regression:
+
+```bash
+RUN_LIVE_MCP_TESTS=1 pytest tests/live
+python scripts/live_mcp_uat.py
+```
+
 ## Tools
 
 See `docs/tool-reference.md` for the current MCP tool surface.
