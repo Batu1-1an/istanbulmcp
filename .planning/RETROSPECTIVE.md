@@ -23,7 +23,7 @@
 ### What Was Inefficient
 
 - IETT SOAP WSDL loading was brittle; raw SOAP was faster and more reliable for the narrow MVP.
-- Railway could not be live-verified because local auth had expired, so deployment verification stopped at Docker.
+- Railway verification initially failed because local auth had expired; after login, live deploy exposed the MCP lifespan issue and drove a useful production regression test.
 
 ### Patterns Established
 

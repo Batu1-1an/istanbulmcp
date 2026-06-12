@@ -17,12 +17,13 @@
 
 **Verification:**
 
-- `.venv/bin/pytest` — 29 passed, 1 warning.
+- `.venv/bin/pytest` — 30 passed, 1 warning.
 - Live CKAN, ISPark, traffic, Metro, air-quality, and IETT smoke checks passed.
 - Docker build and container `/healthz` + `/readyz` smoke checks passed.
+- Railway production deployment passed `/healthz`, `/readyz`, and MCP initialize checks.
 
-**Known deferred item:**
+**Production URL:**
 
-- Live Railway deployment requires fresh `railway login` and `railway link`; deploy config and Docker runtime were verified.
+- `https://istanbulmcp-production.up.railway.app`
 
 ---

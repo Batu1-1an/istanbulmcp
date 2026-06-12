@@ -21,7 +21,6 @@ AI assistants should answer Istanbul city-data questions with real sources, fres
 
 ### Active
 
-- [ ] Re-authenticate and link Railway, then run live Railway deployment verification.
 - [ ] Resolve common Istanbul place names to coordinates.
 - [ ] Add source-health and freshness diagnostics for operators.
 - [ ] Evaluate deeper GTFS route/trip support for transit v2.
@@ -36,7 +35,7 @@ AI assistants should answer Istanbul city-data questions with real sources, fres
 
 ## Context
 
-v1.0 shipped a Python/FastMCP remote MCP server with 2,067 lines of Python across app and test code. The implementation includes CKAN catalog tools, normalized geo storage, ISPark parking, Istanbul traffic, Metro station, air-quality, and narrow IETT line/stop tools. Unit tests and live source smoke checks passed; Docker runtime was verified. Live Railway deployment remains an operator task because local Railway auth returned `invalid_grant` and no project is currently linked.
+v1.0 shipped a Python/FastMCP remote MCP server with 2,067 lines of Python across app and test code. The implementation includes CKAN catalog tools, normalized geo storage, ISPark parking, Istanbul traffic, Metro station, air-quality, and narrow IETT line/stop tools. Unit tests, live source smoke checks, Docker runtime, and Railway production deployment were verified. The production URL is `https://istanbulmcp-production.up.railway.app`.
 
 The agreed stack is Python 3.11+, FastMCP/Python MCP SDK, `httpx`, `zeep` for IETT SOAP only, SQLite WAL with FTS5 and RTree, `pydantic`, `pytest`, and Railway. `ctx7` documentation lookup confirmed the official Python MCP SDK exposes FastMCP tools/resources/prompts and Streamable HTTP with stateless JSON-friendly deployment patterns.
 
@@ -55,7 +54,7 @@ The agreed stack is Python 3.11+, FastMCP/Python MCP SDK, `httpx`, `zeep` for IE
 |----------|-----------|---------|
 | Build MVP as "City Data Core" | Keeps first release useful without drowning in 550 datasets | ✓ Good |
 | Use Python + FastMCP | Official SDK supports tools/resources/prompts and Streamable HTTP; Python fits data processing | ✓ Good |
-| Use Railway for deploy | Matches project goal of one remote URL, but local auth must be refreshed | ⚠ Revisit auth |
+| Use Railway for deploy | Matches project goal of one remote URL and passed live production verification | ✓ Good |
 | Use SQLite for MVP | WAL, FTS5, and RTree cover the first data volume without PostGIS overhead | ✓ Good |
 | Treat ISbike as optional | Live service returned empty data during validation | ✓ Good |
 | Keep IETT SOAP narrow | SOAP risk is real but limited to IETT; avoid broad realtime transit scope | ✓ Good |

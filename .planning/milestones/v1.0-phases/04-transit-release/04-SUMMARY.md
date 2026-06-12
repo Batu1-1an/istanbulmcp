@@ -14,7 +14,7 @@
 
 ```txt
 .venv/bin/pytest
-29 passed, 1 warning
+30 passed, 1 warning
 ```
 
 Live IETT smoke check:
@@ -34,7 +34,13 @@ GET /healthz -> 200
 GET /readyz -> 200
 ```
 
-Railway CLI/MCP auth check failed with `invalid_grant` / not authenticated, so live Railway deployment was not executed. Deployment config is present and Docker runtime is verified.
+Railway deployment:
+
+```txt
+https://istanbulmcp-production.up.railway.app/healthz -> 200
+https://istanbulmcp-production.up.railway.app/readyz -> 200
+POST https://istanbulmcp-production.up.railway.app/mcp/ initialize -> 200
+```
 
 ## Requirements Covered
 

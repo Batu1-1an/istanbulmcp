@@ -37,7 +37,6 @@ Archive:
 
 ## Candidate Backlog
 
-- Live Railway deploy after `railway login` and `railway link`.
 - Istanbul place-name resolution.
 - Source-health and freshness diagnostics.
 - Deeper GTFS route/trip support.
