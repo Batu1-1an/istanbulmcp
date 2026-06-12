@@ -1,0 +1,1 @@
+"""Istanbul MCP application package."""
