@@ -18,6 +18,14 @@ The local server exposes:
 - `GET /readyz`
 - `POST /mcp`
 
+## Tools
+
+See `docs/tool-reference.md` for the current MCP tool surface.
+
+## Deployment
+
+Railway deployment notes live in `docs/deploy-railway.md`.
+
 ## Planning
 
 Project context and roadmap live under `.planning/`.
