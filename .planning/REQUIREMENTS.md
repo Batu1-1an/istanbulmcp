@@ -69,10 +69,10 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CORE-01 | Phase 1 | Pending |
-| CORE-02 | Phase 1 | Pending |
-| CORE-03 | Phase 1 | Pending |
-| CORE-04 | Phase 1 | Pending |
+| CORE-01 | Phase 1 | Complete |
+| CORE-02 | Phase 1 | Complete |
+| CORE-03 | Phase 1 | Complete |
+| CORE-04 | Phase 1 | Complete |
 | CAT-01 | Phase 2 | Pending |
 | CAT-02 | Phase 2 | Pending |
 | CAT-03 | Phase 2 | Pending |
@@ -98,4 +98,4 @@
 
 ---
 *Requirements defined: 2026-06-12*
-*Last updated: 2026-06-12 after initialization*
+*Last updated: 2026-06-12 after Phase 1 verification*
