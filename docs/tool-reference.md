@@ -41,6 +41,14 @@ Air quality results include `latest_reading_quality` because the upstream source
 
 `istanbul_city_services_nearby` returns nearby WiFi points and district-level library address/hour records where available. Library records do not have coordinates, so those results are marked as district-level rather than radius-precise.
 
+## Neighborhood Profiles
+
+- `istanbul_neighborhood_profile(district, neighborhood?, limit?)`
+
+Returns a joined neighborhood profile from fixed IBB Open Data CKAN resources: 2023 social-assistance household counts, neighborhood building stock by age/floor band, and earthquake-scenario records. Pass `district` only to list covered neighborhoods; pass both `district` and `neighborhood` for one joined profile.
+
+Neighborhood matching normalizes Turkish characters, source mojibake variants such as `CAFERAÐA`, and source abbreviations such as `19.May`. Earthquake scenario fields are returned as source scenario records only, not as real-time risk, incident, or guidance data.
+
 ## Transit
 
 - `istanbul_transit_line_info(line_code)`

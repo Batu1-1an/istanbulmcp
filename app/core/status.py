@@ -22,6 +22,7 @@ TOOL_SOURCES = {
     "istanbul_traffic_status": "traffic",
     "istanbul_mobility_nearby": "mixed_city_open_data",
     "istanbul_city_services_nearby": "ckan",
+    "istanbul_neighborhood_profile": "ckan",
     "istanbul_transit_line_info": "iett",
     "istanbul_stops_for_line": "iett",
 }

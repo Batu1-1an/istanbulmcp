@@ -1,6 +1,6 @@
 # Istanbul MCP
 
-Remote MCP server for Istanbul open city data. The MVP focuses on a small, reliable city-data core: IBB catalog search, nearby city services, traffic, parking, metro, air quality, practical nearby mobility aggregation, and narrow IETT line/stop access.
+Remote MCP server for Istanbul open city data. The MVP focuses on a small, reliable city-data core: IBB catalog search, nearby city services, traffic, parking, metro, air quality, practical nearby mobility aggregation, neighborhood profiles, and narrow IETT line/stop access.
 
 ## Development
 

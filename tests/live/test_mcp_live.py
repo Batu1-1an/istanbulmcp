@@ -76,3 +76,17 @@ def test_live_mcp_city_services_nearby_tool():
     assert payload["ok"] is True
     assert len(payload["data"]) == 1
     assert "wifi_locations" in payload["data"][0]
+
+
+def test_live_mcp_neighborhood_profile_tool():
+    payload, error, _elapsed = rpc_call(
+        os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
+        9006,
+        "istanbul_neighborhood_profile",
+        {"district": "Kadıköy", "neighborhood": "Caferağa"},
+    )
+
+    assert error is None
+    assert payload["ok"] is True
+    assert len(payload["data"]) == 1
+    assert payload["data"][0]["coverage"]["earthquake_scenario"] is True

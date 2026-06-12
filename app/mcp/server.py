@@ -6,6 +6,7 @@ from app.core.envelope import Freshness, Source, success_envelope
 from app.core.settings import get_settings
 from app.services.city import CityService
 from app.services.catalog import CatalogService
+from app.services.neighborhood import NeighborhoodService
 from app.services.transit import TransitService
 from app.storage.db import readiness
 
@@ -202,6 +203,20 @@ async def istanbul_city_services_nearby(
         lat=lat,
         lon=lon,
         radius_m=radius_m,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+async def istanbul_neighborhood_profile(
+    district: str,
+    neighborhood: str | None = None,
+    limit: int | None = None,
+) -> dict:
+    """Return a joined neighborhood profile from social, building, and earthquake scenario records."""
+    return await NeighborhoodService(settings=get_settings()).profile(
+        district=district,
+        neighborhood=neighborhood,
         limit=limit,
     )
 
