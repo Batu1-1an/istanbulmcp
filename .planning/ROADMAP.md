@@ -11,7 +11,7 @@
 | 1 | MCP Foundation | Complete — remote server skeleton, storage base, envelope, validation, and health checks | CORE-01..CORE-04 |
 | 2 | Catalog Core | Complete — CKAN catalog ingestion, search, metadata, schema, and guarded querying | CAT-01..CAT-04 |
 | 3 | Geo & City Services | Complete — normalized geo search plus parking, traffic, metro, and air-quality tools | GEO-01..GEO-03, CITY-01..CITY-04 |
-| 4 | Transit & Release | Narrow IETT SOAP integration, tests, docs, and Railway release | TRN-01..TRN-03, REL-01..REL-03 |
+| 4 | Transit & Release | Complete — narrow IETT SOAP integration, tests, docs, and Railway release config | TRN-01..TRN-03, REL-01..REL-03 |
 
 ## Phase Details
 
@@ -61,6 +61,7 @@
 
 **Goal:** Add narrow IETT transit capability and ship a documented Railway MVP.
 **Mode:** mvp
+**Status:** Complete
 
 **Requirements:** TRN-01, TRN-02, TRN-03, REL-01, REL-02, REL-03
 
@@ -76,4 +77,4 @@
 All v1 requirements are mapped in `.planning/REQUIREMENTS.md`; coverage is 21/21.
 
 ---
-*Last updated: 2026-06-12 after Phase 3 completion*
+*Last updated: 2026-06-12 after Phase 4 completion*

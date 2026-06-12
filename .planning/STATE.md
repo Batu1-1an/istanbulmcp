@@ -5,7 +5,7 @@
 See: `.planning/PROJECT.md` (updated 2026-06-12)
 
 **Core value:** AI assistants should answer Istanbul city-data questions with real sources, freshness, and limitations instead of guessing.
-**Current focus:** Phase 4 — Transit & Release
+**Current focus:** Milestone lifecycle audit
 
 ## Workflow
 
@@ -25,11 +25,11 @@ See: `.planning/PROJECT.md` (updated 2026-06-12)
 | 1. MCP Foundation | Complete | 100% |
 | 2. Catalog Core | Complete | 100% |
 | 3. Geo & City Services | Complete | 100% |
-| 4. Transit & Release | Pending | 0% |
+| 4. Transit & Release | Complete | 100% |
 
 ## Next Action
 
-Run `$gsd-discuss-phase 4` to gather phase-specific context, or `$gsd-plan-phase 4` to plan directly.
+Run milestone audit and completion lifecycle.
 
 ---
-*Last updated: 2026-06-12 after Phase 3 completion*
+*Last updated: 2026-06-12 after Phase 4 completion*

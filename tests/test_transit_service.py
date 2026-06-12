@@ -1,0 +1,53 @@
+import pytest
+
+from app.core.settings import Settings
+from app.services.transit import TransitService
+from app.storage.geo import GeoRepository
+
+
+class FakeIett:
+    async def line_info(self, line_code):
+        return [{"SHATKODU": line_code, "SHATADI": "A - B", "TARIFE": "TEST"}]
+
+    async def stops_for_line(self, line_code):
+        return [
+            {
+                "HATKODU": line_code,
+                "YON": "D",
+                "YON_ADI": " B ",
+                "SIRANO": "1",
+                "DURAKKODU": "100",
+                "DURAKADI": "Stop",
+                "XKOORDINATI": "29.0",
+                "YKOORDINATI": "41.0",
+                "DURAKTIPI": "DURAK",
+                "ILCEADI": "Test",
+            }
+        ]
+
+
+def service(tmp_path):
+    settings = Settings(database_path=tmp_path / "transit.sqlite3")
+    return TransitService(
+        settings=settings,
+        iett_client=FakeIett(),
+        geo_repository=GeoRepository(settings.database_path),
+    )
+
+
+@pytest.mark.asyncio
+async def test_line_info_returns_envelope(tmp_path):
+    result = await service(tmp_path).line_info("34A")
+
+    assert result["data"][0]["line_code"] == "34A"
+    assert result["sources"][0]["name"] == "IETT SOAP Services"
+
+
+@pytest.mark.asyncio
+async def test_stops_for_line_upserts_bus_stop(tmp_path):
+    svc = service(tmp_path)
+    result = await svc.stops_for_line("34A")
+
+    assert result["data"][0]["stop_code"] == "100"
+    nearby = svc.geo.nearby(lat=41.0, lon=29.0, radius_m=100, limit=5, types=["bus_stop"])
+    assert nearby[0]["name"] == "Stop"

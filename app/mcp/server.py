@@ -6,6 +6,7 @@ from app.core.envelope import Freshness, Source, success_envelope
 from app.core.settings import get_settings
 from app.services.city import CityService
 from app.services.catalog import CatalogService
+from app.services.transit import TransitService
 from app.storage.db import readiness
 
 settings = get_settings()
@@ -166,3 +167,15 @@ async def istanbul_air_quality_nearby(
 async def istanbul_traffic_status() -> dict:
     """Return Istanbul citywide traffic index."""
     return await CityService(settings=get_settings()).traffic_status()
+
+
+@mcp.tool()
+async def istanbul_transit_line_info(line_code: str) -> dict:
+    """Return basic IETT line information."""
+    return await TransitService(settings=get_settings()).line_info(line_code)
+
+
+@mcp.tool()
+async def istanbul_stops_for_line(line_code: str) -> dict:
+    """Return ordered IETT stops for a line."""
+    return await TransitService(settings=get_settings()).stops_for_line(line_code)
