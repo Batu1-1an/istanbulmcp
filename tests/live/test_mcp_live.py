@@ -48,3 +48,31 @@ def test_live_mcp_validation_envelope():
     assert payload["ok"] is False
     assert payload["data"][0]["field"] == "radius_m"
     assert payload["data"][0]["allowed_max"] == 5000
+
+
+def test_live_mcp_mobility_nearby_tool():
+    payload, error, _elapsed = rpc_call(
+        os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
+        9004,
+        "istanbul_mobility_nearby",
+        {"place": "Kadıköy", "radius_m": 1500, "limit": 3},
+    )
+
+    assert error is None
+    assert payload["ok"] is True
+    assert len(payload["data"]) == 1
+    assert "public_transport_stops" in payload["data"][0]
+
+
+def test_live_mcp_city_services_nearby_tool():
+    payload, error, _elapsed = rpc_call(
+        os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
+        9005,
+        "istanbul_city_services_nearby",
+        {"place": "Taksim", "radius_m": 1500, "limit": 3},
+    )
+
+    assert error is None
+    assert payload["ok"] is True
+    assert len(payload["data"]) == 1
+    assert "wifi_locations" in payload["data"][0]

@@ -171,6 +171,42 @@ async def istanbul_traffic_status() -> dict:
 
 
 @mcp.tool()
+async def istanbul_mobility_nearby(
+    place: str | None = None,
+    lat: float | None = None,
+    lon: float | None = None,
+    radius_m: int = 1500,
+    limit: int | None = None,
+) -> dict:
+    """Summarize nearby mobility options for a known Istanbul place or coordinate."""
+    return await CityService(settings=get_settings()).mobility_nearby(
+        place=place,
+        lat=lat,
+        lon=lon,
+        radius_m=radius_m,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+async def istanbul_city_services_nearby(
+    place: str | None = None,
+    lat: float | None = None,
+    lon: float | None = None,
+    radius_m: int = 1500,
+    limit: int | None = None,
+) -> dict:
+    """Summarize nearby WiFi and district-level library services."""
+    return await CityService(settings=get_settings()).city_services_nearby(
+        place=place,
+        lat=lat,
+        lon=lon,
+        radius_m=radius_m,
+        limit=limit,
+    )
+
+
+@mcp.tool()
 async def istanbul_transit_line_info(line_code: str) -> dict:
     """Return basic IETT line information."""
     return await TransitService(settings=get_settings()).line_info(line_code)

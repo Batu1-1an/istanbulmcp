@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.connectors.ckan import CkanClient
 from app.connectors.air_quality import AirQualityClient
 from app.connectors.ispark import IsparkClient
 from app.connectors.metro import MetroClient
@@ -12,6 +13,7 @@ from app.core.geo import parse_wkt_point
 from app.core.settings import Settings
 from app.core.source_cache import cached_source_data
 from app.core.validation import InputValidationError, validate_bbox, validate_lat_lon, validate_limit, validate_radius
+from app.services.places import ResolvedPlace, known_place_names, normalize_place, resolve_place
 from app.storage.geo import GeoRepository
 
 
@@ -20,6 +22,17 @@ CITY_SOURCE = Source(
     publisher="Istanbul Metropolitan Municipality",
     url="https://api.ibb.gov.tr",
 )
+
+OPEN_DATA_SOURCE = Source(
+    name="IBB Open Data Portal",
+    publisher="Istanbul Metropolitan Municipality",
+    url="https://data.ibb.gov.tr",
+)
+
+GTFS_STOPS_RESOURCE_ID = "d1f7c258-bbc1-406f-9ab2-7a7c1797c673"
+WIFI_LOCATIONS_RESOURCE_ID = "5d0a0b1e-9e56-4038-b966-7d3e7b46f882"
+LIBRARY_LOCATIONS_RESOURCE_ID = "2ee4476c-9984-43de-96de-7aeda4da9aee"
+CKAN_POINT_PREFETCH_LIMIT = 100
 
 
 class CityService:
@@ -32,6 +45,7 @@ class CityService:
         metro_client: MetroClient | None = None,
         air_quality_client: AirQualityClient | None = None,
         traffic_client: TrafficClient | None = None,
+        ckan_client: CkanClient | None = None,
     ):
         self.settings = settings
         self.geo = geo_repository or GeoRepository(settings.database_path)
@@ -39,6 +53,7 @@ class CityService:
         self.metro = metro_client or MetroClient(timeout=settings.request_timeout_seconds)
         self.air_quality = air_quality_client or AirQualityClient(timeout=settings.request_timeout_seconds)
         self.traffic = traffic_client or TrafficClient(timeout=settings.request_timeout_seconds)
+        self.ckan = ckan_client or CkanClient(timeout=settings.request_timeout_seconds)
 
     async def parking_nearby(self, *, lat: float, lon: float, radius_m: int = 1000, limit: int | None = None) -> dict:
         try:
@@ -92,7 +107,8 @@ class CityService:
             try:
                 readings = await self._air_quality_readings(station["source_id"])
             except Exception as exc:
-                return self._source_error(f"Air quality readings are unavailable for {station['name']}.", exc)
+                readings = []
+                warnings.append(f"Air quality readings are unavailable for {station['name']}: {type(exc).__name__}.")
             latest = readings[0] if readings else {}
             station["latest_reading"] = latest
             station["latest_reading_quality"] = {
@@ -144,6 +160,128 @@ class CityService:
             warnings=["Traffic source does not provide crash or incident details."],
         )
 
+    async def mobility_nearby(
+        self,
+        *,
+        place: str | None = None,
+        lat: float | None = None,
+        lon: float | None = None,
+        radius_m: int = 1500,
+        limit: int | None = None,
+    ) -> dict:
+        try:
+            resolved = self._resolve_location(place=place, lat=lat, lon=lon)
+            safe_limit = self._validate_geo(resolved.lat, resolved.lon, radius_m, limit)
+        except InputValidationError as exc:
+            return validation_error_envelope(exc, sources=[CITY_SOURCE, OPEN_DATA_SOURCE])
+
+        warnings: list[str] = []
+        parking = await self.parking_nearby(lat=resolved.lat, lon=resolved.lon, radius_m=radius_m, limit=safe_limit)
+        metro = await self.metro_stations_nearby(lat=resolved.lat, lon=resolved.lon, radius_m=radius_m, limit=safe_limit)
+        traffic = await self.traffic_status()
+
+        public_stops: list[dict[str, Any]] = []
+        air_quality_stations: list[dict[str, Any]] = []
+        try:
+            public_stops = await self._public_transport_stops_nearby(
+                lat=resolved.lat,
+                lon=resolved.lon,
+                radius_m=radius_m,
+                limit=safe_limit,
+            )
+        except Exception as exc:
+            warnings.append(f"Public transport GTFS stops unavailable: {type(exc).__name__}.")
+        try:
+            air_quality_stations = await self._air_quality_stations_nearby_summary(
+                lat=resolved.lat,
+                lon=resolved.lon,
+                radius_m=min(radius_m, self.settings.max_radius_m),
+                limit=min(safe_limit, 3),
+            )
+            warnings.append("Air quality in mobility summaries includes station locations only; use istanbul_air_quality_nearby for latest readings.")
+        except Exception as exc:
+            warnings.append(f"Air quality station source unavailable: {type(exc).__name__}.")
+
+        for label, envelope in (("parking", parking), ("metro", metro), ("traffic", traffic)):
+            warnings.extend(f"{label}: {warning}" for warning in envelope.get("warnings", []))
+            if not envelope.get("ok", False):
+                warnings.append(f"{label} source unavailable: {envelope.get('summary')}")
+
+        data = [
+            {
+                "query": self._resolved_payload(resolved),
+                "parking": parking.get("data", []) if parking.get("ok") else [],
+                "metro_stations": metro.get("data", []) if metro.get("ok") else [],
+                "public_transport_stops": public_stops,
+                "air_quality_stations": air_quality_stations,
+                "traffic": (traffic.get("data") or [{}])[0] if traffic.get("ok") else {},
+            }
+        ]
+        return success_envelope(
+            summary=f"Mobility options near {resolved.name} within {radius_m} meters.",
+            data=data,
+            sources=[
+                CITY_SOURCE,
+                Source(name="IBB Open Data Portal - Public GTFS stops", resource_id=GTFS_STOPS_RESOURCE_ID, url="https://data.ibb.gov.tr"),
+            ],
+            freshness=Freshness(status="fresh", ttl_seconds=300),
+            limits=[f"radius_m={radius_m}", f"limit_per_section={safe_limit}", "traffic=citywide"],
+            warnings=warnings,
+            next_queries=[
+                "Use istanbul_parking_nearby for parking-only details.",
+                "Use istanbul_stops_for_line for ordered IETT line stops.",
+            ],
+        )
+
+    async def city_services_nearby(
+        self,
+        *,
+        place: str | None = None,
+        lat: float | None = None,
+        lon: float | None = None,
+        radius_m: int = 1500,
+        limit: int | None = None,
+    ) -> dict:
+        try:
+            resolved = self._resolve_location(place=place, lat=lat, lon=lon)
+            safe_limit = self._validate_geo(resolved.lat, resolved.lon, radius_m, limit)
+        except InputValidationError as exc:
+            return validation_error_envelope(exc, sources=[OPEN_DATA_SOURCE])
+
+        warnings: list[str] = []
+        wifi: list[dict[str, Any]] = []
+        libraries: list[dict[str, Any]] = []
+        try:
+            wifi = await self._wifi_nearby(lat=resolved.lat, lon=resolved.lon, radius_m=radius_m, limit=safe_limit)
+        except Exception as exc:
+            warnings.append(f"WiFi locations unavailable: {type(exc).__name__}.")
+        if resolved.district:
+            try:
+                libraries = await self._libraries_for_district(resolved.district, limit=safe_limit)
+                warnings.append("Library results are district-level address records, not radius-precise coordinates.")
+            except Exception as exc:
+                warnings.append(f"Library locations unavailable: {type(exc).__name__}.")
+        else:
+            warnings.append("Libraries require a known place with district metadata; coordinate-only queries return WiFi only.")
+
+        return success_envelope(
+            summary=f"City services near {resolved.name} within {radius_m} meters.",
+            data=[
+                {
+                    "query": self._resolved_payload(resolved),
+                    "wifi_locations": wifi,
+                    "libraries": libraries,
+                }
+            ],
+            sources=[
+                Source(name="IBB Open Data Portal - WiFi locations", resource_id=WIFI_LOCATIONS_RESOURCE_ID, url="https://data.ibb.gov.tr"),
+                Source(name="IBB Open Data Portal - Library locations", resource_id=LIBRARY_LOCATIONS_RESOURCE_ID, url="https://data.ibb.gov.tr"),
+            ],
+            freshness=Freshness(status="fresh", ttl_seconds=60 * 60 * 24),
+            limits=[f"radius_m={radius_m}", f"limit_per_section={safe_limit}", "libraries=district-level"],
+            warnings=warnings,
+        )
+
     async def nearby(
         self,
         *,
@@ -155,7 +293,7 @@ class CityService:
     ) -> dict:
         try:
             safe_limit = self._validate_geo(lat, lon, radius_m, limit)
-            await self._refresh_requested(types)
+            warnings = await self._refresh_requested(types)
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[CITY_SOURCE])
         except Exception as exc:
@@ -167,13 +305,14 @@ class CityService:
             sources=[CITY_SOURCE],
             freshness=Freshness(status="fresh", ttl_seconds=300),
             limits=[f"radius_m={radius_m}", f"limit={safe_limit}"],
+            warnings=warnings,
         )
 
     async def bbox_search(self, *, bbox: list[float], types: list[str] | None = None, limit: int | None = None) -> dict:
         try:
             min_lon, min_lat, max_lon, max_lat = validate_bbox(bbox)
             safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
-            await self._refresh_requested(types)
+            warnings = await self._refresh_requested(types)
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[CITY_SOURCE])
         except Exception as exc:
@@ -192,6 +331,7 @@ class CityService:
             sources=[CITY_SOURCE],
             freshness=Freshness(status="fresh", ttl_seconds=300),
             limits=[f"limit={safe_limit}"],
+            warnings=warnings,
         )
 
     def _validate_geo(self, lat: float, lon: float, radius_m: int, limit: int | None) -> int:
@@ -199,17 +339,40 @@ class CityService:
         validate_radius(radius_m, self.settings.max_radius_m)
         return validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
 
-    async def _refresh_requested(self, types: list[str] | None) -> None:
+    async def _refresh_requested(self, types: list[str] | None) -> list[str]:
         requested = set(types or ["parking", "metro_station", "air_quality_station"])
+        warnings: list[str] = []
         if "parking" in requested:
-            parks = await self._parks()
-            self.geo.upsert_features([self._ispark_feature(park) for park in parks if park.get("lat") and park.get("lng")])
+            try:
+                parks = await self._parks()
+                self.geo.upsert_features([self._ispark_feature(park) for park in parks if park.get("lat") and park.get("lng")])
+            except Exception as exc:
+                warnings.append(f"Parking source refresh failed: {type(exc).__name__}.")
         if "metro_station" in requested:
-            stations = await self._metro_stations()
-            self.geo.upsert_features([self._metro_feature(station) for station in stations if self._metro_coordinates(station)])
+            try:
+                stations = await self._metro_stations()
+                self.geo.upsert_features([self._metro_feature(station) for station in stations if self._metro_coordinates(station)])
+            except Exception as exc:
+                warnings.append(f"Metro source refresh failed: {type(exc).__name__}.")
         if "air_quality_station" in requested:
-            stations = await self._air_quality_stations()
-            self.geo.upsert_features([self._aq_feature(station) for station in stations if parse_wkt_point(station.get("Location"))])
+            try:
+                stations = await self._air_quality_stations()
+                self.geo.upsert_features([self._aq_feature(station) for station in stations if parse_wkt_point(station.get("Location"))])
+            except Exception as exc:
+                warnings.append(f"Air quality station source refresh failed: {type(exc).__name__}.")
+        if "public_transport_stop" in requested:
+            try:
+                stops = await self._gtfs_stops()
+                self.geo.upsert_features([feature for row in stops if (feature := self._gtfs_stop_feature(row))])
+            except Exception as exc:
+                warnings.append(f"Public transport stop source refresh failed: {type(exc).__name__}.")
+        if "wifi" in requested:
+            try:
+                wifi_locations = await self._wifi_locations()
+                self.geo.upsert_features([feature for row in wifi_locations if (feature := self._wifi_feature(row))])
+            except Exception as exc:
+                warnings.append(f"WiFi source refresh failed: {type(exc).__name__}.")
+        return warnings
 
     async def _parks(self) -> list[dict[str, Any]]:
         return await cached_source_data(
@@ -245,6 +408,71 @@ class CityService:
             ttl_seconds=self.settings.traffic_cache_ttl_seconds,
             loader=self.traffic.index_history,
         )
+
+    async def _gtfs_stops(self) -> list[dict[str, Any]]:
+        async def load() -> list[dict[str, Any]]:
+            result = await self.ckan.datastore_search(resource_id=GTFS_STOPS_RESOURCE_ID, limit=CKAN_POINT_PREFETCH_LIMIT)
+            return result.get("records", [])
+
+        return await cached_source_data(
+            "ckan.public_gtfs.stops",
+            ttl_seconds=60 * 60 * 24,
+            loader=load,
+        )
+
+    async def _wifi_locations(self) -> list[dict[str, Any]]:
+        async def load() -> list[dict[str, Any]]:
+            result = await self.ckan.datastore_search(resource_id=WIFI_LOCATIONS_RESOURCE_ID, limit=CKAN_POINT_PREFETCH_LIMIT)
+            return result.get("records", [])
+
+        return await cached_source_data(
+            "ckan.wifi.locations",
+            ttl_seconds=60 * 60 * 24,
+            loader=load,
+        )
+
+    async def _library_locations(self) -> list[dict[str, Any]]:
+        async def load() -> list[dict[str, Any]]:
+            result = await self.ckan.datastore_search(resource_id=LIBRARY_LOCATIONS_RESOURCE_ID, limit=200)
+            return result.get("records", [])
+
+        return await cached_source_data(
+            "ckan.library.locations",
+            ttl_seconds=60 * 60 * 24,
+            loader=load,
+        )
+
+    async def _public_transport_stops_nearby(self, *, lat: float, lon: float, radius_m: int, limit: int) -> list[dict[str, Any]]:
+        stops = await self._gtfs_stops()
+        self.geo.upsert_features([feature for row in stops if (feature := self._gtfs_stop_feature(row))])
+        return self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=limit, types=["public_transport_stop"])
+
+    async def _wifi_nearby(self, *, lat: float, lon: float, radius_m: int, limit: int) -> list[dict[str, Any]]:
+        locations = await self._wifi_locations()
+        self.geo.upsert_features([feature for row in locations if (feature := self._wifi_feature(row))])
+        return self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=limit, types=["wifi"])
+
+    async def _air_quality_stations_nearby_summary(self, *, lat: float, lon: float, radius_m: int, limit: int) -> list[dict[str, Any]]:
+        stations = await self._air_quality_stations()
+        self.geo.upsert_features([self._aq_feature(station) for station in stations if parse_wkt_point(station.get("Location"))])
+        return self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=limit, types=["air_quality_station"])
+
+    async def _libraries_for_district(self, district: str, *, limit: int) -> list[dict[str, Any]]:
+        rows = await self._library_locations()
+        normalized_district = self._normalize_text(district)
+        matches = [
+            {
+                "name": row.get("Kutuphane Adi"),
+                "district": row.get("Ilce Adi"),
+                "address": row.get("Adres"),
+                "phone": row.get("Telefon"),
+                "working_hours": row.get("Calisma Saatleri"),
+                "working_days": row.get("Calisma Gunleri"),
+            }
+            for row in rows
+            if self._normalize_text(row.get("Ilce Adi")) == normalized_district
+        ]
+        return matches[:limit]
 
     def _ispark_feature(self, park: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -305,6 +533,49 @@ class CityService:
             },
         }
 
+    def _gtfs_stop_feature(self, stop: dict[str, Any]) -> dict[str, Any] | None:
+        lat = self._float_or_none(stop.get("stop_lat"))
+        lon = self._float_or_none(stop.get("stop_lon"))
+        stop_id = stop.get("stop_id")
+        if lat is None or lon is None or not stop_id:
+            return None
+        return {
+            "id": f"gtfs_stop:{stop_id}",
+            "source": "gtfs",
+            "feature_type": "public_transport_stop",
+            "source_id": str(stop_id),
+            "name": stop.get("stop_name") or str(stop_id),
+            "lat": lat,
+            "lon": lon,
+            "properties": {
+                "stop_code": stop.get("stop_code"),
+                "stop_desc": stop.get("stop_desc"),
+                "zone_id": stop.get("zone_id"),
+                "wheelchair_boarding": stop.get("wheelchair_boarding"),
+            },
+        }
+
+    def _wifi_feature(self, row: dict[str, Any]) -> dict[str, Any] | None:
+        lat = self._float_or_none(row.get("latitude"))
+        lon = self._float_or_none(row.get("longitude"))
+        code = row.get("location_code") or row.get("_id")
+        if lat is None or lon is None or lat == 0.0 or lon == 0.0 or not code:
+            return None
+        return {
+            "id": f"wifi:{code}",
+            "source": "ibb_wifi",
+            "feature_type": "wifi",
+            "source_id": str(code),
+            "name": row.get("location") or str(code),
+            "lat": lat,
+            "lon": lon,
+            "properties": {
+                "location_group": row.get("location_group"),
+                "location_type": row.get("location_type"),
+                "location_code": row.get("location_code"),
+            },
+        }
+
     def _traffic_label(self, index: int | None) -> str:
         if index is None:
             return "unknown"
@@ -313,6 +584,44 @@ class CityService:
         if index < 60:
             return "moderate"
         return "high"
+
+    def _resolve_location(self, *, place: str | None, lat: float | None, lon: float | None) -> ResolvedPlace:
+        if place and (lat is not None or lon is not None):
+            raise InputValidationError("Provide either place or lat/lon, not both.", field="place")
+        if place:
+            resolved = resolve_place(place)
+            if resolved is None:
+                raise InputValidationError(
+                    f"Unknown place. Known examples: {', '.join(known_place_names()[:8])}",
+                    field="place",
+                )
+            validate_lat_lon(resolved.lat, resolved.lon)
+            return resolved
+        if lat is None or lon is None:
+            raise InputValidationError("Provide place or both lat and lon.", field="place")
+        validate_lat_lon(lat, lon)
+        return ResolvedPlace("coordinates", "coordinates", float(lat), float(lon), confidence="coordinate")
+
+    def _resolved_payload(self, resolved: ResolvedPlace) -> dict[str, Any]:
+        return {
+            "name": resolved.name,
+            "lat": resolved.lat,
+            "lon": resolved.lon,
+            "district": resolved.district,
+            "neighborhood": resolved.neighborhood,
+            "confidence": resolved.confidence,
+        }
+
+    def _float_or_none(self, value: Any) -> float | None:
+        if value in (None, ""):
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _normalize_text(self, value: Any) -> str:
+        return normalize_place(str(value or ""))
 
     def _source_error(self, summary: str, exc: Exception) -> dict[str, Any]:
         return source_error_envelope(

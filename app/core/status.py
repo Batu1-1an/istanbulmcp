@@ -20,6 +20,8 @@ TOOL_SOURCES = {
     "istanbul_metro_stations_nearby": "metro",
     "istanbul_air_quality_nearby": "air_quality",
     "istanbul_traffic_status": "traffic",
+    "istanbul_mobility_nearby": "mixed_city_open_data",
+    "istanbul_city_services_nearby": "ckan",
     "istanbul_transit_line_info": "iett",
     "istanbul_stops_for_line": "iett",
 }

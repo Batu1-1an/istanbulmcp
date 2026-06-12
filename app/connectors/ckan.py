@@ -64,8 +64,9 @@ class CkanClient:
         resource_id: str,
         limit: int,
         filters: dict[str, Any] | None = None,
+        offset: int = 0,
     ) -> dict[str, Any]:
-        payload: dict[str, Any] = {"resource_id": resource_id, "limit": limit}
+        payload: dict[str, Any] = {"resource_id": resource_id, "limit": limit, "offset": offset}
         if filters:
             payload["filters"] = filters
         return await self._request("datastore_search", payload)

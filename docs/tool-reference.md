@@ -32,8 +32,14 @@ Catalog search results include `relevance`, `datastore_active_count`, and `prefe
 - `istanbul_metro_stations_nearby(lat, lon, radius_m?, limit?)`
 - `istanbul_air_quality_nearby(lat, lon, radius_m?, limit?)`
 - `istanbul_traffic_status()`
+- `istanbul_mobility_nearby(place?, lat?, lon?, radius_m?, limit?)`
+- `istanbul_city_services_nearby(place?, lat?, lon?, radius_m?, limit?)`
 
 Air quality results include `latest_reading_quality` because the upstream source can return station records with missing AQI values. Traffic status is citywide only and explicitly lists unsupported road-level or incident detail.
+
+`istanbul_mobility_nearby` is for practical questions such as nearby parking, metro, public transport stops, air quality, and the citywide traffic index. It accepts either a curated Istanbul `place` name such as `Kadıköy`, `Taksim`, or `Beşiktaş`, or explicit `lat`/`lon`.
+
+`istanbul_city_services_nearby` returns nearby WiFi points and district-level library address/hour records where available. Library records do not have coordinates, so those results are marked as district-level rather than radius-precise.
 
 ## Transit
 

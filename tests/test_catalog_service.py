@@ -40,6 +40,17 @@ class RateLimitedCkan:
         raise SourceRateLimitExceeded(source="ckan", retry_after_seconds=1.25)
 
 
+class FailingCkan:
+    async def package_search(self, **_kwargs):
+        raise RuntimeError("ckan down")
+
+    async def package_show(self, _dataset_id):
+        raise RuntimeError("ckan down")
+
+    async def datastore_search(self, **_kwargs):
+        raise RuntimeError("ckan down")
+
+
 @pytest.mark.asyncio
 async def test_search_datasets_snapshots_results(tmp_path):
     async def handler(_request: httpx.Request) -> httpx.Response:
@@ -108,6 +119,23 @@ async def test_search_datasets_rate_limit_returns_retry_after_envelope(tmp_path)
     assert result["freshness"]["status"] == "stale"
     assert result["data"][0]["source"] == "ckan"
     assert result["data"][0]["retry_after_seconds"] == 1.25
+
+
+@pytest.mark.asyncio
+async def test_search_datasets_source_failure_returns_envelope(tmp_path):
+    settings = Settings(database_path=tmp_path / "catalog.sqlite3")
+    service = CatalogService(
+        settings=settings,
+        client=FailingCkan(),
+        repository=CatalogRepository(settings.database_path),
+    )
+
+    result = await service.search_datasets(query="trafik", limit=5)
+
+    assert result["ok"] is False
+    assert result["data"][0]["error_code"] == "source_unavailable"
+    assert result["data"][0]["exception_type"] == "RuntimeError"
+    assert result["warnings"] == ["CKAN source request failed: RuntimeError"]
 
 
 @pytest.mark.asyncio

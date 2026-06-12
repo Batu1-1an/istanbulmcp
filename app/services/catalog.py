@@ -4,7 +4,7 @@ from typing import Any
 
 from app.connectors.ckan import CkanClient
 from app.core.envelope import Freshness, Pagination, Source, error_envelope, success_envelope
-from app.core.error_responses import validation_error_envelope
+from app.core.error_responses import source_error_envelope, validation_error_envelope
 from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
 from app.core.validation import InputValidationError, validate_limit
@@ -44,6 +44,8 @@ class CatalogService:
             result = await self.client.package_search(query=query, rows=safe_limit, formats=formats)
         except SourceRateLimitExceeded as exc:
             return self._rate_limited("CKAN package_search", exc)
+        except Exception as exc:
+            return self._source_error("CKAN package search is unavailable.", exc)
         datasets = result.get("results", [])
         for dataset in datasets:
             self.repository.upsert_dataset(dataset)
@@ -66,6 +68,8 @@ class CatalogService:
             dataset = await self.client.package_show(dataset_id)
         except SourceRateLimitExceeded as exc:
             return self._rate_limited("CKAN package_show", exc)
+        except Exception as exc:
+            return self._source_error(f"CKAN dataset metadata is unavailable for {dataset_id}.", exc)
         self.repository.upsert_dataset(dataset)
         return success_envelope(
             summary=f"Dataset '{dataset.get('title') or dataset_id}' metadata retrieved.",
@@ -80,6 +84,8 @@ class CatalogService:
             result = await self.client.datastore_search(resource_id=resource_id, limit=0)
         except SourceRateLimitExceeded as exc:
             return self._rate_limited("CKAN datastore_search", exc)
+        except Exception as exc:
+            return self._source_error(f"CKAN resource schema is unavailable for {resource_id}.", exc)
         fields = result.get("fields", [])
         return success_envelope(
             summary=f"Resource '{resource_id}' schema has {len(fields)} field(s).",
@@ -108,6 +114,8 @@ class CatalogService:
             )
         except SourceRateLimitExceeded as exc:
             return self._rate_limited("CKAN datastore_search", exc)
+        except Exception as exc:
+            return self._source_error(f"CKAN resource query is unavailable for {resource_id}.", exc)
         records = result.get("records", [])
         return success_envelope(
             summary=f"{len(records)} record(s) returned from resource '{resource_id}'.",
@@ -184,4 +192,12 @@ class CatalogService:
             freshness_status="stale",
             data=[{"source": exc.source, "retry_after_seconds": retry_after}],
             limits=[f"rate_limited_source={exc.source}", f"retry_after_seconds={retry_after}"],
+        )
+
+    def _source_error(self, summary: str, exc: Exception) -> dict[str, Any]:
+        return source_error_envelope(
+            summary=summary,
+            warning=f"CKAN source request failed: {type(exc).__name__}",
+            sources=[IBB_SOURCE],
+            exception=exc,
         )
