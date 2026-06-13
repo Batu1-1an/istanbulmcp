@@ -1,6 +1,156 @@
 # Istanbul MCP
 
-Remote MCP server for Istanbul open city data. The MVP focuses on a small, reliable city-data core: IBB catalog search, nearby city services, traffic, parking, metro, air quality, practical nearby mobility aggregation, neighborhood profiles, and narrow IETT line/stop access.
+Istanbul MCP is a remote Model Context Protocol server for Istanbul open city data. It lets AI assistants, IDE agents, and CLI tools answer practical Istanbul questions with live or cached source data, freshness metadata, limits, warnings, and map links where available.
+
+Public endpoint:
+
+```text
+https://istanbulmcp-production.up.railway.app/mcp/
+```
+
+## What It Can Do
+
+- Search Istanbul Metropolitan Municipality open datasets and inspect dataset/resource schemas.
+- Query selected CKAN DataStore resources with guarded filters and limits.
+- Return citywide traffic index data.
+- Find nearby parking lots, show capacity/empty capacity, open status, and Google Maps links.
+- List district-wide ISPark parking records without inventing fake center distances.
+- Find nearby Metro Istanbul stations, public transport stops, WiFi points, and air quality stations.
+- Summarize mobility near known places such as `Kadıköy Rıhtım`, `Taksim`, and `Levent`.
+- Return IETT line information and ordered stops for a line code.
+- Return district-level library address, phone, hours, and Google Maps search links.
+- Build neighborhood profiles from social assistance, building stock, and earthquake scenario open data.
+
+Coordinate results include `maps_url`. Address-only records, such as libraries, can include `maps_search_url` and `location_precision=address_search` so users get a useful map search link without fake coordinates.
+
+## Example Questions
+
+Try these from any MCP-compatible client:
+
+```text
+Beşiktaş'ta hangi kütüphaneler var?
+Başakşehir'de hangi otoparklar var, doluluk oranı nedir?
+Kadıköy Rıhtım çevresinde ulaşım seçenekleri neler?
+34A hattının durakları neler?
+Levent yakınında metro istasyonu var mı?
+Kadıköy'de hava kalitesi istasyonları neler?
+Trafik verisiyle ilgili hangi datasetler var?
+Kadıköy Caferağa mahalle profili nedir?
+```
+
+## MCP Tools
+
+The server exposes read-only tools:
+
+```text
+istanbul_health
+istanbul_search_datasets
+istanbul_get_dataset
+istanbul_get_resource_schema
+istanbul_query_resource
+istanbul_nearby
+istanbul_bbox_search
+istanbul_parking_nearby
+istanbul_parking_by_district
+istanbul_metro_stations_nearby
+istanbul_air_quality_nearby
+istanbul_traffic_status
+istanbul_mobility_nearby
+istanbul_city_services_nearby
+istanbul_neighborhood_profile
+istanbul_transit_line_info
+istanbul_stops_for_line
+```
+
+See [docs/tool-reference.md](docs/tool-reference.md) for parameters, behavior, and limitations.
+
+## Add To Codex CLI
+
+Codex supports Streamable HTTP MCP servers. Add Istanbul MCP with:
+
+```bash
+codex mcp add istanbul --url https://istanbulmcp-production.up.railway.app/mcp/
+codex mcp list
+```
+
+Equivalent manual config in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.istanbul]
+url = "https://istanbulmcp-production.up.railway.app/mcp/"
+```
+
+Then open a new Codex session and ask an Istanbul question, for example:
+
+```text
+Başakşehir'de hangi otoparklar var, doluluk oranı nedir?
+```
+
+## Add To OpenCode
+
+OpenCode supports remote MCP servers in `opencode.json`.
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "istanbul": {
+      "type": "remote",
+      "url": "https://istanbulmcp-production.up.railway.app/mcp/",
+      "enabled": true
+    }
+  }
+}
+```
+
+After saving the config, restart OpenCode or start a new session, then run:
+
+```bash
+opencode mcp list
+```
+
+## Generic MCP Client Config
+
+For other MCP-compatible tools, add Istanbul MCP as a remote or Streamable HTTP server:
+
+```json
+{
+  "mcpServers": {
+    "istanbul": {
+      "url": "https://istanbulmcp-production.up.railway.app/mcp/"
+    }
+  }
+}
+```
+
+Some clients use a different top-level key or require `"type": "remote"` / `"transport": "http"`. Keep the endpoint exactly as shown, including the trailing `/mcp/`.
+
+## HTTP Health Checks
+
+Quick service checks:
+
+```bash
+curl -fsS https://istanbulmcp-production.up.railway.app/healthz
+curl -fsS https://istanbulmcp-production.up.railway.app/status
+curl -i https://istanbulmcp-production.up.railway.app/mcp
+```
+
+`/mcp` redirects to `/mcp/`; MCP clients should use `/mcp/` directly.
+
+## Response Model
+
+Tools return a standard envelope with:
+
+- `ok`
+- `summary`
+- `data`
+- `freshness`
+- `sources`
+- `limits`
+- `warnings`
+- `next_queries` where useful
+
+The server is read-only. It does not book parking, alter public data, provide emergency advice, or invent unavailable source fields.
 
 ## Development
 
@@ -17,15 +167,7 @@ The local server exposes:
 - `GET /healthz`
 - `GET /readyz`
 - `GET /status`
-- `POST /mcp/` (canonical Streamable HTTP MCP endpoint; `/mcp` redirects to `/mcp/`)
-
-Quick remote smoke test:
-
-```bash
-curl -fsS https://istanbulmcp-production.up.railway.app/healthz
-curl -fsS https://istanbulmcp-production.up.railway.app/status
-curl -i https://istanbulmcp-production.up.railway.app/mcp
-```
+- `POST /mcp/`
 
 Opt-in live MCP regression:
 
@@ -34,7 +176,9 @@ RUN_LIVE_MCP_TESTS=1 pytest tests/live
 python scripts/live_mcp_uat.py
 ```
 
-Key upstream cache TTLs can be tuned with environment variables:
+## Configuration
+
+Key upstream cache TTLs:
 
 - `CKAN_CATALOG_CACHE_TTL_SECONDS`
 - `CKAN_RESOURCE_CACHE_TTL_SECONDS`
@@ -42,7 +186,7 @@ Key upstream cache TTLs can be tuned with environment variables:
 - `IETT_STOPS_CACHE_TTL_SECONDS`
 - `SOURCE_CACHE_MAX_ENTRIES`
 
-Public MCP abuse guard limits can also be tuned:
+Public MCP guard limits:
 
 - `MCP_MAX_BODY_BYTES`
 - `MCP_RATE_LIMIT_CAPACITY`
@@ -50,13 +194,9 @@ Public MCP abuse guard limits can also be tuned:
 - `MCP_RATE_LIMIT_MAX_CLIENTS`
 - `MCP_MAX_CONCURRENT_REQUESTS`
 
-## Tools
-
-See `docs/tool-reference.md` for the current MCP tool surface.
-
 ## Deployment
 
-Railway deployment notes live in `docs/deploy-railway.md`.
+The production service runs on Railway. Deployment notes live in [docs/deploy-railway.md](docs/deploy-railway.md).
 
 ## Planning
 
