@@ -41,9 +41,10 @@ def test_status_returns_tool_inventory(monkeypatch, tmp_path):
     assert body["ok"] is True
     assert body["transport"]["streamable_http"] == "/mcp/"
     tool_names = {tool["name"] for tool in body["tools"]}
-    assert body["tool_count"] >= 16
+    assert body["tool_count"] >= 17
     assert "istanbul_search_datasets" in tool_names
     assert "istanbul_neighborhood_profile" in tool_names
+    assert "istanbul_parking_by_district" in tool_names
 
 
 def test_http_requests_are_logged_as_json(caplog):

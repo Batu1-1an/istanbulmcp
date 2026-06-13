@@ -23,7 +23,17 @@ class FakeIspark:
                 "emptyCapacity": 25,
                 "district": "KADIKOY",
                 "isOpen": 1,
-            }
+            },
+            {
+                "parkID": 2,
+                "parkName": "Basaksehir Otopark",
+                "lat": "41.0930",
+                "lng": "28.8060",
+                "capacity": 250,
+                "emptyCapacity": 80,
+                "district": "Başakşehir",
+                "isOpen": 1,
+            },
         ]
 
 
@@ -164,6 +174,18 @@ async def test_parking_nearby_returns_capacity(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_parking_by_district_uses_source_district_without_distance(tmp_path):
+    result = await service(tmp_path).parking_by_district(district="Başakşehir", limit=5)
+
+    assert result["ok"] is True
+    assert result["data"][0]["name"] == "Basaksehir Otopark"
+    assert result["data"][0]["empty_capacity"] == 80
+    assert "distance_m" not in result["data"][0]
+    assert "no distance calculation" in result["limits"]
+    assert any("no district center" in warning for warning in result["warnings"])
+
+
+@pytest.mark.asyncio
 async def test_traffic_status_returns_label(tmp_path):
     result = await service(tmp_path).traffic_status()
 
@@ -288,7 +310,7 @@ async def test_parking_source_uses_ttl_cache(tmp_path):
 
 @pytest.mark.asyncio
 async def test_mobility_nearby_aggregates_sections_for_place(tmp_path):
-    result = await service(tmp_path).mobility_nearby(place="Kadıköy", radius_m=1500, limit=3)
+    result = await service(tmp_path).mobility_nearby(place="Kadıköy Rıhtım", radius_m=1500, limit=3)
 
     payload = result["data"][0]
     assert result["ok"] is True
@@ -297,6 +319,15 @@ async def test_mobility_nearby_aggregates_sections_for_place(tmp_path):
     assert payload["metro_stations"][0]["name"] == "Kadikoy"
     assert payload["public_transport_stops"][0]["name"] == "Kadikoy Rihtim"
     assert payload["traffic"]["traffic_index"] == 63
+
+
+@pytest.mark.asyncio
+async def test_mobility_nearby_rejects_district_place_to_avoid_fake_center_distance(tmp_path):
+    result = await service(tmp_path).mobility_nearby(place="Kadıköy", radius_m=1500, limit=3)
+
+    assert result["ok"] is False
+    assert result["data"][0]["field"] == "place"
+    assert "District names are not valid radius reference points" in result["summary"]
 
 
 @pytest.mark.asyncio

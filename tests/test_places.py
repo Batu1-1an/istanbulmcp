@@ -13,3 +13,4 @@ def test_resolve_place_accepts_turkish_and_ascii_aliases():
 
 def test_normalize_place_handles_common_turkish_characters():
     assert normalize_place(" Beşiktaş, ") == "besiktas"
+    assert normalize_place("BAŞAKŞEHİR") == "basaksehir"

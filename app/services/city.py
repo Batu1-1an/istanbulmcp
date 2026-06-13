@@ -13,7 +13,7 @@ from app.core.geo import parse_wkt_point
 from app.core.settings import Settings
 from app.core.source_cache import cached_source_data
 from app.core.validation import InputValidationError, validate_bbox, validate_lat_lon, validate_limit, validate_radius
-from app.services.places import ResolvedPlace, known_place_names, normalize_place, resolve_place
+from app.services.places import ResolvedPlace, is_district_place, known_place_names, normalize_place, resolve_place
 from app.storage.geo import GeoRepository
 
 
@@ -72,6 +72,35 @@ class CityService:
             freshness=Freshness(status="fresh", ttl_seconds=300),
             limits=[f"radius_m={radius_m}", f"limit={safe_limit}"],
             warnings=[],
+        )
+
+    async def parking_by_district(self, *, district: str, limit: int | None = None) -> dict:
+        try:
+            if not district or not district.strip():
+                raise InputValidationError("district is required", field="district")
+            safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
+            parks = await self._parks()
+        except InputValidationError as exc:
+            return validation_error_envelope(exc, sources=[CITY_SOURCE])
+        except Exception as exc:
+            return self._source_error("Parking source is unavailable.", exc)
+
+        normalized_district = self._normalize_text(district)
+        rows = [
+            self._district_parking_row(park)
+            for park in parks
+            if self._normalize_text(park.get("district")) == normalized_district
+        ]
+        rows.sort(key=lambda row: (row["name"] or "", row["source_id"]))
+        data = rows[:safe_limit]
+        return success_envelope(
+            summary=f"{len(data)} parking lot(s) found in district '{district.strip()}'.",
+            data=data,
+            sources=[CITY_SOURCE],
+            freshness=Freshness(status="fresh", ttl_seconds=self.settings.ispark_cache_ttl_seconds),
+            limits=[f"limit={safe_limit}", "district_match=source district field", "no distance calculation"],
+            warnings=["District parking results are filtered by the source district field; no district center or synthetic distance is used."],
+            next_queries=["Use istanbul_parking_nearby only when you have an exact coordinate and need distance sorting."],
         )
 
     async def metro_stations_nearby(self, *, lat: float, lon: float, radius_m: int = 1000, limit: int | None = None) -> dict:
@@ -171,6 +200,11 @@ class CityService:
     ) -> dict:
         try:
             resolved = self._resolve_location(place=place, lat=lat, lon=lon)
+            if place and is_district_place(resolved):
+                raise InputValidationError(
+                    "District names are not valid radius reference points. Use istanbul_parking_by_district for district-wide parking, or provide exact lat/lon for nearby mobility.",
+                    field="place",
+                )
             safe_limit = self._validate_geo(resolved.lat, resolved.lon, radius_m, limit)
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[CITY_SOURCE, OPEN_DATA_SOURCE])
@@ -218,7 +252,7 @@ class CityService:
             }
         ]
         return success_envelope(
-            summary=f"Mobility options near {resolved.name} within {radius_m} meters.",
+            summary=f"Mobility options near reference point {resolved.name} within {radius_m} meters.",
             data=data,
             sources=[
                 CITY_SOURCE,
@@ -229,6 +263,7 @@ class CityService:
             warnings=warnings,
             next_queries=[
                 "Use istanbul_parking_nearby for parking-only details.",
+                "Use istanbul_parking_by_district for district-wide parking without synthetic distances.",
                 "Use istanbul_stops_for_line for ordered IETT line stops.",
             ],
         )
@@ -491,6 +526,21 @@ class CityService:
                 "park_type": park.get("parkType"),
                 "is_open": park.get("isOpen"),
             },
+        }
+
+    def _district_parking_row(self, park: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "source": "ispark",
+            "source_id": str(park.get("parkID")),
+            "name": park.get("parkName") or str(park.get("parkID")),
+            "district": park.get("district"),
+            "lat": self._float_or_none(park.get("lat")),
+            "lon": self._float_or_none(park.get("lng")),
+            "capacity": park.get("capacity"),
+            "empty_capacity": park.get("emptyCapacity"),
+            "work_hours": park.get("workHours"),
+            "park_type": park.get("parkType"),
+            "is_open": park.get("isOpen"),
         }
 
     def _metro_coordinates(self, station: dict[str, Any]) -> tuple[float, float] | None:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from unicodedata import normalize
+from unicodedata import combining, normalize
 
 
 @dataclass(frozen=True)
@@ -32,6 +32,18 @@ _PLACES: tuple[ResolvedPlace, ...] = (
     ResolvedPlace("sariyer", "Sariyer", 41.1663, 29.0500, "Sariyer"),
     ResolvedPlace("kartal", "Kartal", 40.8998, 29.1936, "Kartal"),
 )
+
+DISTRICT_PLACE_QUERIES = {
+    "atasehir",
+    "bakirkoy",
+    "besiktas",
+    "fatih",
+    "kadikoy",
+    "kartal",
+    "sariyer",
+    "sisli",
+    "uskudar",
+}
 
 _ALIASES = {
     "kadıkoy": "kadikoy",
@@ -64,6 +76,10 @@ def known_place_names() -> list[str]:
     return sorted(place.name for place in _PLACES)
 
 
+def is_district_place(place: ResolvedPlace) -> bool:
+    return place.query in DISTRICT_PLACE_QUERIES
+
+
 def normalize_place(value: str) -> str:
     normalized = normalize("NFKC", value).strip().casefold()
     replacements = str.maketrans(
@@ -79,4 +95,6 @@ def normalize_place(value: str) -> str:
             ".": " ",
         }
     )
-    return " ".join(normalized.translate(replacements).split())
+    translated = normalize("NFKD", normalized.translate(replacements))
+    without_marks = "".join(char for char in translated if not combining(char))
+    return " ".join(without_marks.split())
