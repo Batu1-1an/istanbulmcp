@@ -114,6 +114,54 @@ Then start a new Claude Code session and ask:
 Beşiktaş'ta hangi kütüphaneler var?
 ```
 
+## Add To Claude Desktop
+
+Claude Desktop supports remote MCP through custom connectors. In Claude Desktop:
+
+1. Open **Customize > Connectors**.
+2. Click **+** and choose **Add custom connector**.
+3. Use `Istanbul MCP` as the name.
+4. Use this URL:
+
+```text
+https://istanbulmcp-production.up.railway.app/mcp/
+```
+
+If your Claude Desktop setup uses the local MCP config file instead, bridge the remote endpoint through `mcp-remote` in `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "istanbul": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://istanbulmcp-production.up.railway.app/mcp/"
+      ]
+    }
+  }
+}
+```
+
+Restart Claude Desktop after editing the config.
+
+## Add To Cursor
+
+Cursor supports remote MCP servers in `~/.cursor/mcp.json` or through **Cursor Settings > MCP**.
+
+```json
+{
+  "mcpServers": {
+    "istanbul": {
+      "url": "https://istanbulmcp-production.up.railway.app/mcp/"
+    }
+  }
+}
+```
+
+After saving, refresh MCP servers in Cursor settings or restart Cursor.
+
 ## Add To OpenCode
 
 OpenCode supports remote MCP servers in `opencode.json`.
@@ -136,6 +184,22 @@ After saving the config, restart OpenCode or start a new session, then run:
 ```bash
 opencode mcp list
 ```
+
+## Add To Windsurf
+
+Windsurf Cascade supports remote HTTP MCP servers in `~/.codeium/windsurf/mcp_config.json`.
+
+```json
+{
+  "mcpServers": {
+    "istanbul": {
+      "serverUrl": "https://istanbulmcp-production.up.railway.app/mcp/"
+    }
+  }
+}
+```
+
+You can also open Windsurf's MCP tools/settings screen, choose raw config, paste the same entry, then refresh MCP servers.
 
 ## Generic MCP Client Config
 
