@@ -9,7 +9,7 @@ from app.connectors.metro import MetroClient
 from app.connectors.traffic import TrafficClient
 from app.core.envelope import Freshness, Source, success_envelope
 from app.core.error_responses import source_error_envelope, validation_error_envelope
-from app.core.geo import google_maps_url, parse_wkt_point
+from app.core.geo import google_maps_search_url, google_maps_url, parse_wkt_point
 from app.core.settings import Settings
 from app.core.source_cache import cached_source_data
 from app.core.validation import InputValidationError, validate_bbox, validate_lat_lon, validate_limit, validate_radius, validate_text
@@ -533,8 +533,11 @@ class CityService:
     async def _libraries_for_district(self, district: str, *, limit: int) -> list[dict[str, Any]]:
         rows = await self._library_locations()
         normalized_district = self._normalize_text(district)
-        matches = [
-            {
+        matches = []
+        for row in rows:
+            if self._normalize_text(row.get("Ilce Adi")) != normalized_district:
+                continue
+            item = {
                 "name": row.get("Kutuphane Adi"),
                 "district": row.get("Ilce Adi"),
                 "address": row.get("Adres"),
@@ -542,9 +545,10 @@ class CityService:
                 "working_hours": row.get("Calisma Saatleri"),
                 "working_days": row.get("Calisma Gunleri"),
             }
-            for row in rows
-            if self._normalize_text(row.get("Ilce Adi")) == normalized_district
-        ]
+            if maps_search_url := google_maps_search_url(item["name"], item["address"], item["district"], "İstanbul"):
+                item["maps_search_url"] = maps_search_url
+                item["location_precision"] = "address_search"
+            matches.append(item)
         return matches[:limit]
 
     def _ispark_feature(self, park: dict[str, Any]) -> dict[str, Any]:

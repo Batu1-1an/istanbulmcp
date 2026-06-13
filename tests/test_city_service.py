@@ -360,6 +360,9 @@ async def test_city_services_nearby_filters_wifi_and_returns_district_libraries(
     assert payload["wifi_locations"][0]["maps_url"].startswith("https://www.google.com/maps/search/")
     assert [row["name"] for row in payload["libraries"]] == ["Kadikoy Library"]
     assert "maps_url" not in payload["libraries"][0]
+    assert payload["libraries"][0]["maps_search_url"].startswith("https://www.google.com/maps/search/?")
+    assert "Kadikoy+Library" in payload["libraries"][0]["maps_search_url"]
+    assert payload["libraries"][0]["location_precision"] == "address_search"
     assert any("district-level" in warning for warning in result["warnings"])
 
 

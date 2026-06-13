@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import re
 from typing import Any
+from urllib.parse import urlencode
 
 EARTH_RADIUS_M = 6_371_000
 WKT_POINT_RE = re.compile(r"POINT\s*\(\s*([0-9.\-]+)\s+([0-9.\-]+)\s*\)", re.I)
@@ -51,3 +52,10 @@ def google_maps_url(lat: Any, lon: Any) -> str | None:
     if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
         return None
     return f"https://www.google.com/maps/search/?api=1&query={latitude:.6f},{longitude:.6f}"
+
+
+def google_maps_search_url(*parts: Any) -> str | None:
+    query = ", ".join(str(part).strip() for part in parts if part is not None and str(part).strip())
+    if not query:
+        return None
+    return f"https://www.google.com/maps/search/?{urlencode({'api': '1', 'query': query})}"

@@ -1,4 +1,4 @@
-from app.core.geo import google_maps_url, haversine_m, parse_wkt_point, radius_bbox
+from app.core.geo import google_maps_search_url, google_maps_url, haversine_m, parse_wkt_point, radius_bbox
 
 
 def test_parse_wkt_point_returns_lat_lon():
@@ -26,3 +26,15 @@ def test_google_maps_url_ignores_missing_or_invalid_coordinates():
     assert google_maps_url(None, 29.0303) is None
     assert google_maps_url(40.9909, "not-a-lon") is None
     assert google_maps_url(100, 29.0303) is None
+
+
+def test_google_maps_search_url_builds_encoded_address_query():
+    assert (
+        google_maps_search_url("İskele Kütüphanesi", "Beşiktaş address", "Beşiktaş", "İstanbul")
+        == "https://www.google.com/maps/search/?api=1&query=%C4%B0skele+K%C3%BCt%C3%BCphanesi%2C+Be%C5%9Fikta%C5%9F+address%2C+Be%C5%9Fikta%C5%9F%2C+%C4%B0stanbul"
+    )
+
+
+def test_google_maps_search_url_ignores_empty_parts():
+    assert google_maps_search_url(None, "", "  ") is None
+    assert google_maps_search_url("Kadikoy Library") == "https://www.google.com/maps/search/?api=1&query=Kadikoy+Library"
