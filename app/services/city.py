@@ -13,7 +13,7 @@ from app.core.geo import parse_wkt_point
 from app.core.settings import Settings
 from app.core.source_cache import cached_source_data
 from app.core.validation import InputValidationError, validate_bbox, validate_lat_lon, validate_limit, validate_radius
-from app.services.places import ResolvedPlace, is_district_place, known_place_names, normalize_place, resolve_place
+from app.services.places import ResolvedPlace, district_from_text, is_district_place, known_place_names, normalize_place, resolve_place
 from app.storage.geo import GeoRepository
 
 
@@ -93,14 +93,15 @@ class CityService:
         ]
         rows.sort(key=lambda row: (row["name"] or "", row["source_id"]))
         data = rows[:safe_limit]
+        display_district = district.strip()
         return success_envelope(
-            summary=f"{len(data)} parking lot(s) found in district '{district.strip()}'.",
+            summary=f"{len(data)} parking lot(s) found in {display_district} district. Distances are not included because no exact location was provided.",
             data=data,
             sources=[CITY_SOURCE],
             freshness=Freshness(status="fresh", ttl_seconds=self.settings.ispark_cache_ttl_seconds),
-            limits=[f"limit={safe_limit}", "district_match=source district field", "no distance calculation"],
-            warnings=["District parking results are filtered by the source district field; no district center or synthetic distance is used."],
-            next_queries=["Use istanbul_parking_nearby only when you have an exact coordinate and need distance sorting."],
+            limits=[f"up to {safe_limit} results", "district-wide parking records", "no distance shown without an exact location"],
+            warnings=["This is a district-wide parking list. Give an exact place or coordinates if you need distances."],
+            next_queries=["Ask for parking near an exact place, landmark, or coordinates when distance matters."],
         )
 
     async def metro_stations_nearby(self, *, lat: float, lon: float, radius_m: int = 1000, limit: int | None = None) -> dict:
@@ -198,13 +199,18 @@ class CityService:
         radius_m: int = 1500,
         limit: int | None = None,
     ) -> dict:
+        if place and lat is None and lon is None:
+            resolved_place = resolve_place(place)
+            if resolved_place and is_district_place(resolved_place):
+                district = district_from_text(place) or resolved_place.district or resolved_place.name
+                return await self._district_parking_fallback(district=district, limit=limit)
+            if resolved_place is None:
+                district = district_from_text(place)
+                if district:
+                    return await self._district_parking_fallback(district=district, limit=limit)
+
         try:
             resolved = self._resolve_location(place=place, lat=lat, lon=lon)
-            if place and is_district_place(resolved):
-                raise InputValidationError(
-                    "District names are not valid radius reference points. Use istanbul_parking_by_district for district-wide parking, or provide exact lat/lon for nearby mobility.",
-                    field="place",
-                )
             safe_limit = self._validate_geo(resolved.lat, resolved.lon, radius_m, limit)
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[CITY_SOURCE, OPEN_DATA_SOURCE])
@@ -266,6 +272,33 @@ class CityService:
                 "Use istanbul_parking_by_district for district-wide parking without synthetic distances.",
                 "Use istanbul_stops_for_line for ordered IETT line stops.",
             ],
+        )
+
+    async def _district_parking_fallback(self, *, district: str, limit: int | None) -> dict:
+        parking = await self.parking_by_district(district=district, limit=limit)
+        if not parking.get("ok", False):
+            return parking
+        data = [
+            {
+                "query": {
+                    "district": district,
+                    "scope": "district",
+                    "distance_included": False,
+                },
+                "parking": parking.get("data", []),
+            }
+        ]
+        return success_envelope(
+            summary=(
+                f"{district} için ilçe geneli otopark kayıtlarını döndürüyorum. "
+                "Mesafe göstermiyorum; bunun için net bir konum gerekir."
+            ),
+            data=data,
+            sources=[CITY_SOURCE],
+            freshness=Freshness(status="fresh", ttl_seconds=self.settings.ispark_cache_ttl_seconds),
+            limits=parking.get("limits", []),
+            warnings=parking.get("warnings", []),
+            next_queries=["Mesafe önemliyse net bir yer adı, durak, meydan veya koordinat verin."],
         )
 
     async def city_services_nearby(

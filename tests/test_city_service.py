@@ -181,8 +181,8 @@ async def test_parking_by_district_uses_source_district_without_distance(tmp_pat
     assert result["data"][0]["name"] == "Basaksehir Otopark"
     assert result["data"][0]["empty_capacity"] == 80
     assert "distance_m" not in result["data"][0]
-    assert "no distance calculation" in result["limits"]
-    assert any("no district center" in warning for warning in result["warnings"])
+    assert "no distance shown without an exact location" in result["limits"]
+    assert any("exact place or coordinates" in warning for warning in result["warnings"])
 
 
 @pytest.mark.asyncio
@@ -322,12 +322,25 @@ async def test_mobility_nearby_aggregates_sections_for_place(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_mobility_nearby_rejects_district_place_to_avoid_fake_center_distance(tmp_path):
+async def test_mobility_nearby_returns_district_parking_for_district_place(tmp_path):
     result = await service(tmp_path).mobility_nearby(place="Kadıköy", radius_m=1500, limit=3)
 
-    assert result["ok"] is False
-    assert result["data"][0]["field"] == "place"
-    assert "District names are not valid radius reference points" in result["summary"]
+    assert result["ok"] is True
+    assert "ilçe geneli otopark" in result["summary"]
+    assert result["data"][0]["query"]["district"] == "Kadıköy"
+    assert result["data"][0]["query"]["distance_included"] is False
+    assert result["data"][0]["parking"][0]["name"] == "Moda Otopark"
+    assert "distance_m" not in result["data"][0]["parking"][0]
+
+
+@pytest.mark.asyncio
+async def test_mobility_nearby_returns_district_parking_for_uncurated_district_text(tmp_path):
+    result = await service(tmp_path).mobility_nearby(place="Başakşehir merkez", radius_m=1500, limit=3)
+
+    assert result["ok"] is True
+    assert result["data"][0]["query"]["district"] == "Başakşehir"
+    assert result["data"][0]["parking"][0]["name"] == "Basaksehir Otopark"
+    assert "distance_m" not in result["data"][0]["parking"][0]
 
 
 @pytest.mark.asyncio
