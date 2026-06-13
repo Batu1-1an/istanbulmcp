@@ -86,6 +86,34 @@ Then open a new Codex session and ask an Istanbul question, for example:
 Başakşehir'de hangi otoparklar var, doluluk oranı nedir?
 ```
 
+## Add To Claude Code
+
+Claude Code supports remote HTTP MCP servers. Add Istanbul MCP with:
+
+```bash
+claude mcp add --transport http istanbul https://istanbulmcp-production.up.railway.app/mcp/
+claude mcp list
+```
+
+Equivalent JSON server definition for Claude tools that accept MCP config:
+
+```json
+{
+  "mcpServers": {
+    "istanbul": {
+      "type": "http",
+      "url": "https://istanbulmcp-production.up.railway.app/mcp/"
+    }
+  }
+}
+```
+
+Then start a new Claude Code session and ask:
+
+```text
+Beşiktaş'ta hangi kütüphaneler var?
+```
+
 ## Add To OpenCode
 
 OpenCode supports remote MCP servers in `opencode.json`.
