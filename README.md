@@ -40,6 +40,15 @@ Key upstream cache TTLs can be tuned with environment variables:
 - `CKAN_RESOURCE_CACHE_TTL_SECONDS`
 - `IETT_LINE_CACHE_TTL_SECONDS`
 - `IETT_STOPS_CACHE_TTL_SECONDS`
+- `SOURCE_CACHE_MAX_ENTRIES`
+
+Public MCP abuse guard limits can also be tuned:
+
+- `MCP_MAX_BODY_BYTES`
+- `MCP_RATE_LIMIT_CAPACITY`
+- `MCP_RATE_LIMIT_REFILL_PER_SECOND`
+- `MCP_RATE_LIMIT_MAX_CLIENTS`
+- `MCP_MAX_CONCURRENT_REQUESTS`
 
 ## Tools
 

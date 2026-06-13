@@ -360,3 +360,11 @@ async def test_mobility_nearby_unknown_place_returns_validation_envelope(tmp_pat
 
     assert result["ok"] is False
     assert result["data"][0]["field"] == "place"
+
+
+@pytest.mark.asyncio
+async def test_mobility_nearby_rejects_overlong_place(tmp_path):
+    result = await service(tmp_path).mobility_nearby(place="x" * 121, radius_m=600, limit=3)
+
+    assert result["ok"] is False
+    assert result["data"][0]["field"] == "place"

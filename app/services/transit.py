@@ -7,6 +7,8 @@ from app.core.envelope import Freshness, Source, error_envelope, success_envelop
 from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
 from app.core.source_cache import cached_source_data
+from app.core.validation import InputValidationError, validate_line_code
+from app.core.error_responses import validation_error_envelope
 from app.storage.geo import GeoRepository
 
 IETT_SOURCE = Source(
@@ -29,9 +31,11 @@ class TransitService:
         self.geo = geo_repository or GeoRepository(settings.database_path)
 
     async def line_info(self, line_code: str) -> dict[str, Any]:
-        safe_line_code = line_code.strip().upper()
         try:
+            safe_line_code = validate_line_code(line_code)
             rows = await self._line_info_rows(safe_line_code)
+        except InputValidationError as exc:
+            return validation_error_envelope(exc, sources=[IETT_SOURCE])
         except SourceRateLimitExceeded as exc:
             return self._rate_limited("IETT line info", exc)
         except Exception as exc:
@@ -59,9 +63,11 @@ class TransitService:
         )
 
     async def stops_for_line(self, line_code: str) -> dict[str, Any]:
-        safe_line_code = line_code.strip().upper()
         try:
+            safe_line_code = validate_line_code(line_code)
             rows = await self._stops_for_line_rows(safe_line_code)
+        except InputValidationError as exc:
+            return validation_error_envelope(exc, sources=[IETT_SOURCE])
         except SourceRateLimitExceeded as exc:
             return self._rate_limited("IETT stops", exc)
         except Exception as exc:

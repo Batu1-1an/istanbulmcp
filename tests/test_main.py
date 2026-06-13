@@ -40,6 +40,9 @@ def test_status_returns_tool_inventory(monkeypatch, tmp_path):
     assert response.status_code == 200
     assert body["ok"] is True
     assert body["transport"]["streamable_http"] == "/mcp/"
+    assert body["limits"]["mcp_request_guard"]["max_body_bytes"] > 0
+    assert body["abuse_guard"]["rate_limit"]["capacity"] > 0
+    assert body["abuse_guard"]["concurrency"]["max_concurrent"] > 0
     tool_names = {tool["name"] for tool in body["tools"]}
     assert body["tool_count"] >= 17
     assert "istanbul_search_datasets" in tool_names

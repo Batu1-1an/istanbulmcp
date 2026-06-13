@@ -12,7 +12,7 @@ from app.core.error_responses import source_error_envelope, validation_error_env
 from app.core.geo import parse_wkt_point
 from app.core.settings import Settings
 from app.core.source_cache import cached_source_data
-from app.core.validation import InputValidationError, validate_bbox, validate_lat_lon, validate_limit, validate_radius
+from app.core.validation import InputValidationError, validate_bbox, validate_lat_lon, validate_limit, validate_radius, validate_text
 from app.services.places import ResolvedPlace, district_from_text, is_district_place, known_place_names, normalize_place, resolve_place
 from app.storage.geo import GeoRepository
 
@@ -78,6 +78,7 @@ class CityService:
         try:
             if not district or not district.strip():
                 raise InputValidationError("district is required", field="district")
+            district = validate_text(district, field="district", max_length=80)
             safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
             parks = await self._parks()
         except InputValidationError as exc:
@@ -200,6 +201,10 @@ class CityService:
         limit: int | None = None,
     ) -> dict:
         if place and lat is None and lon is None:
+            try:
+                place = validate_text(place, field="place", max_length=120)
+            except InputValidationError as exc:
+                return validation_error_envelope(exc, sources=[CITY_SOURCE, OPEN_DATA_SOURCE])
             resolved_place = resolve_place(place)
             if resolved_place and is_district_place(resolved_place):
                 district = district_from_text(place) or resolved_place.district or resolved_place.name
@@ -672,6 +677,7 @@ class CityService:
         if place and (lat is not None or lon is not None):
             raise InputValidationError("Provide either place or lat/lon, not both.", field="place")
         if place:
+            place = validate_text(place, field="place", max_length=120)
             resolved = resolve_place(place)
             if resolved is None:
                 raise InputValidationError(

@@ -9,7 +9,7 @@ from app.core.error_responses import source_error_envelope, validation_error_env
 from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
 from app.core.source_cache import cached_source_data
-from app.core.validation import InputValidationError, validate_limit
+from app.core.validation import InputValidationError, validate_filters, validate_identifier, validate_limit, validate_text
 from app.storage.catalog import CatalogRepository
 
 IBB_SOURCE = Source(
@@ -40,10 +40,12 @@ class CatalogService:
     ) -> dict[str, Any]:
         try:
             safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
+            safe_query = validate_text(query, field="query", max_length=120)
+            safe_formats = self._validate_formats(formats)
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[IBB_SOURCE])
         try:
-            result = await self._cached_package_search(query=query, rows=safe_limit, formats=formats)
+            result = await self._cached_package_search(query=safe_query, rows=safe_limit, formats=safe_formats)
         except SourceRateLimitExceeded as exc:
             return self._rate_limited("CKAN package_search", exc)
         except Exception as exc:
@@ -52,12 +54,12 @@ class CatalogService:
         for dataset in datasets:
             self.repository.upsert_dataset(dataset)
         data = sorted(
-            [self._dataset_summary(dataset, query=query) for dataset in datasets],
+            [self._dataset_summary(dataset, query=safe_query) for dataset in datasets],
             key=lambda item: item["relevance"]["score"],
             reverse=True,
         )
         return success_envelope(
-            summary=f"{len(data)} dataset result(s) found for '{query}'.",
+            summary=f"{len(data)} dataset result(s) found for '{safe_query}'.",
             data=data,
             sources=[IBB_SOURCE],
             freshness=Freshness(status="fresh", ttl_seconds=60 * 60 * 6),
@@ -67,14 +69,18 @@ class CatalogService:
 
     async def get_dataset(self, dataset_id: str) -> dict[str, Any]:
         try:
-            dataset = await self._cached_package_show(dataset_id)
+            safe_dataset_id = validate_identifier(dataset_id, field="dataset_id")
+        except InputValidationError as exc:
+            return validation_error_envelope(exc, sources=[IBB_SOURCE])
+        try:
+            dataset = await self._cached_package_show(safe_dataset_id)
         except SourceRateLimitExceeded as exc:
             return self._rate_limited("CKAN package_show", exc)
         except Exception as exc:
-            return self._source_error(f"CKAN dataset metadata is unavailable for {dataset_id}.", exc)
+            return self._source_error(f"CKAN dataset metadata is unavailable for {safe_dataset_id}.", exc)
         self.repository.upsert_dataset(dataset)
         return success_envelope(
-            summary=f"Dataset '{dataset.get('title') or dataset_id}' metadata retrieved.",
+            summary=f"Dataset '{dataset.get('title') or safe_dataset_id}' metadata retrieved.",
             data=[self._dataset_detail(dataset)],
             sources=[IBB_SOURCE],
             freshness=Freshness(status="fresh", ttl_seconds=60 * 60 * 6),
@@ -83,15 +89,19 @@ class CatalogService:
 
     async def get_resource_schema(self, resource_id: str) -> dict[str, Any]:
         try:
-            result = await self._cached_datastore_search(resource_id=resource_id, limit=0)
+            safe_resource_id = validate_identifier(resource_id, field="resource_id")
+        except InputValidationError as exc:
+            return validation_error_envelope(exc, sources=[IBB_SOURCE])
+        try:
+            result = await self._cached_datastore_search(resource_id=safe_resource_id, limit=0)
         except SourceRateLimitExceeded as exc:
             return self._rate_limited("CKAN datastore_search", exc)
         except Exception as exc:
-            return self._source_error(f"CKAN resource schema is unavailable for {resource_id}.", exc)
+            return self._source_error(f"CKAN resource schema is unavailable for {safe_resource_id}.", exc)
         fields = result.get("fields", [])
         return success_envelope(
-            summary=f"Resource '{resource_id}' schema has {len(fields)} field(s).",
-            data=[{"resource_id": resource_id, "fields": fields}],
+            summary=f"Resource '{safe_resource_id}' schema has {len(fields)} field(s).",
+            data=[{"resource_id": safe_resource_id, "fields": fields}],
             sources=[IBB_SOURCE],
             freshness=Freshness(status="fresh", ttl_seconds=60 * 60 * 6),
             limits=["source=CKAN datastore_search", "limit=0"],
@@ -106,21 +116,23 @@ class CatalogService:
     ) -> dict[str, Any]:
         try:
             safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
+            safe_resource_id = validate_identifier(resource_id, field="resource_id")
+            safe_filters = validate_filters(filters)
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[IBB_SOURCE])
         try:
             result = await self._cached_datastore_search(
-                resource_id=resource_id,
-                filters=filters,
+                resource_id=safe_resource_id,
+                filters=safe_filters,
                 limit=safe_limit,
             )
         except SourceRateLimitExceeded as exc:
             return self._rate_limited("CKAN datastore_search", exc)
         except Exception as exc:
-            return self._source_error(f"CKAN resource query is unavailable for {resource_id}.", exc)
+            return self._source_error(f"CKAN resource query is unavailable for {safe_resource_id}.", exc)
         records = result.get("records", [])
         return success_envelope(
-            summary=f"{len(records)} record(s) returned from resource '{resource_id}'.",
+            summary=f"{len(records)} record(s) returned from resource '{safe_resource_id}'.",
             data=records,
             sources=[IBB_SOURCE],
             freshness=Freshness(status="fresh", ttl_seconds=60 * 60 * 6),
@@ -235,6 +247,13 @@ class CatalogService:
             data=[{"source": exc.source, "retry_after_seconds": retry_after}],
             limits=[f"rate_limited_source={exc.source}", f"retry_after_seconds={retry_after}"],
         )
+
+    def _validate_formats(self, formats: list[str] | None) -> list[str] | None:
+        if formats is None:
+            return None
+        if len(formats) > 10:
+            raise InputValidationError("formats must contain <= 10 items", field="formats", allowed_max=10)
+        return [validate_identifier(fmt, field="formats", max_length=20).upper() for fmt in formats]
 
     def _source_error(self, summary: str, exc: Exception) -> dict[str, Any]:
         return source_error_envelope(

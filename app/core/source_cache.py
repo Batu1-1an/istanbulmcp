@@ -26,6 +26,7 @@ class SourceTTLCache:
         key: str,
         *,
         ttl_seconds: int,
+        max_entries: int,
         loader: Callable[[], Awaitable[Any]],
     ) -> Any:
         now = time.monotonic()
@@ -42,6 +43,7 @@ class SourceTTLCache:
 
             value = await loader()
             refreshed_at = datetime.now(timezone.utc).isoformat()
+            self._evict_before_insert(max_entries=max_entries, now=now)
             self._entries[key] = CacheEntry(
                 value=value,
                 refreshed_at_monotonic=now,
@@ -64,6 +66,20 @@ class SourceTTLCache:
             )
         return rows
 
+    def _evict_before_insert(self, *, max_entries: int, now: float) -> None:
+        max_entries = max(1, int(max_entries))
+        expired = [key for key, entry in self._entries.items() if now >= entry.expires_at_monotonic]
+        for key in expired:
+            self._entries.pop(key, None)
+            self._locks.pop(key, None)
+        while len(self._entries) >= max_entries:
+            oldest = min(
+                self._entries,
+                key=lambda key: (self._entries[key].expires_at_monotonic, self._entries[key].refreshed_at_monotonic),
+            )
+            self._entries.pop(oldest, None)
+            self._locks.pop(oldest, None)
+
     def clear(self) -> None:
         self._entries.clear()
         self._locks.clear()
@@ -78,7 +94,14 @@ async def cached_source_data(
     ttl_seconds: int,
     loader: Callable[[], Awaitable[Any]],
 ) -> Any:
-    return await source_cache.get(key, ttl_seconds=ttl_seconds, loader=loader)
+    from app.core.settings import get_settings
+
+    return await source_cache.get(
+        key,
+        ttl_seconds=ttl_seconds,
+        max_entries=get_settings().source_cache_max_entries,
+        loader=loader,
+    )
 
 
 def source_cache_snapshot() -> list[dict[str, Any]]:

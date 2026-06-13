@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Iterable
 
 
@@ -42,6 +43,61 @@ def validate_limit(limit: int, max_limit: int = 100) -> int:
     if limit > max_limit:
         raise InputValidationError(f"limit must be <= {max_limit}", field="limit", allowed_max=max_limit)
     return limit
+
+
+def validate_text(value: str, *, field: str, max_length: int, min_length: int = 1) -> str:
+    text = str(value or "").strip()
+    if len(text) < min_length:
+        raise InputValidationError(f"{field} is required", field=field, allowed_min=min_length)
+    if len(text) > max_length:
+        raise InputValidationError(f"{field} must be <= {max_length} characters", field=field, allowed_max=max_length)
+    return text
+
+
+def validate_identifier(value: str, *, field: str, max_length: int = 120) -> str:
+    text = validate_text(value, field=field, max_length=max_length)
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", text):
+        raise InputValidationError(f"{field} contains unsupported characters", field=field)
+    return text
+
+
+def validate_line_code(value: str, *, max_length: int = 20) -> str:
+    text = validate_text(value, field="line_code", max_length=max_length).upper()
+    if not re.fullmatch(r"[0-9A-Z._-]+", text):
+        raise InputValidationError("line_code contains unsupported characters", field="line_code")
+    return text
+
+
+def validate_filters(filters: dict | None, *, max_keys: int = 10, max_key_length: int = 80, max_value_length: int = 200, max_list_items: int = 20) -> dict | None:
+    if filters is None:
+        return None
+    if not isinstance(filters, dict):
+        raise InputValidationError("filters must be an object", field="filters")
+    if len(filters) > max_keys:
+        raise InputValidationError(f"filters must contain <= {max_keys} keys", field="filters", allowed_max=max_keys)
+
+    safe_filters = {}
+    for key, value in filters.items():
+        safe_key = validate_text(str(key), field="filters", max_length=max_key_length)
+        if not re.fullmatch(r"[\w .:-]+", safe_key, flags=re.UNICODE):
+            raise InputValidationError("filter key contains unsupported characters", field="filters")
+        safe_filters[safe_key] = _validate_filter_value(value, max_value_length=max_value_length, max_list_items=max_list_items, allow_list=True)
+    return safe_filters
+
+
+def _validate_filter_value(value, *, max_value_length: int, max_list_items: int, allow_list: bool):
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        if isinstance(value, str):
+            return validate_text(value, field="filters", max_length=max_value_length, min_length=0)
+        return value
+    if isinstance(value, list) and allow_list:
+        if len(value) > max_list_items:
+            raise InputValidationError(f"filter lists must contain <= {max_list_items} items", field="filters", allowed_max=max_list_items)
+        return [
+            _validate_filter_value(item, max_value_length=max_value_length, max_list_items=max_list_items, allow_list=False)
+            for item in value
+        ]
+    raise InputValidationError("filter values must be scalars or scalar lists", field="filters")
 
 
 def validate_bbox(bbox: Iterable[float]) -> tuple[float, float, float, float]:

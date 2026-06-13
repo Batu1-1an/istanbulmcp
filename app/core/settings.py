@@ -31,6 +31,12 @@ class Settings:
     ckan_resource_cache_ttl_seconds: int = 900
     iett_line_cache_ttl_seconds: int = 900
     iett_stops_cache_ttl_seconds: int = 900
+    source_cache_max_entries: int = 1024
+    mcp_max_body_bytes: int = 256 * 1024
+    mcp_rate_limit_capacity: int = 60
+    mcp_rate_limit_refill_per_second: float = 1.0
+    mcp_rate_limit_max_clients: int = 2048
+    mcp_max_concurrent_requests: int = 25
 
 
 def _int_env(name: str, default: int) -> int:
@@ -73,4 +79,10 @@ def get_settings() -> Settings:
         ckan_resource_cache_ttl_seconds=_int_env("CKAN_RESOURCE_CACHE_TTL_SECONDS", 900),
         iett_line_cache_ttl_seconds=_int_env("IETT_LINE_CACHE_TTL_SECONDS", 900),
         iett_stops_cache_ttl_seconds=_int_env("IETT_STOPS_CACHE_TTL_SECONDS", 900),
+        source_cache_max_entries=_int_env("SOURCE_CACHE_MAX_ENTRIES", 1024),
+        mcp_max_body_bytes=_int_env("MCP_MAX_BODY_BYTES", 256 * 1024),
+        mcp_rate_limit_capacity=_int_env("MCP_RATE_LIMIT_CAPACITY", 60),
+        mcp_rate_limit_refill_per_second=_float_env("MCP_RATE_LIMIT_REFILL_PER_SECOND", 1.0),
+        mcp_rate_limit_max_clients=_int_env("MCP_RATE_LIMIT_MAX_CLIENTS", 2048),
+        mcp_max_concurrent_requests=_int_env("MCP_MAX_CONCURRENT_REQUESTS", 25),
     )

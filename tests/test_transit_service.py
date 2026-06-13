@@ -114,6 +114,14 @@ async def test_line_info_rate_limit_returns_retry_after_envelope(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_line_info_rejects_invalid_line_code(tmp_path):
+    result = await service(tmp_path).line_info("../34A")
+
+    assert result["ok"] is False
+    assert result["data"][0]["field"] == "line_code"
+
+
+@pytest.mark.asyncio
 async def test_line_info_cache_collapses_concurrent_requests(tmp_path):
     clear_source_cache()
     fake = FakeIett()

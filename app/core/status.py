@@ -29,7 +29,7 @@ TOOL_SOURCES = {
 }
 
 
-def build_status(settings: Settings) -> dict[str, Any]:
+def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = None) -> dict[str, Any]:
     tools = _tool_inventory()
     return {
         "ok": True,
@@ -55,6 +55,7 @@ def build_status(settings: Settings) -> dict[str, Any]:
                 "air_quality_reading": settings.air_quality_reading_cache_ttl_seconds,
                 "traffic": settings.traffic_cache_ttl_seconds,
             },
+            "source_cache_max_entries": settings.source_cache_max_entries,
             "source_rate_limits": {
                 "ckan": {
                     "capacity": settings.ckan_rate_capacity,
@@ -67,7 +68,15 @@ def build_status(settings: Settings) -> dict[str, Any]:
                     "max_wait_seconds": settings.iett_rate_max_wait_seconds,
                 },
             },
+            "mcp_request_guard": {
+                "max_body_bytes": settings.mcp_max_body_bytes,
+                "rate_limit_capacity": settings.mcp_rate_limit_capacity,
+                "rate_limit_refill_per_second": settings.mcp_rate_limit_refill_per_second,
+                "rate_limit_max_clients": settings.mcp_rate_limit_max_clients,
+                "max_concurrent_requests": settings.mcp_max_concurrent_requests,
+            },
         },
+        "abuse_guard": abuse_guard or {},
         "database": readiness(settings.database_path),
         "source_cache": source_cache_snapshot(),
         "tool_count": len(tools),

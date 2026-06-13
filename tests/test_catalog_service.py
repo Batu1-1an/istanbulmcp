@@ -185,6 +185,38 @@ async def test_search_datasets_limit_validation_returns_envelope(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_search_datasets_query_length_validation_returns_envelope(tmp_path):
+    clear_source_cache()
+    settings = Settings(database_path=tmp_path / "catalog.sqlite3")
+    service = CatalogService(
+        settings=settings,
+        client=CountingCkan(),
+        repository=CatalogRepository(settings.database_path),
+    )
+
+    result = await service.search_datasets(query="x" * 121, limit=5)
+
+    assert result["ok"] is False
+    assert result["data"][0]["field"] == "query"
+
+
+@pytest.mark.asyncio
+async def test_query_resource_rejects_complex_filters(tmp_path):
+    clear_source_cache()
+    settings = Settings(database_path=tmp_path / "catalog.sqlite3")
+    service = CatalogService(
+        settings=settings,
+        client=CountingCkan(),
+        repository=CatalogRepository(settings.database_path),
+    )
+
+    result = await service.query_resource(resource_id="resource-1", filters={"ILCE": {"nested": "Kadikoy"}}, limit=5)
+
+    assert result["ok"] is False
+    assert result["data"][0]["field"] == "filters"
+
+
+@pytest.mark.asyncio
 async def test_search_datasets_cache_collapses_concurrent_requests(tmp_path):
     clear_source_cache()
     fake = CountingCkan()
