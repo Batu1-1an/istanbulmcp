@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from app.core.settings import Settings
@@ -12,7 +14,11 @@ from app.services.neighborhood import (
 
 
 class FakeCkan:
+    def __init__(self):
+        self.calls_by_resource: dict[str, int] = {}
+
     async def datastore_search(self, *, resource_id, limit, filters=None, offset=0):
+        self.calls_by_resource[resource_id] = self.calls_by_resource.get(resource_id, 0) + 1
         records = {
             SOCIAL_ASSISTANCE_RESOURCE_ID: [
                 {"_id": 1, "ILCE": "KADIKÖY", "MAHALLE": "CAFERAĞA", "HANE SAYISI": "13"},
@@ -136,3 +142,19 @@ async def test_neighborhood_profile_unknown_neighborhood_returns_validation_enve
     assert result["ok"] is False
     assert result["data"][0]["field"] == "neighborhood"
     assert "Known examples" in result["summary"]
+
+
+@pytest.mark.asyncio
+async def test_neighborhood_profile_cache_collapses_concurrent_source_prefetch(tmp_path):
+    clear_source_cache()
+    fake = FakeCkan()
+    svc = NeighborhoodService(settings=Settings(database_path=tmp_path / "neighborhood.sqlite3"), ckan_client=fake)
+
+    results = await asyncio.gather(*(svc.profile(district="Kadıköy", neighborhood="Caferağa") for _ in range(20)))
+
+    assert all(result["ok"] is True for result in results)
+    assert fake.calls_by_resource == {
+        SOCIAL_ASSISTANCE_RESOURCE_ID: 1,
+        BUILDING_STOCK_RESOURCE_ID: 1,
+        EARTHQUAKE_SCENARIO_RESOURCE_ID: 1,
+    }

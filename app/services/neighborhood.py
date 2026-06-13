@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 import unicodedata
 from collections import defaultdict
@@ -98,22 +99,28 @@ class NeighborhoodService:
             result = await self.ckan.datastore_search(resource_id=EARTHQUAKE_SCENARIO_RESOURCE_ID, limit=NEIGHBORHOOD_PREFETCH_LIMIT)
             return result.get("records", [])
 
-        return {
-            "social_assistance": await cached_source_data(
+        social_assistance, building_stock, earthquake_scenario = await asyncio.gather(
+            cached_source_data(
                 "ckan.neighborhood.social_assistance",
                 ttl_seconds=NEIGHBORHOOD_CACHE_TTL_SECONDS,
                 loader=load_social,
             ),
-            "building_stock": await cached_source_data(
+            cached_source_data(
                 "ckan.neighborhood.building_stock",
                 ttl_seconds=NEIGHBORHOOD_CACHE_TTL_SECONDS,
                 loader=load_buildings,
             ),
-            "earthquake_scenario": await cached_source_data(
+            cached_source_data(
                 "ckan.neighborhood.earthquake_scenario",
                 ttl_seconds=NEIGHBORHOOD_CACHE_TTL_SECONDS,
                 loader=load_earthquake,
             ),
+        )
+
+        return {
+            "social_assistance": social_assistance,
+            "building_stock": building_stock,
+            "earthquake_scenario": earthquake_scenario,
         }
 
     def _index_rows(self, rows: dict[str, list[dict[str, Any]]]) -> dict[str, dict[str, dict[str, dict[str, Any]]]]:
