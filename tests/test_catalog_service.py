@@ -1,9 +1,12 @@
+import asyncio
+
 import httpx
 import pytest
 
 from app.connectors.ckan import CkanClient
 from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
+from app.core.source_cache import clear_source_cache
 from app.services.catalog import CatalogService
 from app.storage.catalog import CatalogRepository
 
@@ -51,8 +54,30 @@ class FailingCkan:
         raise RuntimeError("ckan down")
 
 
+class CountingCkan:
+    def __init__(self):
+        self.package_search_calls = 0
+        self.datastore_search_calls = 0
+
+    async def package_search(self, **_kwargs):
+        self.package_search_calls += 1
+        return {"count": 1, "results": [_dataset()]}
+
+    async def package_show(self, _dataset_id):
+        return _dataset()
+
+    async def datastore_search(self, **_kwargs):
+        self.datastore_search_calls += 1
+        return {
+            "total": 1,
+            "records": [{"ILCE": "Kadikoy"}],
+            "fields": [{"id": "ILCE", "type": "text"}],
+        }
+
+
 @pytest.mark.asyncio
 async def test_search_datasets_snapshots_results(tmp_path):
+    clear_source_cache()
     async def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
@@ -78,6 +103,7 @@ async def test_search_datasets_snapshots_results(tmp_path):
 
 @pytest.mark.asyncio
 async def test_query_resource_returns_records(tmp_path):
+    clear_source_cache()
     async def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
@@ -106,6 +132,7 @@ async def test_query_resource_returns_records(tmp_path):
 
 @pytest.mark.asyncio
 async def test_search_datasets_rate_limit_returns_retry_after_envelope(tmp_path):
+    clear_source_cache()
     settings = Settings(database_path=tmp_path / "catalog.sqlite3")
     service = CatalogService(
         settings=settings,
@@ -123,6 +150,7 @@ async def test_search_datasets_rate_limit_returns_retry_after_envelope(tmp_path)
 
 @pytest.mark.asyncio
 async def test_search_datasets_source_failure_returns_envelope(tmp_path):
+    clear_source_cache()
     settings = Settings(database_path=tmp_path / "catalog.sqlite3")
     service = CatalogService(
         settings=settings,
@@ -140,6 +168,7 @@ async def test_search_datasets_source_failure_returns_envelope(tmp_path):
 
 @pytest.mark.asyncio
 async def test_search_datasets_limit_validation_returns_envelope(tmp_path):
+    clear_source_cache()
     settings = Settings(database_path=tmp_path / "catalog.sqlite3", max_limit=10)
     service = CatalogService(
         settings=settings,
@@ -153,3 +182,39 @@ async def test_search_datasets_limit_validation_returns_envelope(tmp_path):
     assert result["data"][0]["error_code"] == "validation_error"
     assert result["data"][0]["field"] == "limit"
     assert result["data"][0]["allowed_max"] == 10
+
+
+@pytest.mark.asyncio
+async def test_search_datasets_cache_collapses_concurrent_requests(tmp_path):
+    clear_source_cache()
+    fake = CountingCkan()
+    settings = Settings(database_path=tmp_path / "catalog.sqlite3")
+    service = CatalogService(
+        settings=settings,
+        client=fake,
+        repository=CatalogRepository(settings.database_path),
+    )
+
+    results = await asyncio.gather(*(service.search_datasets(query="trafik", limit=5) for _ in range(20)))
+
+    assert all(result["ok"] is True for result in results)
+    assert fake.package_search_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_query_resource_cache_collapses_concurrent_requests(tmp_path):
+    clear_source_cache()
+    fake = CountingCkan()
+    settings = Settings(database_path=tmp_path / "catalog.sqlite3")
+    service = CatalogService(
+        settings=settings,
+        client=fake,
+        repository=CatalogRepository(settings.database_path),
+    )
+
+    results = await asyncio.gather(
+        *(service.query_resource(resource_id="resource-1", filters={"ILCE": "Kadikoy"}, limit=5) for _ in range(20))
+    )
+
+    assert all(result["ok"] is True for result in results)
+    assert fake.datastore_search_calls == 1

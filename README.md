@@ -34,6 +34,13 @@ RUN_LIVE_MCP_TESTS=1 pytest tests/live
 python scripts/live_mcp_uat.py
 ```
 
+Key upstream cache TTLs can be tuned with environment variables:
+
+- `CKAN_CATALOG_CACHE_TTL_SECONDS`
+- `CKAN_RESOURCE_CACHE_TTL_SECONDS`
+- `IETT_LINE_CACHE_TTL_SECONDS`
+- `IETT_STOPS_CACHE_TTL_SECONDS`
+
 ## Tools
 
 See `docs/tool-reference.md` for the current MCP tool surface.

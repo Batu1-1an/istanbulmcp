@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 import unicodedata
 from collections import defaultdict
@@ -21,7 +22,47 @@ EARTHQUAKE_SCENARIO_RESOURCE_ID = "9c3ac492-de4b-4245-b418-7ad3df67a193"
 
 NEIGHBORHOOD_PREFETCH_LIMIT = 2000
 NEIGHBORHOOD_CACHE_TTL_SECONDS = 60 * 60 * 24
-
+ISTANBUL_DISTRICTS = [
+    "ADALAR",
+    "ARNAVUTKÖY",
+    "ATAŞEHİR",
+    "AVCILAR",
+    "BAĞCILAR",
+    "BAHÇELİEVLER",
+    "BAKIRKÖY",
+    "BAŞAKŞEHİR",
+    "BAYRAMPAŞA",
+    "BEŞİKTAŞ",
+    "BEYKOZ",
+    "BEYLİKDÜZÜ",
+    "BEYOĞLU",
+    "BÜYÜKÇEKMECE",
+    "ÇATALCA",
+    "ÇEKMEKÖY",
+    "ESENLER",
+    "ESENYURT",
+    "EYÜPSULTAN",
+    "FATİH",
+    "GAZİOSMANPAŞA",
+    "GÜNGÖREN",
+    "KADIKÖY",
+    "KAĞITHANE",
+    "KARTAL",
+    "KÜÇÜKÇEKMECE",
+    "MALTEPE",
+    "PENDİK",
+    "SANCAKTEPE",
+    "SARIYER",
+    "SİLİVRİ",
+    "SULTANBEYLİ",
+    "SULTANGAZİ",
+    "ŞİLE",
+    "ŞİŞLİ",
+    "TUZLA",
+    "ÜMRANİYE",
+    "ÜSKÜDAR",
+    "ZEYTİNBURNU",
+]
 NEIGHBORHOOD_SOURCES = [
     Source(
         name="IBB Open Data Portal - Social assistance households 2023",
@@ -54,7 +95,14 @@ class NeighborhoodService:
             if not district or not district.strip():
                 raise InputValidationError("district is required", field="district")
             safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
-            rows = await self._all_source_rows()
+            district_key = normalize_neighborhood_text(district)
+            source_district = DISTRICTS_BY_NORMALIZED.get(district_key)
+            if source_district is None:
+                raise InputValidationError(
+                    f"Unknown district for neighborhood profile. Known examples: {', '.join(ISTANBUL_DISTRICTS[:8])}",
+                    field="district",
+                )
+            rows = await self._district_source_rows(source_district)
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=NEIGHBORHOOD_SOURCES)
         except Exception as exc:
@@ -65,13 +113,12 @@ class NeighborhoodService:
                 exception=exc,
             )
 
-        district_key = normalize_neighborhood_text(district)
         index = self._index_rows(rows)
         district_entries = index.get(district_key)
         if not district_entries:
             return validation_error_envelope(
                 InputValidationError(
-                    f"Unknown district for neighborhood profile. Known examples: {', '.join(self._district_examples(index))}",
+                    f"No neighborhood profile source rows found for {source_district}.",
                     field="district",
                 ),
                 sources=NEIGHBORHOOD_SOURCES,
@@ -85,35 +132,53 @@ class NeighborhoodService:
             )
         return self._district_list(district_query=district, district_entries=district_entries, limit=safe_limit)
 
-    async def _all_source_rows(self) -> dict[str, list[dict[str, Any]]]:
+    async def _district_source_rows(self, source_district: str) -> dict[str, list[dict[str, Any]]]:
         async def load_social() -> list[dict[str, Any]]:
-            result = await self.ckan.datastore_search(resource_id=SOCIAL_ASSISTANCE_RESOURCE_ID, limit=NEIGHBORHOOD_PREFETCH_LIMIT)
+            result = await self.ckan.datastore_search(
+                resource_id=SOCIAL_ASSISTANCE_RESOURCE_ID,
+                filters={"ILCE": source_district},
+                limit=NEIGHBORHOOD_PREFETCH_LIMIT,
+            )
             return result.get("records", [])
 
         async def load_buildings() -> list[dict[str, Any]]:
-            result = await self.ckan.datastore_search(resource_id=BUILDING_STOCK_RESOURCE_ID, limit=NEIGHBORHOOD_PREFETCH_LIMIT)
+            result = await self.ckan.datastore_search(
+                resource_id=BUILDING_STOCK_RESOURCE_ID,
+                filters={"ilce_adi": source_district},
+                limit=NEIGHBORHOOD_PREFETCH_LIMIT,
+            )
             return result.get("records", [])
 
         async def load_earthquake() -> list[dict[str, Any]]:
-            result = await self.ckan.datastore_search(resource_id=EARTHQUAKE_SCENARIO_RESOURCE_ID, limit=NEIGHBORHOOD_PREFETCH_LIMIT)
+            result = await self.ckan.datastore_search(
+                resource_id=EARTHQUAKE_SCENARIO_RESOURCE_ID,
+                filters={"ilce_adi": source_district},
+                limit=NEIGHBORHOOD_PREFETCH_LIMIT,
+            )
             return result.get("records", [])
 
-        return {
-            "social_assistance": await cached_source_data(
-                "ckan.neighborhood.social_assistance",
+        social_assistance, building_stock, earthquake_scenario = await asyncio.gather(
+            cached_source_data(
+                f"ckan.neighborhood.social_assistance.{source_district}",
                 ttl_seconds=NEIGHBORHOOD_CACHE_TTL_SECONDS,
                 loader=load_social,
             ),
-            "building_stock": await cached_source_data(
-                "ckan.neighborhood.building_stock",
+            cached_source_data(
+                f"ckan.neighborhood.building_stock.{source_district}",
                 ttl_seconds=NEIGHBORHOOD_CACHE_TTL_SECONDS,
                 loader=load_buildings,
             ),
-            "earthquake_scenario": await cached_source_data(
-                "ckan.neighborhood.earthquake_scenario",
+            cached_source_data(
+                f"ckan.neighborhood.earthquake_scenario.{source_district}",
                 ttl_seconds=NEIGHBORHOOD_CACHE_TTL_SECONDS,
                 loader=load_earthquake,
             ),
+        )
+
+        return {
+            "social_assistance": social_assistance,
+            "building_stock": building_stock,
+            "earthquake_scenario": earthquake_scenario,
         }
 
     def _index_rows(self, rows: dict[str, list[dict[str, Any]]]) -> dict[str, dict[str, dict[str, dict[str, Any]]]]:
@@ -370,6 +435,9 @@ def normalize_neighborhood_text(value: Any) -> str:
     if text.endswith(" may"):
         text = f"{text}is"
     return text
+
+
+DISTRICTS_BY_NORMALIZED = {normalize_neighborhood_text(name): name for name in ISTANBUL_DISTRICTS}
 
 
 def _int_or_none(value: Any) -> int | None:

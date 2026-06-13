@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from unicodedata import normalize
+from unicodedata import combining, normalize
 
 
 @dataclass(frozen=True)
@@ -32,6 +32,60 @@ _PLACES: tuple[ResolvedPlace, ...] = (
     ResolvedPlace("sariyer", "Sariyer", 41.1663, 29.0500, "Sariyer"),
     ResolvedPlace("kartal", "Kartal", 40.8998, 29.1936, "Kartal"),
 )
+
+_DISTRICT_DISPLAY_NAMES = {
+    "adalar": "Adalar",
+    "arnavutkoy": "Arnavutköy",
+    "atasehir": "Ataşehir",
+    "avcilar": "Avcılar",
+    "bagcilar": "Bağcılar",
+    "bahcelievler": "Bahçelievler",
+    "bakirkoy": "Bakırköy",
+    "basaksehir": "Başakşehir",
+    "bayrampasa": "Bayrampaşa",
+    "besiktas": "Beşiktaş",
+    "beykoz": "Beykoz",
+    "beylikduzu": "Beylikdüzü",
+    "beyoglu": "Beyoğlu",
+    "buyukcekmece": "Büyükçekmece",
+    "catalca": "Çatalca",
+    "cekmekoy": "Çekmeköy",
+    "esenler": "Esenler",
+    "esenyurt": "Esenyurt",
+    "eyupsultan": "Eyüpsultan",
+    "fatih": "Fatih",
+    "gaziosmanpasa": "Gaziosmanpaşa",
+    "gungoren": "Güngören",
+    "kadikoy": "Kadıköy",
+    "kagithane": "Kağıthane",
+    "kartal": "Kartal",
+    "kucukcekmece": "Küçükçekmece",
+    "maltepe": "Maltepe",
+    "pendik": "Pendik",
+    "sancaktepe": "Sancaktepe",
+    "sariyer": "Sarıyer",
+    "silivri": "Silivri",
+    "sultanbeyli": "Sultanbeyli",
+    "sultangazi": "Sultangazi",
+    "sile": "Şile",
+    "sisli": "Şişli",
+    "tuzla": "Tuzla",
+    "umraniye": "Ümraniye",
+    "uskudar": "Üsküdar",
+    "zeytinburnu": "Zeytinburnu",
+}
+
+DISTRICT_PLACE_QUERIES = {
+    "atasehir",
+    "bakirkoy",
+    "besiktas",
+    "fatih",
+    "kadikoy",
+    "kartal",
+    "sariyer",
+    "sisli",
+    "uskudar",
+}
 
 _ALIASES = {
     "kadıkoy": "kadikoy",
@@ -64,6 +118,22 @@ def known_place_names() -> list[str]:
     return sorted(place.name for place in _PLACES)
 
 
+def district_from_text(value: str) -> str | None:
+    normalized = normalize_place(value)
+    if normalized in _DISTRICT_DISPLAY_NAMES:
+        return _DISTRICT_DISPLAY_NAMES[normalized]
+
+    words = set(normalized.split())
+    for key, display_name in _DISTRICT_DISPLAY_NAMES.items():
+        if key in words:
+            return display_name
+    return None
+
+
+def is_district_place(place: ResolvedPlace) -> bool:
+    return place.query in DISTRICT_PLACE_QUERIES
+
+
 def normalize_place(value: str) -> str:
     normalized = normalize("NFKC", value).strip().casefold()
     replacements = str.maketrans(
@@ -79,4 +149,6 @@ def normalize_place(value: str) -> str:
             ".": " ",
         }
     )
-    return " ".join(normalized.translate(replacements).split())
+    translated = normalize("NFKD", normalized.translate(replacements))
+    without_marks = "".join(char for char in translated if not combining(char))
+    return " ".join(without_marks.split())

@@ -27,6 +27,10 @@ class Settings:
     air_quality_station_cache_ttl_seconds: int = 3600
     air_quality_reading_cache_ttl_seconds: int = 900
     traffic_cache_ttl_seconds: int = 60
+    ckan_catalog_cache_ttl_seconds: int = 900
+    ckan_resource_cache_ttl_seconds: int = 900
+    iett_line_cache_ttl_seconds: int = 900
+    iett_stops_cache_ttl_seconds: int = 900
 
 
 def _int_env(name: str, default: int) -> int:
@@ -65,4 +69,8 @@ def get_settings() -> Settings:
         air_quality_station_cache_ttl_seconds=_int_env("AIR_QUALITY_STATION_CACHE_TTL_SECONDS", 3600),
         air_quality_reading_cache_ttl_seconds=_int_env("AIR_QUALITY_READING_CACHE_TTL_SECONDS", 900),
         traffic_cache_ttl_seconds=_int_env("TRAFFIC_CACHE_TTL_SECONDS", 60),
+        ckan_catalog_cache_ttl_seconds=_int_env("CKAN_CATALOG_CACHE_TTL_SECONDS", 900),
+        ckan_resource_cache_ttl_seconds=_int_env("CKAN_RESOURCE_CACHE_TTL_SECONDS", 900),
+        iett_line_cache_ttl_seconds=_int_env("IETT_LINE_CACHE_TTL_SECONDS", 900),
+        iett_stops_cache_ttl_seconds=_int_env("IETT_STOPS_CACHE_TTL_SECONDS", 900),
     )

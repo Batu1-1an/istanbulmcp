@@ -6,6 +6,7 @@ from app.connectors.iett import IettClient
 from app.core.envelope import Freshness, Source, error_envelope, success_envelope
 from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
+from app.core.source_cache import cached_source_data
 from app.storage.geo import GeoRepository
 
 IETT_SOURCE = Source(
@@ -30,7 +31,7 @@ class TransitService:
     async def line_info(self, line_code: str) -> dict[str, Any]:
         safe_line_code = line_code.strip().upper()
         try:
-            rows = await self.iett.line_info(safe_line_code)
+            rows = await self._line_info_rows(safe_line_code)
         except SourceRateLimitExceeded as exc:
             return self._rate_limited("IETT line info", exc)
         except Exception as exc:
@@ -60,7 +61,7 @@ class TransitService:
     async def stops_for_line(self, line_code: str) -> dict[str, Any]:
         safe_line_code = line_code.strip().upper()
         try:
-            rows = await self.iett.stops_for_line(safe_line_code)
+            rows = await self._stops_for_line_rows(safe_line_code)
         except SourceRateLimitExceeded as exc:
             return self._rate_limited("IETT stops", exc)
         except Exception as exc:
@@ -78,6 +79,20 @@ class TransitService:
             sources=[IETT_SOURCE],
             freshness=Freshness(status="fresh", ttl_seconds=60 * 60 * 6),
             limits=["IETT SOAP may be unavailable during nightly maintenance."],
+        )
+
+    async def _line_info_rows(self, line_code: str) -> list[dict[str, Any]]:
+        return await cached_source_data(
+            f"iett.line_info.{line_code}",
+            ttl_seconds=self.settings.iett_line_cache_ttl_seconds,
+            loader=lambda: self.iett.line_info(line_code),
+        )
+
+    async def _stops_for_line_rows(self, line_code: str) -> list[dict[str, Any]]:
+        return await cached_source_data(
+            f"iett.stops_for_line.{line_code}",
+            ttl_seconds=self.settings.iett_stops_cache_ttl_seconds,
+            loader=lambda: self.iett.stops_for_line(line_code),
         )
 
     def _stop_row(self, row: dict[str, Any]) -> dict[str, Any]:

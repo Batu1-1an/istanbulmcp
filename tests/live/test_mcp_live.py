@@ -55,13 +55,43 @@ def test_live_mcp_mobility_nearby_tool():
         os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
         9004,
         "istanbul_mobility_nearby",
-        {"place": "Kadıköy", "radius_m": 1500, "limit": 3},
+        {"place": "Kadıköy Rıhtım", "radius_m": 1500, "limit": 3},
     )
 
     assert error is None
     assert payload["ok"] is True
     assert len(payload["data"]) == 1
     assert "public_transport_stops" in payload["data"][0]
+
+
+def test_live_mcp_mobility_district_prompt_returns_parking_without_distance():
+    payload, error, _elapsed = rpc_call(
+        os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
+        9008,
+        "istanbul_mobility_nearby",
+        {"place": "Başakşehir merkez", "radius_m": 1500, "limit": 5},
+    )
+
+    assert error is None
+    assert payload["ok"] is True
+    assert "ilçe geneli otopark" in payload["summary"]
+    parking = payload["data"][0]["parking"]
+    assert len(parking) >= 1
+    assert "distance_m" not in parking[0]
+
+
+def test_live_mcp_parking_by_district_tool():
+    payload, error, _elapsed = rpc_call(
+        os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
+        9007,
+        "istanbul_parking_by_district",
+        {"district": "Başakşehir", "limit": 5},
+    )
+
+    assert error is None
+    assert payload["ok"] is True
+    assert len(payload["data"]) >= 1
+    assert "distance_m" not in payload["data"][0]
 
 
 def test_live_mcp_city_services_nearby_tool():

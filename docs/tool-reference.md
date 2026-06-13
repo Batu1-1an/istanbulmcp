@@ -5,6 +5,8 @@ All tools are read-only and return a standard envelope with `summary`, `data`, `
 When local source back-pressure is active, affected tools return `ok=false` with `retry_after_seconds` in `data[0]`.
 Expected validation and source failures return `ok=false` envelopes with `error_code`, field/source context, and actionable limits where available.
 
+Repeated CKAN catalog/resource queries and IETT line/stop queries use short upstream TTL caches to collapse concurrent identical requests and reduce pressure on source systems. Runtime cache entries and TTL settings are visible from `/status`.
+
 ## Core
 
 - `istanbul_health()` — service and SQLite readiness.
@@ -29,6 +31,7 @@ Catalog search results include `relevance`, `datastore_active_count`, and `prefe
 - `istanbul_nearby(lat, lon, types?, radius_m?, limit?)`
 - `istanbul_bbox_search(bbox, types?, limit?)`
 - `istanbul_parking_nearby(lat, lon, radius_m?, limit?)`
+- `istanbul_parking_by_district(district, limit?)`
 - `istanbul_metro_stations_nearby(lat, lon, radius_m?, limit?)`
 - `istanbul_air_quality_nearby(lat, lon, radius_m?, limit?)`
 - `istanbul_traffic_status()`
@@ -37,7 +40,9 @@ Catalog search results include `relevance`, `datastore_active_count`, and `prefe
 
 Air quality results include `latest_reading_quality` because the upstream source can return station records with missing AQI values. Traffic status is citywide only and explicitly lists unsupported road-level or incident detail.
 
-`istanbul_mobility_nearby` is for practical questions such as nearby parking, metro, public transport stops, air quality, and the citywide traffic index. It accepts either a curated Istanbul `place` name such as `Kadıköy`, `Taksim`, or `Beşiktaş`, or explicit `lat`/`lon`.
+`istanbul_parking_by_district` lists ISPark records by the source `district` field and does not calculate or return synthetic distances. It is the right tool for questions such as "Başakşehir'de hangi otoparklar var, doluluk oranı nedir?"
+
+`istanbul_mobility_nearby` is for practical questions such as nearby parking, metro, public transport stops, air quality, and the citywide traffic index. It accepts explicit `lat`/`lon` or curated reference points such as `Kadıköy Rıhtım`, `Taksim`, or `Levent`. If a district name is supplied instead, it returns district-wide parking records without distances and asks for an exact place only when distance matters.
 
 `istanbul_city_services_nearby` returns nearby WiFi points and district-level library address/hour records where available. Library records do not have coordinates, so those results are marked as district-level rather than radius-precise.
 

@@ -134,6 +134,18 @@ async def istanbul_parking_nearby(
 
 
 @mcp.tool()
+async def istanbul_parking_by_district(
+    district: str,
+    limit: int | None = None,
+) -> dict:
+    """List ISPark parking lots by source district without synthetic distance calculations."""
+    return await CityService(settings=get_settings()).parking_by_district(
+        district=district,
+        limit=limit,
+    )
+
+
+@mcp.tool()
 async def istanbul_metro_stations_nearby(
     lat: float,
     lon: float,

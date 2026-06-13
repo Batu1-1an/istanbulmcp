@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from app.connectors.ckan import CkanClient
@@ -7,6 +8,7 @@ from app.core.envelope import Freshness, Pagination, Source, error_envelope, suc
 from app.core.error_responses import source_error_envelope, validation_error_envelope
 from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
+from app.core.source_cache import cached_source_data
 from app.core.validation import InputValidationError, validate_limit
 from app.storage.catalog import CatalogRepository
 
@@ -41,7 +43,7 @@ class CatalogService:
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[IBB_SOURCE])
         try:
-            result = await self.client.package_search(query=query, rows=safe_limit, formats=formats)
+            result = await self._cached_package_search(query=query, rows=safe_limit, formats=formats)
         except SourceRateLimitExceeded as exc:
             return self._rate_limited("CKAN package_search", exc)
         except Exception as exc:
@@ -65,7 +67,7 @@ class CatalogService:
 
     async def get_dataset(self, dataset_id: str) -> dict[str, Any]:
         try:
-            dataset = await self.client.package_show(dataset_id)
+            dataset = await self._cached_package_show(dataset_id)
         except SourceRateLimitExceeded as exc:
             return self._rate_limited("CKAN package_show", exc)
         except Exception as exc:
@@ -81,7 +83,7 @@ class CatalogService:
 
     async def get_resource_schema(self, resource_id: str) -> dict[str, Any]:
         try:
-            result = await self.client.datastore_search(resource_id=resource_id, limit=0)
+            result = await self._cached_datastore_search(resource_id=resource_id, limit=0)
         except SourceRateLimitExceeded as exc:
             return self._rate_limited("CKAN datastore_search", exc)
         except Exception as exc:
@@ -107,7 +109,7 @@ class CatalogService:
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[IBB_SOURCE])
         try:
-            result = await self.client.datastore_search(
+            result = await self._cached_datastore_search(
                 resource_id=resource_id,
                 filters=filters,
                 limit=safe_limit,
@@ -124,6 +126,46 @@ class CatalogService:
             freshness=Freshness(status="fresh", ttl_seconds=60 * 60 * 6),
             pagination=Pagination(limit=safe_limit, total_estimate=result.get("total")),
             limits=[f"limit={safe_limit}", "source=CKAN datastore_search", "filters only"],
+        )
+
+    async def _cached_package_search(self, *, query: str, rows: int, formats: list[str] | None) -> dict[str, Any]:
+        normalized_formats = sorted({fmt.upper() for fmt in formats or []})
+        key = _cache_key("ckan.package_search", {"query": query.strip(), "rows": rows, "formats": normalized_formats})
+        return await cached_source_data(
+            key,
+            ttl_seconds=self.settings.ckan_catalog_cache_ttl_seconds,
+            loader=lambda: self.client.package_search(query=query, rows=rows, formats=normalized_formats or None),
+        )
+
+    async def _cached_package_show(self, dataset_id: str) -> dict[str, Any]:
+        key = _cache_key("ckan.package_show", {"dataset_id": dataset_id.strip()})
+        return await cached_source_data(
+            key,
+            ttl_seconds=self.settings.ckan_catalog_cache_ttl_seconds,
+            loader=lambda: self.client.package_show(dataset_id),
+        )
+
+    async def _cached_datastore_search(
+        self,
+        *,
+        resource_id: str,
+        limit: int,
+        filters: dict[str, Any] | None = None,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        key = _cache_key(
+            "ckan.datastore_search",
+            {
+                "resource_id": resource_id.strip(),
+                "limit": limit,
+                "filters": filters or {},
+                "offset": offset,
+            },
+        )
+        return await cached_source_data(
+            key,
+            ttl_seconds=self.settings.ckan_resource_cache_ttl_seconds,
+            loader=lambda: self.client.datastore_search(resource_id=resource_id, limit=limit, filters=filters, offset=offset),
         )
 
     def _dataset_summary(self, dataset: dict[str, Any], *, query: str | None = None) -> dict[str, Any]:
@@ -201,3 +243,8 @@ class CatalogService:
             sources=[IBB_SOURCE],
             exception=exc,
         )
+
+
+def _cache_key(prefix: str, payload: dict[str, Any]) -> str:
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return f"{prefix}.{encoded}"
