@@ -43,6 +43,17 @@ def build_status(settings: Settings) -> dict[str, Any]:
             "max_limit": settings.max_limit,
             "max_radius_m": settings.max_radius_m,
             "request_timeout_seconds": settings.request_timeout_seconds,
+            "cache_ttl_seconds": {
+                "ckan_catalog": settings.ckan_catalog_cache_ttl_seconds,
+                "ckan_resource": settings.ckan_resource_cache_ttl_seconds,
+                "iett_line": settings.iett_line_cache_ttl_seconds,
+                "iett_stops": settings.iett_stops_cache_ttl_seconds,
+                "ispark": settings.ispark_cache_ttl_seconds,
+                "metro": settings.metro_cache_ttl_seconds,
+                "air_quality_station": settings.air_quality_station_cache_ttl_seconds,
+                "air_quality_reading": settings.air_quality_reading_cache_ttl_seconds,
+                "traffic": settings.traffic_cache_ttl_seconds,
+            },
             "source_rate_limits": {
                 "ckan": {
                     "capacity": settings.ckan_rate_capacity,

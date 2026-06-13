@@ -1,16 +1,24 @@
 import pytest
+import asyncio
 
 from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
+from app.core.source_cache import clear_source_cache
 from app.services.transit import TransitService
 from app.storage.geo import GeoRepository
 
 
 class FakeIett:
+    def __init__(self):
+        self.line_info_calls = 0
+        self.stops_for_line_calls = 0
+
     async def line_info(self, line_code):
+        self.line_info_calls += 1
         return [{"SHATKODU": line_code, "SHATADI": "A - B", "TARIFE": "TEST"}]
 
     async def stops_for_line(self, line_code):
+        self.stops_for_line_calls += 1
         return [
             {
                 "HATKODU": line_code,
@@ -44,6 +52,7 @@ class RateLimitedIett:
 
 
 def service(tmp_path):
+    clear_source_cache()
     settings = Settings(database_path=tmp_path / "transit.sqlite3")
     return TransitService(
         settings=settings,
@@ -88,6 +97,7 @@ async def test_line_info_failure_returns_structured_error(tmp_path):
 
 @pytest.mark.asyncio
 async def test_line_info_rate_limit_returns_retry_after_envelope(tmp_path):
+    clear_source_cache()
     settings = Settings(database_path=tmp_path / "transit.sqlite3")
     svc = TransitService(
         settings=settings,
@@ -101,3 +111,37 @@ async def test_line_info_rate_limit_returns_retry_after_envelope(tmp_path):
     assert result["freshness"]["status"] == "stale"
     assert result["data"][0]["source"] == "iett"
     assert result["data"][0]["retry_after_seconds"] == 2.5
+
+
+@pytest.mark.asyncio
+async def test_line_info_cache_collapses_concurrent_requests(tmp_path):
+    clear_source_cache()
+    fake = FakeIett()
+    settings = Settings(database_path=tmp_path / "transit.sqlite3")
+    svc = TransitService(
+        settings=settings,
+        iett_client=fake,
+        geo_repository=GeoRepository(settings.database_path),
+    )
+
+    results = await asyncio.gather(*(svc.line_info("34A") for _ in range(20)))
+
+    assert all(result["ok"] is True for result in results)
+    assert fake.line_info_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_stops_for_line_cache_collapses_concurrent_requests(tmp_path):
+    clear_source_cache()
+    fake = FakeIett()
+    settings = Settings(database_path=tmp_path / "transit.sqlite3")
+    svc = TransitService(
+        settings=settings,
+        iett_client=fake,
+        geo_repository=GeoRepository(settings.database_path),
+    )
+
+    results = await asyncio.gather(*(svc.stops_for_line("34A") for _ in range(20)))
+
+    assert all(result["ok"] is True for result in results)
+    assert fake.stops_for_line_calls == 1

@@ -5,6 +5,8 @@ All tools are read-only and return a standard envelope with `summary`, `data`, `
 When local source back-pressure is active, affected tools return `ok=false` with `retry_after_seconds` in `data[0]`.
 Expected validation and source failures return `ok=false` envelopes with `error_code`, field/source context, and actionable limits where available.
 
+Repeated CKAN catalog/resource queries and IETT line/stop queries use short upstream TTL caches to collapse concurrent identical requests and reduce pressure on source systems. Runtime cache entries and TTL settings are visible from `/status`.
+
 ## Core
 
 - `istanbul_health()` — service and SQLite readiness.
