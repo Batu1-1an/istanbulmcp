@@ -75,6 +75,7 @@ async def test_stops_for_line_upserts_bus_stop(tmp_path):
     result = await svc.stops_for_line("34A")
 
     assert result["data"][0]["stop_code"] == "100"
+    assert result["data"][0]["maps_url"] == "https://www.google.com/maps/search/?api=1&query=41.000000,29.000000"
     nearby = svc.geo.nearby(lat=41.0, lon=29.0, radius_m=100, limit=5, types=["bus_stop"])
     assert nearby[0]["name"] == "Stop"
 

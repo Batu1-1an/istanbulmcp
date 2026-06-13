@@ -9,7 +9,7 @@ from app.connectors.metro import MetroClient
 from app.connectors.traffic import TrafficClient
 from app.core.envelope import Freshness, Source, success_envelope
 from app.core.error_responses import source_error_envelope, validation_error_envelope
-from app.core.geo import parse_wkt_point
+from app.core.geo import google_maps_url, parse_wkt_point
 from app.core.settings import Settings
 from app.core.source_cache import cached_source_data
 from app.core.validation import InputValidationError, validate_bbox, validate_lat_lon, validate_limit, validate_radius, validate_text
@@ -567,7 +567,7 @@ class CityService:
         }
 
     def _district_parking_row(self, park: dict[str, Any]) -> dict[str, Any]:
-        return {
+        row = {
             "source": "ispark",
             "source_id": str(park.get("parkID")),
             "name": park.get("parkName") or str(park.get("parkID")),
@@ -580,6 +580,9 @@ class CityService:
             "park_type": park.get("parkType"),
             "is_open": park.get("isOpen"),
         }
+        if maps_url := google_maps_url(row.get("lat"), row.get("lon")):
+            row["maps_url"] = maps_url
+        return row
 
     def _metro_coordinates(self, station: dict[str, Any]) -> tuple[float, float] | None:
         detail = station.get("DetailInfo") or {}

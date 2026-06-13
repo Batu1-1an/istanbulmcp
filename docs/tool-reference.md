@@ -40,6 +40,8 @@ Catalog search results include `relevance`, `datastore_active_count`, and `prefe
 
 Air quality results include `latest_reading_quality` because the upstream source can return station records with missing AQI values. Traffic status is citywide only and explicitly lists unsupported road-level or incident detail.
 
+Coordinate-bearing location results include `maps_url`, a Google Maps search URL built from the source `lat`/`lon`. The server does not create map links for address-only or district-level records without real coordinates.
+
 `istanbul_parking_by_district` lists ISPark records by the source `district` field and does not calculate or return synthetic distances. It is the right tool for questions such as "Başakşehir'de hangi otoparklar var, doluluk oranı nedir?"
 
 `istanbul_mobility_nearby` is for practical questions such as nearby parking, metro, public transport stops, air quality, and the citywide traffic index. It accepts explicit `lat`/`lon` or curated reference points such as `Kadıköy Rıhtım`, `Taksim`, or `Levent`. If a district name is supplied instead, it returns district-wide parking records without distances and asks for an exact place only when distance matters.

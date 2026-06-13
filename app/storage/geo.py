@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from app.core.geo import haversine_m, radius_bbox
+from app.core.geo import google_maps_url, haversine_m, radius_bbox
 from app.storage.db import connect, init_database
 
 
@@ -132,4 +132,6 @@ class GeoRepository:
         item = dict(row)
         item["properties"] = json.loads(item.pop("properties_json") or "{}")
         item.pop("geometry_json", None)
+        if maps_url := google_maps_url(item.get("lat"), item.get("lon")):
+            item["maps_url"] = maps_url
         return item

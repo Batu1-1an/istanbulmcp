@@ -30,6 +30,7 @@ def test_nearby_returns_sorted_features(tmp_path):
 
     assert [item["name"] for item in results] == ["A", "B"]
     assert results[0]["distance_m"] == 0
+    assert results[0]["maps_url"] == "https://www.google.com/maps/search/?api=1&query=41.000000,29.000000"
 
 
 def test_bbox_search_filters_by_type(tmp_path):
@@ -45,3 +46,4 @@ def test_bbox_search_filters_by_type(tmp_path):
 
     assert len(results) == 1
     assert results[0]["feature_type"] == "metro_station"
+    assert results[0]["maps_url"] == "https://www.google.com/maps/search/?api=1&query=41.000000,29.000000"

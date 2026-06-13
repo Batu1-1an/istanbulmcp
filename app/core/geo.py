@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import re
+from typing import Any
 
 EARTH_RADIUS_M = 6_371_000
 WKT_POINT_RE = re.compile(r"POINT\s*\(\s*([0-9.\-]+)\s+([0-9.\-]+)\s*\)", re.I)
@@ -35,3 +36,18 @@ def parse_wkt_point(value: str | None) -> tuple[float, float] | None:
     lon = float(match.group(1))
     lat = float(match.group(2))
     return lat, lon
+
+
+def google_maps_url(lat: Any, lon: Any) -> str | None:
+    if lat in (None, "") or lon in (None, ""):
+        return None
+    try:
+        latitude = float(lat)
+        longitude = float(lon)
+    except (TypeError, ValueError):
+        return None
+    if not (math.isfinite(latitude) and math.isfinite(longitude)):
+        return None
+    if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
+        return None
+    return f"https://www.google.com/maps/search/?api=1&query={latitude:.6f},{longitude:.6f}"

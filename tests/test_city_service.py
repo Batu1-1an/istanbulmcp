@@ -171,6 +171,7 @@ async def test_parking_nearby_returns_capacity(tmp_path):
 
     assert result["data"][0]["name"] == "Moda Otopark"
     assert result["data"][0]["properties"]["empty_capacity"] == 25
+    assert result["data"][0]["maps_url"] == "https://www.google.com/maps/search/?api=1&query=40.990900,29.030300"
 
 
 @pytest.mark.asyncio
@@ -180,6 +181,7 @@ async def test_parking_by_district_uses_source_district_without_distance(tmp_pat
     assert result["ok"] is True
     assert result["data"][0]["name"] == "Basaksehir Otopark"
     assert result["data"][0]["empty_capacity"] == 80
+    assert result["data"][0]["maps_url"] == "https://www.google.com/maps/search/?api=1&query=41.093000,28.806000"
     assert "distance_m" not in result["data"][0]
     assert "no distance shown without an exact location" in result["limits"]
     assert any("exact place or coordinates" in warning for warning in result["warnings"])
@@ -316,8 +318,11 @@ async def test_mobility_nearby_aggregates_sections_for_place(tmp_path):
     assert result["ok"] is True
     assert payload["query"]["district"] == "Kadikoy"
     assert payload["parking"][0]["name"] == "Moda Otopark"
+    assert payload["parking"][0]["maps_url"].startswith("https://www.google.com/maps/search/")
     assert payload["metro_stations"][0]["name"] == "Kadikoy"
+    assert payload["metro_stations"][0]["maps_url"].startswith("https://www.google.com/maps/search/")
     assert payload["public_transport_stops"][0]["name"] == "Kadikoy Rihtim"
+    assert payload["public_transport_stops"][0]["maps_url"].startswith("https://www.google.com/maps/search/")
     assert payload["traffic"]["traffic_index"] == 63
 
 
@@ -330,6 +335,7 @@ async def test_mobility_nearby_returns_district_parking_for_district_place(tmp_p
     assert result["data"][0]["query"]["district"] == "Kadıköy"
     assert result["data"][0]["query"]["distance_included"] is False
     assert result["data"][0]["parking"][0]["name"] == "Moda Otopark"
+    assert result["data"][0]["parking"][0]["maps_url"].startswith("https://www.google.com/maps/search/")
     assert "distance_m" not in result["data"][0]["parking"][0]
 
 
@@ -340,6 +346,7 @@ async def test_mobility_nearby_returns_district_parking_for_uncurated_district_t
     assert result["ok"] is True
     assert result["data"][0]["query"]["district"] == "Başakşehir"
     assert result["data"][0]["parking"][0]["name"] == "Basaksehir Otopark"
+    assert result["data"][0]["parking"][0]["maps_url"].startswith("https://www.google.com/maps/search/")
     assert "distance_m" not in result["data"][0]["parking"][0]
 
 
@@ -350,7 +357,9 @@ async def test_city_services_nearby_filters_wifi_and_returns_district_libraries(
     payload = result["data"][0]
     assert result["ok"] is True
     assert [row["name"] for row in payload["wifi_locations"]] == ["Kadikoy WiFi"]
+    assert payload["wifi_locations"][0]["maps_url"].startswith("https://www.google.com/maps/search/")
     assert [row["name"] for row in payload["libraries"]] == ["Kadikoy Library"]
+    assert "maps_url" not in payload["libraries"][0]
     assert any("district-level" in warning for warning in result["warnings"])
 
 

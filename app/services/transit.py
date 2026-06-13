@@ -4,6 +4,7 @@ from typing import Any
 
 from app.connectors.iett import IettClient
 from app.core.envelope import Freshness, Source, error_envelope, success_envelope
+from app.core.geo import google_maps_url
 from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
 from app.core.source_cache import cached_source_data
@@ -104,7 +105,7 @@ class TransitService:
     def _stop_row(self, row: dict[str, Any]) -> dict[str, Any]:
         lon = self._float_or_none(row.get("XKOORDINATI"))
         lat = self._float_or_none(row.get("YKOORDINATI"))
-        return {
+        stop = {
             "line_code": row.get("HATKODU"),
             "direction": row.get("YON"),
             "direction_name": (row.get("YON_ADI") or "").strip() or None,
@@ -116,6 +117,9 @@ class TransitService:
             "district": row.get("ILCEADI"),
             "stop_type": row.get("DURAKTIPI"),
         }
+        if maps_url := google_maps_url(lat, lon):
+            stop["maps_url"] = maps_url
+        return stop
 
     def _stop_feature(self, stop: dict[str, Any]) -> dict[str, Any]:
         return {
