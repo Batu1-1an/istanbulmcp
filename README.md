@@ -162,6 +162,30 @@ Cursor supports remote MCP servers in `~/.cursor/mcp.json` or through **Cursor S
 
 After saving, refresh MCP servers in Cursor settings or restart Cursor.
 
+## Add To Google Antigravity
+
+Google Antigravity supports MCP servers through its MCP settings and shared config file. In Antigravity, open the agent panel menu, go to **MCP Servers > Manage MCP Servers > View raw config**, then add Istanbul MCP to `mcp_config.json`.
+
+Common config path:
+
+```text
+~/.gemini/config/mcp_config.json
+```
+
+Remote HTTP config:
+
+```json
+{
+  "mcpServers": {
+    "istanbul": {
+      "serverUrl": "https://istanbulmcp-production.up.railway.app/mcp/"
+    }
+  }
+}
+```
+
+Save the file, then refresh MCP servers or restart Antigravity.
+
 ## Add To OpenCode
 
 OpenCode supports remote MCP servers in `opencode.json`.
