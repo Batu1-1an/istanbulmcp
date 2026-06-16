@@ -14,7 +14,7 @@ from app.core.mcp_transport import McpJsonRpcGuard
 from app.core.settings import get_settings
 from app.core.status import build_status
 from app.mcp.server import mcp
-from app.storage.db import readiness
+from app.storage.db import public_readiness, readiness
 
 
 async def healthz(_request):
@@ -23,7 +23,7 @@ async def healthz(_request):
 
 async def readyz(_request):
     settings = get_settings()
-    return JSONResponse(readiness(settings.database_path))
+    return JSONResponse(public_readiness(readiness(settings.database_path)))
 
 
 async def status(request):

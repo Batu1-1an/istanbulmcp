@@ -281,8 +281,8 @@ python -m app.main
 The local server exposes:
 
 - `GET /healthz`
-- `GET /readyz`
-- `GET /status`
+- `GET /readyz` for readiness without exposing the local database path
+- `GET /status` for tool inventory, runtime limits, and redacted cache metadata
 - `POST /mcp/`
 
 Opt-in live MCP regression:
@@ -301,6 +301,9 @@ Key upstream cache TTLs:
 - `IETT_LINE_CACHE_TTL_SECONDS`
 - `IETT_STOPS_CACHE_TTL_SECONDS`
 - `SOURCE_CACHE_MAX_ENTRIES`
+- `AIR_QUALITY_RATE_CAPACITY`
+- `AIR_QUALITY_RATE_REFILL_PER_SECOND`
+- `AIR_QUALITY_RATE_MAX_WAIT_SECONDS`
 
 Public MCP guard limits:
 

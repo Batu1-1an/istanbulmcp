@@ -688,7 +688,7 @@ class KvkkApiClient:
     KVKK_BASE_URL = "https://www.kvkk.gov.tr"
     
     def __init__(self):
-        self.brave_api_token = os.getenv("BRAVE_API_TOKEN", "BSAuaRKB-dvSDSQxIN0ft1p2k6N82Kq")
+        self.brave_api_token = os.getenv("BRAVE_API_TOKEN")
         # Fallback token built-in!
     
     async def search_decisions(self, request: KvkkSearchRequest) -> KvkkSearchResult:

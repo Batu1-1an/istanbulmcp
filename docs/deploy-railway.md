@@ -19,12 +19,15 @@ Abuse and cache guard variables can be tuned per Railway environment:
 - `MCP_RATE_LIMIT_MAX_CLIENTS`
 - `MCP_MAX_CONCURRENT_REQUESTS`
 - `SOURCE_CACHE_MAX_ENTRIES`
+- `AIR_QUALITY_RATE_CAPACITY`
+- `AIR_QUALITY_RATE_REFILL_PER_SECOND`
+- `AIR_QUALITY_RATE_MAX_WAIT_SECONDS`
 
 ## Health Checks
 
 - `/healthz` confirms the process is up.
-- `/readyz` initializes/checks SQLite and returns readiness details.
-- `/status` returns version, tool inventory, source group, and runtime limits.
+- `/readyz` initializes/checks SQLite and returns readiness details without exposing the local database path.
+- `/status` returns version, tool inventory, source group, runtime limits, and redacted cache metadata.
 - `/mcp/` is the canonical Streamable HTTP MCP endpoint.
 - `/mcp` returns a relative `308` redirect to `/mcp/`.
 

@@ -124,3 +124,11 @@ def readiness(database_path: Path) -> dict[str, str | int | bool]:
     with connect(database_path) as conn:
         conn.execute("SELECT 1").fetchone()
     return {**status, "ready": True}
+
+
+def public_readiness(status: dict) -> dict[str, str | int | bool | None]:
+    return {
+        "ready": status.get("ready"),
+        "journal_mode": status.get("journal_mode"),
+        "schema_version": status.get("schema_version"),
+    }

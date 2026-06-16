@@ -22,6 +22,9 @@ class Settings:
     iett_rate_capacity: int = 2
     iett_rate_refill_per_second: float = 0.5
     iett_rate_max_wait_seconds: float = 0.2
+    air_quality_rate_capacity: int = 4
+    air_quality_rate_refill_per_second: float = 1.0
+    air_quality_rate_max_wait_seconds: float = 0.5
     ispark_cache_ttl_seconds: int = 300
     metro_cache_ttl_seconds: int = 86400
     air_quality_station_cache_ttl_seconds: int = 3600
@@ -70,6 +73,9 @@ def get_settings() -> Settings:
         iett_rate_capacity=_int_env("IETT_RATE_CAPACITY", 2),
         iett_rate_refill_per_second=_float_env("IETT_RATE_REFILL_PER_SECOND", 0.5),
         iett_rate_max_wait_seconds=_float_env("IETT_RATE_MAX_WAIT_SECONDS", 0.2),
+        air_quality_rate_capacity=_int_env("AIR_QUALITY_RATE_CAPACITY", 4),
+        air_quality_rate_refill_per_second=_float_env("AIR_QUALITY_RATE_REFILL_PER_SECOND", 1.0),
+        air_quality_rate_max_wait_seconds=_float_env("AIR_QUALITY_RATE_MAX_WAIT_SECONDS", 0.5),
         ispark_cache_ttl_seconds=_int_env("ISPARK_CACHE_TTL_SECONDS", 300),
         metro_cache_ttl_seconds=_int_env("METRO_CACHE_TTL_SECONDS", 86400),
         air_quality_station_cache_ttl_seconds=_int_env("AIR_QUALITY_STATION_CACHE_TTL_SECONDS", 3600),

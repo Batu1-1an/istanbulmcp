@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -35,22 +36,27 @@ class SourceTTLCache:
             return entry.value
 
         lock = self._locks.setdefault(key, asyncio.Lock())
-        async with lock:
-            now = time.monotonic()
-            entry = self._entries.get(key)
-            if entry is not None and now < entry.expires_at_monotonic:
-                return entry.value
+        try:
+            async with lock:
+                now = time.monotonic()
+                entry = self._entries.get(key)
+                if entry is not None and now < entry.expires_at_monotonic:
+                    return entry.value
 
-            value = await loader()
-            refreshed_at = datetime.now(timezone.utc).isoformat()
-            self._evict_before_insert(max_entries=max_entries, now=now)
-            self._entries[key] = CacheEntry(
-                value=value,
-                refreshed_at_monotonic=now,
-                expires_at_monotonic=now + ttl_seconds,
-                refreshed_at_iso=refreshed_at,
-            )
-            return value
+                value = await loader()
+                refreshed_at = datetime.now(timezone.utc).isoformat()
+                self._evict_before_insert(max_entries=max_entries, now=now)
+                self._entries[key] = CacheEntry(
+                    value=value,
+                    refreshed_at_monotonic=now,
+                    expires_at_monotonic=now + ttl_seconds,
+                    refreshed_at_iso=refreshed_at,
+                )
+                return value
+        except Exception:
+            if self._entries.get(key) is None:
+                self._locks.pop(key, None)
+            raise
 
     def snapshot(self) -> list[dict[str, Any]]:
         now = time.monotonic()
@@ -58,7 +64,8 @@ class SourceTTLCache:
         for key, entry in sorted(self._entries.items()):
             rows.append(
                 {
-                    "source": key,
+                    "source": _source_label(key),
+                    "cache_key_hash": _cache_key_hash(key),
                     "refreshed_at": entry.refreshed_at_iso,
                     "expires_in_seconds": max(0, round(entry.expires_at_monotonic - now, 3)),
                     "is_fresh": now < entry.expires_at_monotonic,
@@ -110,3 +117,14 @@ def source_cache_snapshot() -> list[dict[str, Any]]:
 
 def clear_source_cache() -> None:
     source_cache.clear()
+
+
+def _cache_key_hash(key: str) -> str:
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+
+
+def _source_label(key: str) -> str:
+    parts = key.split(".")
+    if len(parts) >= 2:
+        return ".".join(parts[:2])
+    return key

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -173,16 +174,22 @@ class McpAbuseGuardMiddleware:
             key.decode("latin-1").lower(): value.decode("latin-1")
             for key, value in scope.get("headers", [])
         }
-        forwarded = headers.get("x-forwarded-for")
-        if forwarded:
-            return forwarded.split(",", 1)[0].strip() or "unknown"
-        for header in ("cf-connecting-ip", "x-real-ip"):
-            if headers.get(header):
-                return headers[header].strip()
+        for header in ("x-real-ip", "cf-connecting-ip"):
+            if client_ip := self._trusted_header_ip(headers.get(header)):
+                return client_ip
         client = scope.get("client")
         if isinstance(client, tuple) and client:
             return str(client[0])
         return "unknown"
+
+    def _trusted_header_ip(self, value: str | None) -> str | None:
+        if not value:
+            return None
+        candidate = value.strip()
+        try:
+            return str(ipaddress.ip_address(candidate))
+        except ValueError:
+            return None
 
     async def _reject(
         self,
@@ -215,4 +222,3 @@ class McpAbuseGuardMiddleware:
 
 class RequestBodyTooLarge(Exception):
     pass
-

@@ -54,6 +54,62 @@ def test_mcp_rate_limit_returns_429(monkeypatch):
     assert second.json()["ok"] is False
 
 
+def test_mcp_rate_limit_ignores_spoofed_x_forwarded_for(monkeypatch):
+    monkeypatch.setenv("MCP_RATE_LIMIT_CAPACITY", "1")
+    monkeypatch.setenv("MCP_RATE_LIMIT_REFILL_PER_SECOND", "0.001")
+    client = TestClient(create_app(), base_url="http://localhost")
+
+    first = client.post(
+        "/mcp/",
+        headers={
+            "accept": "application/json, text/event-stream",
+            "content-type": "application/json",
+            "x-forwarded-for": "198.51.100.10",
+        },
+        json={"jsonrpc": "2.0", "id": None, "method": "ping"},
+    )
+    second = client.post(
+        "/mcp/",
+        headers={
+            "accept": "application/json, text/event-stream",
+            "content-type": "application/json",
+            "x-forwarded-for": "198.51.100.11",
+        },
+        json={"jsonrpc": "2.0", "id": 2, "method": "ping"},
+    )
+
+    assert first.status_code != 429
+    assert second.status_code == 429
+
+
+def test_mcp_rate_limit_uses_x_real_ip_when_present(monkeypatch):
+    monkeypatch.setenv("MCP_RATE_LIMIT_CAPACITY", "1")
+    monkeypatch.setenv("MCP_RATE_LIMIT_REFILL_PER_SECOND", "0.001")
+    client = TestClient(create_app(), base_url="http://localhost")
+
+    first = client.post(
+        "/mcp/",
+        headers={
+            "accept": "application/json, text/event-stream",
+            "content-type": "application/json",
+            "x-real-ip": "198.51.100.10",
+        },
+        json={"jsonrpc": "2.0", "id": None, "method": "ping"},
+    )
+    second = client.post(
+        "/mcp/",
+        headers={
+            "accept": "application/json, text/event-stream",
+            "content-type": "application/json",
+            "x-real-ip": "198.51.100.11",
+        },
+        json={"jsonrpc": "2.0", "id": None, "method": "ping"},
+    )
+
+    assert first.status_code != 429
+    assert second.status_code != 429
+
+
 @pytest.mark.asyncio
 async def test_concurrency_limiter_rejects_above_limit():
     limiter = ConcurrencyLimiter(max_concurrent=1)

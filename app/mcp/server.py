@@ -8,7 +8,7 @@ from app.services.city import CityService
 from app.services.catalog import CatalogService
 from app.services.neighborhood import NeighborhoodService
 from app.services.transit import TransitService
-from app.storage.db import readiness
+from app.storage.db import public_readiness, readiness
 
 settings = get_settings()
 
@@ -24,7 +24,7 @@ mcp = FastMCP(
 @mcp.tool()
 def istanbul_health() -> dict:
     """Return Istanbul MCP service readiness."""
-    db_status = readiness(settings.database_path)
+    db_status = public_readiness(readiness(settings.database_path))
     return success_envelope(
         summary="Istanbul MCP is ready.",
         data=[db_status],

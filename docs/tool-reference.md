@@ -5,7 +5,7 @@ All tools are read-only and return a standard envelope with `summary`, `data`, `
 When local source back-pressure is active, affected tools return `ok=false` with `retry_after_seconds` in `data[0]`.
 Expected validation and source failures return `ok=false` envelopes with `error_code`, field/source context, and actionable limits where available.
 
-Repeated CKAN catalog/resource queries and IETT line/stop queries use short upstream TTL caches to collapse concurrent identical requests and reduce pressure on source systems. Runtime cache entries and TTL settings are visible from `/status`.
+Repeated CKAN catalog/resource, IETT line/stop, and air-quality requests use local back-pressure or TTL caches to reduce pressure on source systems. `/status` exposes TTL settings and redacted cache metadata with source labels and short key hashes, not raw user query/filter values.
 
 ## Core
 
@@ -14,8 +14,8 @@ Repeated CKAN catalog/resource queries and IETT line/stop queries use short upst
 HTTP status endpoints:
 
 - `GET /healthz`
-- `GET /readyz`
-- `GET /status` — version, tool inventory, source groups, and runtime limits.
+- `GET /readyz` — readiness without local database path disclosure.
+- `GET /status` — version, tool inventory, source groups, runtime limits, and redacted cache metadata.
 
 ## Catalog
 

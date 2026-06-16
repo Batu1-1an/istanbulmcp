@@ -6,7 +6,7 @@ from typing import Any
 from app.core.settings import Settings
 from app.core.source_cache import source_cache_snapshot
 from app.mcp.server import mcp
-from app.storage.db import readiness
+from app.storage.db import public_readiness, readiness
 
 TOOL_SOURCES = {
     "istanbul_health": "runtime",
@@ -67,6 +67,11 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
                     "refill_per_second": settings.iett_rate_refill_per_second,
                     "max_wait_seconds": settings.iett_rate_max_wait_seconds,
                 },
+                "air_quality": {
+                    "capacity": settings.air_quality_rate_capacity,
+                    "refill_per_second": settings.air_quality_rate_refill_per_second,
+                    "max_wait_seconds": settings.air_quality_rate_max_wait_seconds,
+                },
             },
             "mcp_request_guard": {
                 "max_body_bytes": settings.mcp_max_body_bytes,
@@ -77,7 +82,7 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
             },
         },
         "abuse_guard": abuse_guard or {},
-        "database": readiness(settings.database_path),
+        "database": public_readiness(readiness(settings.database_path)),
         "source_cache": source_cache_snapshot(),
         "tool_count": len(tools),
         "tools": tools,
