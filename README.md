@@ -44,7 +44,7 @@ claude mcp add istanbul --url https://istanbulmcp-production.up.railway.app/mcp/
 Sonra yeni bir oturum açıp örnek bir soru sorun:
 
 ```text
-Taksim'e arabayla gideceğim. Yakındaki otoparkları boş kapasite, çalışma saati ve harita linkiyle göster.
+Taksim'e arabayla gideceğim. Yakındaki otoparkların boş yer sayısını, çalışma saatini ve haritadaki yerlerini gösterir misin?
 ```
 
 Genel MCP istemci yapılandırması:
@@ -98,7 +98,7 @@ Bu resource'lar ayrıca sorgulanabilir. Örneğin müze lokasyon resource'u müz
 ## Örnek Sorular
 
 ```text
-Taksim'e arabayla gideceğim. Yakındaki otoparkları boş kapasite, çalışma saati ve harita linkiyle göster.
+Taksim'e arabayla gideceğim. Yakındaki otoparkların boş yer sayısını, çalışma saatini ve haritadaki yerlerini gösterir misin?
 Levent yakınındaki metro istasyonları hangileri? Hat bilgisi ve harita linkleriyle listele.
 500T hattı hangi duraklardan geçiyor? Durakları yönlerine göre sıralı ve harita linkleriyle göster.
 İstanbul trafik yoğunluğu şu an hangi seviyede?
