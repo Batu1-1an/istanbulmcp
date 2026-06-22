@@ -1,5 +1,15 @@
 # Istanbul MCP
 
+## İçindekiler
+
+- [Başlangıç](#hızlı-başlangıç)
+- [Kullanım](#ne-yapabilir)
+- [Kurulum](#i̇stemci-kurulumları)
+- [Geliştirme](#geliştirme)
+- [Dağıtım](#dağıtım)
+
+---
+
 Istanbul MCP, İstanbul'a dair açık verileri MCP destekleyen yapay zekâ araçları, geliştirici ortamları ve ajan tabanlı iş akışları için erişilebilir hale getiren uzak bir Model Context Protocol sunucusudur.
 
 Herkese açık endpoint:
