@@ -205,31 +205,15 @@ JSON yapılandırma örneği:
 
 ### Claude Desktop
 
-Claude Desktop'ın doğrulanmış yerel yapılandırma yolu: **Claude Desktop > Settings > Developer > Edit Config**. Yapılandırma dosyaları:
+Claude Desktop ile kullanım için ücretli abonelik gerekir.
 
-```text
-macOS: ~/Library/Application Support/Claude/claude_desktop_config.json
-Windows: %APPDATA%\Claude\claude_desktop_config.json
-```
-
-Claude Desktop yerel `command` tabanlı MCP yapılandırmasını okur. Uzak HTTP endpoint'e bağlanmak için `mcp-remote` bridge kullanın, ardından Claude Desktop'ı tamamen yeniden başlatın:
-
-```json
-{
-  "mcpServers": {
-    "istanbul": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "mcp-remote",
-        "https://istanbulmcp-production.up.railway.app/mcp/",
-        "--transport",
-        "http-only"
-      ]
-    }
-  }
-}
-```
+1. Claude Desktop'ı açın.
+2. **Settings → Connectors → Add Custom Connector** yolunu izleyin.
+3. Bilgileri girin:
+   - **Name:** `İstanbul MCP`
+   - **URL:** `https://istanbulmcp-production.up.railway.app/mcp/`
+4. **Add** butonuna tıklayın.
+5. İstanbul MCP araçlarını kullanmaya başlayın.
 
 ### Cursor
 
@@ -301,8 +285,6 @@ Kontrol edilen resmi kaynaklar:
 
 - [Codex MCP dokümanı](https://developers.openai.com/codex/mcp)
 - [Claude Code MCP dokümanı](https://code.claude.com/docs/en/mcp)
-- [Claude Desktop yerel MCP yapılandırması](https://modelcontextprotocol.io/docs/develop/connect-local-servers)
-- [`mcp-remote` README](https://github.com/geelen/mcp-remote)
 - [Cursor MCP dokümanı](https://cursor.com/docs/mcp)
 - [OpenCode MCP servers dokümanı](https://opencode.ai/docs/mcp-servers/)
 - [Windsurf/Cascade MCP dokümanı](https://docs.windsurf.com/windsurf/cascade/mcp.md)
