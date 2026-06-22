@@ -41,6 +41,12 @@ Claude Code ile eklemek için:
 claude mcp add istanbul --url https://istanbulmcp-production.up.railway.app/mcp/
 ```
 
+Claude Desktop ve Claude.ai (Settings > Connectors > Add custom connector):
+
+```text
+URL: https://istanbulmcp-production.up.railway.app/mcp/
+```
+
 Sonra yeni bir oturum açıp örnek bir soru sorun:
 
 ```text
