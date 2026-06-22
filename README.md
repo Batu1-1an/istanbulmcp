@@ -25,6 +25,12 @@ codex mcp add istanbul --url https://istanbulmcp-production.up.railway.app/mcp/
 codex mcp list
 ```
 
+Claude Code ile eklemek için:
+
+```bash
+claude mcp add istanbul --url https://istanbulmcp-production.up.railway.app/mcp/
+```
+
 Sonra yeni bir oturum açıp örnek bir soru sorun:
 
 ```text
