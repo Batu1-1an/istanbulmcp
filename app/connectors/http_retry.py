@@ -37,6 +37,7 @@ async def request_with_retries(
         raise ValueError("attempts must be at least 1")
 
     sleep_fn = sleep or asyncio.sleep
+    penalized_retry_after = False
 
     for attempt in range(1, attempts + 1):
         try:
@@ -53,8 +54,9 @@ async def request_with_retries(
         retry_delay = 0.0
         if response.status_code == 429:
             retry_delay = retry_after_seconds(response.headers.get("retry-after"))
-            if rate_limiter is not None:
+            if rate_limiter is not None and not penalized_retry_after:
                 rate_limiter.penalize(retry_delay)
+                penalized_retry_after = True
 
         if attempt >= attempts:
             response.raise_for_status()
