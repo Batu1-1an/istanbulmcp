@@ -34,3 +34,33 @@ def air_quality_rate_limiter() -> AsyncTokenBucket:
         refill_per_second=settings.air_quality_rate_refill_per_second,
         max_wait_seconds=settings.air_quality_rate_max_wait_seconds,
     )
+
+
+@lru_cache
+def ispark_rate_limiter() -> AsyncTokenBucket:
+    settings = get_settings()
+    return AsyncTokenBucket(
+        capacity=settings.ispark_rate_capacity,
+        refill_per_second=settings.ispark_rate_refill_per_second,
+        max_wait_seconds=settings.ispark_rate_max_wait_seconds,
+    )
+
+
+@lru_cache
+def metro_rate_limiter() -> AsyncTokenBucket:
+    settings = get_settings()
+    return AsyncTokenBucket(
+        capacity=settings.metro_rate_capacity,
+        refill_per_second=settings.metro_rate_refill_per_second,
+        max_wait_seconds=settings.metro_rate_max_wait_seconds,
+    )
+
+
+@lru_cache
+def traffic_rate_limiter() -> AsyncTokenBucket:
+    settings = get_settings()
+    return AsyncTokenBucket(
+        capacity=settings.traffic_rate_capacity,
+        refill_per_second=settings.traffic_rate_refill_per_second,
+        max_wait_seconds=settings.traffic_rate_max_wait_seconds,
+    )
