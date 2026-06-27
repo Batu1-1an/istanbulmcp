@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import httpx
 
+from app.connectors.http_retry import request_with_retries
 from app.core.rate_limit import RateLimiter
 from app.core.source_limits import air_quality_rate_limiter
 
@@ -23,11 +24,19 @@ class AirQualityClient:
         await self._rate_limiter.acquire("air_quality")
         if self._client is None:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(f"{self.base_url}/GetAQIStations")
+                response = await request_with_retries(
+                    client,
+                    "GET",
+                    f"{self.base_url}/GetAQIStations",
+                    rate_limiter=self._rate_limiter,
+                )
         else:
-            response = await self._client.get(f"{self.base_url}/GetAQIStations")
-        if response.status_code == 429:
-            self._rate_limiter.penalize(_retry_after_seconds(response.headers.get("retry-after")))
+            response = await request_with_retries(
+                self._client,
+                "GET",
+                f"{self.base_url}/GetAQIStations",
+                rate_limiter=self._rate_limiter,
+            )
         response.raise_for_status()
         return response.json()
 
@@ -35,25 +44,20 @@ class AirQualityClient:
         await self._rate_limiter.acquire("air_quality")
         if self._client is None:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(
+                response = await request_with_retries(
+                    client,
+                    "GET",
                     f"{self.base_url}/GetAQIByStationId",
                     params={"stationId": station_id},
+                    rate_limiter=self._rate_limiter,
                 )
         else:
-            response = await self._client.get(
+            response = await request_with_retries(
+                self._client,
+                "GET",
                 f"{self.base_url}/GetAQIByStationId",
                 params={"stationId": station_id},
+                rate_limiter=self._rate_limiter,
             )
-        if response.status_code == 429:
-            self._rate_limiter.penalize(_retry_after_seconds(response.headers.get("retry-after")))
         response.raise_for_status()
         return response.json()
-
-
-def _retry_after_seconds(value: str | None) -> float:
-    if not value:
-        return 1.0
-    try:
-        return max(0.0, float(value))
-    except ValueError:
-        return 1.0
