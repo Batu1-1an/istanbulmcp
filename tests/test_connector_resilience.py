@@ -2,6 +2,7 @@ import httpx
 import pytest
 
 from app.connectors.http_retry import request_with_retries, retry_after_seconds
+from app.connectors.iski import IskiClient
 from app.connectors.ispark import IsparkClient
 from app.connectors.metro import MetroClient
 from app.connectors.traffic import TrafficClient
@@ -92,6 +93,10 @@ async def test_standardized_connectors_accept_injected_clients_and_limiters() ->
             return httpx.Response(200, json={"Data": [{"Description": "Kadikoy"}]})
         if "/TrafficIndexHistory/1/" in request.url.path:
             return httpx.Response(200, text='[{"TrafficIndex":63}]')
+        if request.url.path.endswith("/mahallelerKesinti.geojson"):
+            return httpx.Response(200, json={"type": "FeatureCollection", "features": []})
+        if request.url.path.endswith("/baraj.json"):
+            return httpx.Response(200, json={"data": [{"kaynakAdi": "Alibey", "dolulukOrani": "59.44"}]})
         return httpx.Response(404)
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
@@ -110,15 +115,24 @@ async def test_standardized_connectors_accept_injected_clients_and_limiters() ->
             http_client=http_client,
             rate_limiter=limiter,
         )
+        iski = IskiClient(
+            base_url="https://example.test/iski",
+            http_client=http_client,
+            rate_limiter=limiter,
+        )
 
         parks = await ispark.parks()
         stations = await metro.stations()
         history = await traffic.index_history()
+        faults = await iski.active_faults()
+        dams = await iski.dams()
 
     assert parks == [{"parkName": "Moda Otopark"}]
     assert stations == [{"Description": "Kadikoy"}]
     assert history == [{"TrafficIndex": 63}]
-    assert limiter.acquired == ["ispark", "metro", "traffic"]
+    assert faults["type"] == "FeatureCollection"
+    assert dams == [{"kaynakAdi": "Alibey", "dolulukOrani": "59.44"}]
+    assert limiter.acquired == ["ispark", "metro", "traffic", "iski", "iski"]
 
 
 @pytest.mark.asyncio

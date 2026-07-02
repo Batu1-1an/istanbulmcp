@@ -21,6 +21,10 @@ TOOL_SOURCES = {
     "istanbul_metro_stations_nearby": "metro",
     "istanbul_air_quality_nearby": "air_quality",
     "istanbul_traffic_status": "traffic",
+    "istanbul_iski_active_faults": "iski",
+    "istanbul_iski_fault_by_number": "iski",
+    "istanbul_iski_nearby_faults": "iski",
+    "istanbul_iski_dam_occupancy": "iski",
     "istanbul_mobility_nearby": "mixed_city_open_data",
     "istanbul_city_services_nearby": "ckan",
     "istanbul_neighborhood_profile": "ckan",
@@ -54,6 +58,8 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
                 "air_quality_station": settings.air_quality_station_cache_ttl_seconds,
                 "air_quality_reading": settings.air_quality_reading_cache_ttl_seconds,
                 "traffic": settings.traffic_cache_ttl_seconds,
+                "iski_faults": settings.iski_faults_cache_ttl_seconds,
+                "iski_dams": settings.iski_dams_cache_ttl_seconds,
             },
             "source_cache_max_entries": settings.source_cache_max_entries,
             "source_rate_limits": {
@@ -71,6 +77,11 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
                     "capacity": settings.air_quality_rate_capacity,
                     "refill_per_second": settings.air_quality_rate_refill_per_second,
                     "max_wait_seconds": settings.air_quality_rate_max_wait_seconds,
+                },
+                "iski": {
+                    "capacity": settings.iski_rate_capacity,
+                    "refill_per_second": settings.iski_rate_refill_per_second,
+                    "max_wait_seconds": settings.iski_rate_max_wait_seconds,
                 },
             },
             "mcp_request_guard": {

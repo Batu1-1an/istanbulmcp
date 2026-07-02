@@ -2,11 +2,9 @@
 
 ## Project Structure & Module Organization
 
-This repository currently contains Istanbul MCP planning documents; source code is not scaffolded yet.
-
 - Root `*.md`: scope, research, data validation, roadmap, and user-flow analysis.
-- Future source: `app/`, following the Python/FastMCP architecture.
-- Future tests: `tests/`, mirroring app modules.
+- Source code: `app/`, following the Python/FastMCP architecture.
+- Tests: `tests/`, mirroring app modules.
 - Fixtures and small API samples: `tests/fixtures/`. Do not place raw snapshots in the root.
 
 ## Technology Stack
@@ -22,14 +20,7 @@ This repository currently contains Istanbul MCP planning documents; source code 
 
 ## Build, Test, and Development Commands
 
-Until code is added, validate documentation changes with:
-
-```bash
-git status --short
-rg --files -uu -g '!.git/**'
-```
-
-When implementation starts:
+Validate changes with:
 
 ```bash
 python -m venv .venv

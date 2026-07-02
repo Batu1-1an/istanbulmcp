@@ -44,14 +44,17 @@ def test_status_returns_tool_inventory(monkeypatch, tmp_path):
     assert body["transport"]["streamable_http"] == "/mcp/"
     assert body["limits"]["mcp_request_guard"]["max_body_bytes"] > 0
     assert "air_quality" in body["limits"]["source_rate_limits"]
+    assert "iski" in body["limits"]["source_rate_limits"]
     assert body["abuse_guard"]["rate_limit"]["capacity"] > 0
     assert body["abuse_guard"]["concurrency"]["max_concurrent"] > 0
     assert "database_path" not in body["database"]
     tool_names = {tool["name"] for tool in body["tools"]}
-    assert body["tool_count"] >= 17
+    assert body["tool_count"] >= 21
     assert "istanbul_search_datasets" in tool_names
     assert "istanbul_neighborhood_profile" in tool_names
     assert "istanbul_parking_by_district" in tool_names
+    assert "istanbul_iski_active_faults" in tool_names
+    assert "istanbul_iski_dam_occupancy" in tool_names
 
 
 def test_mcp_health_does_not_expose_database_path():

@@ -6,6 +6,7 @@ from app.core.envelope import Freshness, Source, success_envelope
 from app.core.settings import get_settings
 from app.services.city import CityService
 from app.services.catalog import CatalogService
+from app.services.iski import IskiService
 from app.services.neighborhood import NeighborhoodService
 from app.services.transit import TransitService
 from app.storage.db import public_readiness, readiness
@@ -181,6 +182,54 @@ async def istanbul_air_quality_nearby(
 async def istanbul_traffic_status() -> dict:
     """Return Istanbul citywide traffic index."""
     return await CityService(settings=get_settings()).traffic_status()
+
+
+@mcp.tool()
+async def istanbul_iski_active_faults(
+    district: str | None = None,
+    limit: int | None = None,
+) -> dict:
+    """List active ISKI water faults, optionally filtered by district."""
+    return await IskiService(settings=get_settings()).active_faults(
+        district=district,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+async def istanbul_iski_fault_by_number(fault_number: str) -> dict:
+    """Return one active ISKI water fault by fault number."""
+    return await IskiService(settings=get_settings()).fault_by_number(fault_number)
+
+
+@mcp.tool()
+async def istanbul_iski_nearby_faults(
+    lat: float,
+    lon: float,
+    radius_m: int = 1000,
+    limit: int | None = None,
+) -> dict:
+    """Find active ISKI water faults near a coordinate."""
+    return await IskiService(settings=get_settings()).nearby_faults(
+        lat=lat,
+        lon=lon,
+        radius_m=radius_m,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+async def istanbul_iski_dam_occupancy(
+    dam_name: str | None = None,
+    min_occupancy: float | None = None,
+    limit: int | None = None,
+) -> dict:
+    """Return live ISKI dam occupancy records."""
+    return await IskiService(settings=get_settings()).dam_occupancy(
+        dam_name=dam_name,
+        min_occupancy=min_occupancy,
+        limit=limit,
+    )
 
 
 @mcp.tool()

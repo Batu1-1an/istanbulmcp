@@ -64,3 +64,13 @@ def traffic_rate_limiter() -> AsyncTokenBucket:
         refill_per_second=settings.traffic_rate_refill_per_second,
         max_wait_seconds=settings.traffic_rate_max_wait_seconds,
     )
+
+
+@lru_cache
+def iski_rate_limiter() -> AsyncTokenBucket:
+    settings = get_settings()
+    return AsyncTokenBucket(
+        capacity=settings.iski_rate_capacity,
+        refill_per_second=settings.iski_rate_refill_per_second,
+        max_wait_seconds=settings.iski_rate_max_wait_seconds,
+    )
