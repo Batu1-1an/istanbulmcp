@@ -34,6 +34,12 @@ class Settings:
     traffic_rate_capacity: int = 2
     traffic_rate_refill_per_second: float = 0.5
     traffic_rate_max_wait_seconds: float = 0.5
+    iski_request_timeout_seconds: float = 5.0
+    iski_request_attempts: int = 1
+    iski_api_base_url: str = "https://iskiapi.iski.istanbul/api"
+    iski_api_bearer_token: str | None = None
+    iski_faults_snapshot_json: str | None = None
+    iski_dams_snapshot_json: str | None = None
     iski_rate_capacity: int = 4
     iski_rate_refill_per_second: float = 1.0
     iski_rate_max_wait_seconds: float = 0.5
@@ -44,6 +50,8 @@ class Settings:
     traffic_cache_ttl_seconds: int = 60
     iski_faults_cache_ttl_seconds: int = 30
     iski_dams_cache_ttl_seconds: int = 60
+    iski_faults_stale_if_error_seconds: int = 900
+    iski_dams_stale_if_error_seconds: int = 86400
     ckan_catalog_cache_ttl_seconds: int = 900
     ckan_resource_cache_ttl_seconds: int = 900
     iett_line_cache_ttl_seconds: int = 900
@@ -68,6 +76,13 @@ def _float_env(name: str, default: float) -> float:
     if value is None or value == "":
         return default
     return float(value)
+
+
+def _str_env(name: str, default: str | None = None) -> str | None:
+    value = os.getenv(name)
+    if value is None or value == "":
+        return default
+    return value
 
 
 @lru_cache
@@ -99,6 +114,12 @@ def get_settings() -> Settings:
         traffic_rate_capacity=_int_env("TRAFFIC_RATE_CAPACITY", 2),
         traffic_rate_refill_per_second=_float_env("TRAFFIC_RATE_REFILL_PER_SECOND", 0.5),
         traffic_rate_max_wait_seconds=_float_env("TRAFFIC_RATE_MAX_WAIT_SECONDS", 0.5),
+        iski_request_timeout_seconds=_float_env("ISKI_REQUEST_TIMEOUT_SECONDS", 5.0),
+        iski_request_attempts=_int_env("ISKI_REQUEST_ATTEMPTS", 1),
+        iski_api_base_url=os.getenv("ISKI_API_BASE_URL", "https://iskiapi.iski.istanbul/api"),
+        iski_api_bearer_token=_str_env("ISKI_API_BEARER_TOKEN"),
+        iski_faults_snapshot_json=_str_env("ISKI_FAULTS_SNAPSHOT_JSON"),
+        iski_dams_snapshot_json=_str_env("ISKI_DAMS_SNAPSHOT_JSON"),
         iski_rate_capacity=_int_env("ISKI_RATE_CAPACITY", 4),
         iski_rate_refill_per_second=_float_env("ISKI_RATE_REFILL_PER_SECOND", 1.0),
         iski_rate_max_wait_seconds=_float_env("ISKI_RATE_MAX_WAIT_SECONDS", 0.5),
@@ -109,6 +130,8 @@ def get_settings() -> Settings:
         traffic_cache_ttl_seconds=_int_env("TRAFFIC_CACHE_TTL_SECONDS", 60),
         iski_faults_cache_ttl_seconds=_int_env("ISKI_FAULTS_CACHE_TTL_SECONDS", 30),
         iski_dams_cache_ttl_seconds=_int_env("ISKI_DAMS_CACHE_TTL_SECONDS", 60),
+        iski_faults_stale_if_error_seconds=_int_env("ISKI_FAULTS_STALE_IF_ERROR_SECONDS", 900),
+        iski_dams_stale_if_error_seconds=_int_env("ISKI_DAMS_STALE_IF_ERROR_SECONDS", 86400),
         ckan_catalog_cache_ttl_seconds=_int_env("CKAN_CATALOG_CACHE_TTL_SECONDS", 900),
         ckan_resource_cache_ttl_seconds=_int_env("CKAN_RESOURCE_CACHE_TTL_SECONDS", 900),
         iett_line_cache_ttl_seconds=_int_env("IETT_LINE_CACHE_TTL_SECONDS", 900),

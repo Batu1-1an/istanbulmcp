@@ -17,6 +17,15 @@ class CacheEntry:
     refreshed_at_iso: str
 
 
+@dataclass(frozen=True)
+class CachedSourceData:
+    value: Any
+    refreshed_at_iso: str | None
+    is_fresh: bool
+    is_stale: bool
+    error: Exception | None = None
+
+
 class SourceTTLCache:
     def __init__(self):
         self._entries: dict[str, CacheEntry] = {}
@@ -30,10 +39,32 @@ class SourceTTLCache:
         max_entries: int,
         loader: Callable[[], Awaitable[Any]],
     ) -> Any:
+        result = await self.get_with_status(
+            key,
+            ttl_seconds=ttl_seconds,
+            max_entries=max_entries,
+            loader=loader,
+        )
+        return result.value
+
+    async def get_with_status(
+        self,
+        key: str,
+        *,
+        ttl_seconds: int,
+        max_entries: int,
+        loader: Callable[[], Awaitable[Any]],
+        stale_if_error_seconds: int = 0,
+    ) -> CachedSourceData:
         now = time.monotonic()
         entry = self._entries.get(key)
         if entry is not None and now < entry.expires_at_monotonic:
-            return entry.value
+            return CachedSourceData(
+                value=entry.value,
+                refreshed_at_iso=entry.refreshed_at_iso,
+                is_fresh=True,
+                is_stale=False,
+            )
 
         lock = self._locks.setdefault(key, asyncio.Lock())
         try:
@@ -41,7 +72,12 @@ class SourceTTLCache:
                 now = time.monotonic()
                 entry = self._entries.get(key)
                 if entry is not None and now < entry.expires_at_monotonic:
-                    return entry.value
+                    return CachedSourceData(
+                        value=entry.value,
+                        refreshed_at_iso=entry.refreshed_at_iso,
+                        is_fresh=True,
+                        is_stale=False,
+                    )
 
                 value = await loader()
                 refreshed_at = datetime.now(timezone.utc).isoformat()
@@ -52,8 +88,26 @@ class SourceTTLCache:
                     expires_at_monotonic=now + ttl_seconds,
                     refreshed_at_iso=refreshed_at,
                 )
-                return value
-        except Exception:
+                return CachedSourceData(
+                    value=value,
+                    refreshed_at_iso=refreshed_at,
+                    is_fresh=True,
+                    is_stale=False,
+                )
+        except Exception as exc:
+            stale_entry = self._entries.get(key)
+            if (
+                stale_entry is not None
+                and stale_if_error_seconds > 0
+                and time.monotonic() <= stale_entry.expires_at_monotonic + stale_if_error_seconds
+            ):
+                return CachedSourceData(
+                    value=stale_entry.value,
+                    refreshed_at_iso=stale_entry.refreshed_at_iso,
+                    is_fresh=False,
+                    is_stale=True,
+                    error=exc,
+                )
             if self._entries.get(key) is None:
                 self._locks.pop(key, None)
             raise
@@ -108,6 +162,24 @@ async def cached_source_data(
         ttl_seconds=ttl_seconds,
         max_entries=get_settings().source_cache_max_entries,
         loader=loader,
+    )
+
+
+async def cached_source_data_with_status(
+    key: str,
+    *,
+    ttl_seconds: int,
+    loader: Callable[[], Awaitable[Any]],
+    stale_if_error_seconds: int = 0,
+) -> CachedSourceData:
+    from app.core.settings import get_settings
+
+    return await source_cache.get_with_status(
+        key,
+        ttl_seconds=ttl_seconds,
+        max_entries=get_settings().source_cache_max_entries,
+        loader=loader,
+        stale_if_error_seconds=stale_if_error_seconds,
     )
 
 

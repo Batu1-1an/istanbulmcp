@@ -1,5 +1,6 @@
 import httpx
 import pytest
+import json
 
 from app.connectors.http_retry import request_with_retries, retry_after_seconds
 from app.connectors.iski import IskiClient
@@ -156,3 +157,86 @@ async def test_retry_helper_raises_final_retryable_status_after_attempt_cap() ->
 
     assert calls == 3
     assert exc_info.value.response.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_iski_dams_fall_back_to_official_api_when_map_source_times_out() -> None:
+    limiter = RecordingLimiter()
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/baraj.json"):
+            raise httpx.ConnectTimeout("map source unavailable", request=request)
+        if request.url.path.endswith("/iski/baraj/listesi/v2"):
+            assert request.headers["authorization"] == "Bearer token"
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "kaynakAdi": "Omerli",
+                            "baslikAdi": "Ömerli",
+                            "dolulukOrani": "89.16",
+                        }
+                    ]
+                },
+            )
+        return httpx.Response(404)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        iski = IskiClient(
+            base_url="https://example.test/map",
+            api_base_url="https://example.test/api",
+            api_bearer_token="token",
+            attempts=1,
+            http_client=http_client,
+            rate_limiter=limiter,
+        )
+
+        dams = await iski.dams()
+
+    assert dams == [{"kaynakAdi": "Omerli", "baslikAdi": "Ömerli", "dolulukOrani": "89.16"}]
+    assert limiter.acquired == ["iski", "iski"]
+
+
+@pytest.mark.asyncio
+async def test_iski_active_faults_fall_back_to_configured_snapshot() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("map source unavailable", request=request)
+
+    snapshot = {"type": "FeatureCollection", "features": []}
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        iski = IskiClient(
+            base_url="https://example.test/map",
+            active_faults_snapshot_json=json.dumps(snapshot),
+            attempts=1,
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+
+        faults = await iski.active_faults()
+
+    assert faults == snapshot
+    assert iski.last_faults_source == "snapshot"
+
+
+@pytest.mark.asyncio
+async def test_iski_dams_fall_back_to_configured_snapshot_after_api_timeout() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("source unavailable", request=request)
+
+    snapshot = {"data": [{"kaynakAdi": "Omerli", "dolulukOrani": "89.16"}]}
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        iski = IskiClient(
+            base_url="https://example.test/map",
+            api_base_url="https://example.test/api",
+            api_bearer_token="token",
+            dams_snapshot_json=json.dumps(snapshot),
+            attempts=1,
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+
+        dams = await iski.dams()
+
+    assert dams == [{"kaynakAdi": "Omerli", "dolulukOrani": "89.16"}]
+    assert iski.last_dams_source == "snapshot"

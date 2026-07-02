@@ -48,6 +48,13 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
             "max_limit": settings.max_limit,
             "max_radius_m": settings.max_radius_m,
             "request_timeout_seconds": settings.request_timeout_seconds,
+            "iski_request_timeout_seconds": settings.iski_request_timeout_seconds,
+            "iski_request_attempts": settings.iski_request_attempts,
+            "iski_api_fallback_enabled": bool(settings.iski_api_bearer_token),
+            "iski_snapshot_fallback_enabled": {
+                "faults": bool(settings.iski_faults_snapshot_json),
+                "dams": bool(settings.iski_dams_snapshot_json),
+            },
             "cache_ttl_seconds": {
                 "ckan_catalog": settings.ckan_catalog_cache_ttl_seconds,
                 "ckan_resource": settings.ckan_resource_cache_ttl_seconds,
@@ -60,6 +67,10 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
                 "traffic": settings.traffic_cache_ttl_seconds,
                 "iski_faults": settings.iski_faults_cache_ttl_seconds,
                 "iski_dams": settings.iski_dams_cache_ttl_seconds,
+            },
+            "stale_if_error_seconds": {
+                "iski_faults": settings.iski_faults_stale_if_error_seconds,
+                "iski_dams": settings.iski_dams_stale_if_error_seconds,
             },
             "source_cache_max_entries": settings.source_cache_max_entries,
             "source_rate_limits": {

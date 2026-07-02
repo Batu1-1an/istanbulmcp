@@ -8,7 +8,7 @@ from app.core.error_responses import source_error_envelope, validation_error_env
 from app.core.geo import google_maps_url, haversine_m
 from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
-from app.core.source_cache import cached_source_data
+from app.core.source_cache import CachedSourceData, cached_source_data_with_status
 from app.core.validation import InputValidationError, validate_lat_lon, validate_limit, validate_radius, validate_text
 from app.services.places import normalize_place
 
@@ -39,7 +39,14 @@ class IskiService:
         client: IskiClient | None = None,
     ):
         self.settings = settings
-        self.client = client or IskiClient(timeout=settings.request_timeout_seconds)
+        self.client = client or IskiClient(
+            timeout=settings.iski_request_timeout_seconds,
+            attempts=settings.iski_request_attempts,
+            api_base_url=settings.iski_api_base_url,
+            api_bearer_token=settings.iski_api_bearer_token,
+            active_faults_snapshot_json=settings.iski_faults_snapshot_json,
+            dams_snapshot_json=settings.iski_dams_snapshot_json,
+        )
 
     async def active_faults(
         self,
@@ -50,7 +57,8 @@ class IskiService:
         try:
             safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
             safe_district = validate_text(district, field="district", max_length=80) if district else None
-            rows = [self._fault_row(feature) for feature in (await self._active_fault_geojson()).get("features", [])]
+            source_result = await self._active_fault_geojson()
+            rows = [self._fault_row(feature) for feature in source_result.value.get("features", [])]
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[ISKI_FAULTS_SOURCE])
         except SourceRateLimitExceeded as exc:
@@ -68,16 +76,25 @@ class IskiService:
             summary=f"{len(data)} active ISKI water fault(s) returned{suffix}.",
             data=data,
             sources=[ISKI_FAULTS_SOURCE],
-            freshness=Freshness(status="fresh", ttl_seconds=self.settings.iski_faults_cache_ttl_seconds),
+            freshness=self._cache_freshness(
+                source_result,
+                ttl_seconds=self.settings.iski_faults_cache_ttl_seconds,
+                source_mode=getattr(self.client, "last_faults_source", None),
+            ),
             limits=[f"limit={safe_limit}", "source=live ISKI GeoJSON"],
-            warnings=["ISKI active faults source does not publish an explicit source_updated_at timestamp."],
+            warnings=self._source_warnings(
+                source_result,
+                "ISKI active faults source does not publish an explicit source_updated_at timestamp.",
+                source_mode=getattr(self.client, "last_faults_source", None),
+            ),
             next_queries=["Use istanbul_iski_nearby_faults with coordinates when distance matters."],
         )
 
     async def fault_by_number(self, fault_number: str) -> dict[str, Any]:
         try:
             safe_fault_number = validate_text(fault_number, field="fault_number", max_length=40)
-            rows = [self._fault_row(feature) for feature in (await self._active_fault_geojson()).get("features", [])]
+            source_result = await self._active_fault_geojson()
+            rows = [self._fault_row(feature) for feature in source_result.value.get("features", [])]
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[ISKI_FAULTS_SOURCE])
         except SourceRateLimitExceeded as exc:
@@ -94,9 +111,17 @@ class IskiService:
             ),
             data=matches[:1],
             sources=[ISKI_FAULTS_SOURCE],
-            freshness=Freshness(status="fresh", ttl_seconds=self.settings.iski_faults_cache_ttl_seconds),
+            freshness=self._cache_freshness(
+                source_result,
+                ttl_seconds=self.settings.iski_faults_cache_ttl_seconds,
+                source_mode=getattr(self.client, "last_faults_source", None),
+            ),
             limits=["source=live ISKI GeoJSON", "exact active fault number match"],
-            warnings=["Only currently active faults from the live map source are searchable."],
+            warnings=self._source_warnings(
+                source_result,
+                "Only currently active faults from the live map source are searchable.",
+                source_mode=getattr(self.client, "last_faults_source", None),
+            ),
         )
 
     async def nearby_faults(
@@ -111,7 +136,8 @@ class IskiService:
             validate_lat_lon(lat, lon)
             validate_radius(radius_m, self.settings.max_radius_m)
             safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
-            rows = [self._fault_row(feature) for feature in (await self._active_fault_geojson()).get("features", [])]
+            source_result = await self._active_fault_geojson()
+            rows = [self._fault_row(feature) for feature in source_result.value.get("features", [])]
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[ISKI_FAULTS_SOURCE])
         except SourceRateLimitExceeded as exc:
@@ -135,9 +161,17 @@ class IskiService:
             summary=f"{len(data)} active ISKI water fault(s) found within {radius_m} meters.",
             data=data,
             sources=[ISKI_FAULTS_SOURCE],
-            freshness=Freshness(status="fresh", ttl_seconds=self.settings.iski_faults_cache_ttl_seconds),
+            freshness=self._cache_freshness(
+                source_result,
+                ttl_seconds=self.settings.iski_faults_cache_ttl_seconds,
+                source_mode=getattr(self.client, "last_faults_source", None),
+            ),
             limits=[f"radius_m={radius_m}", f"limit={safe_limit}", "distance uses feature center"],
-            warnings=["Distances use the fault area's approximate geometry center, not an address-level point."],
+            warnings=self._source_warnings(
+                source_result,
+                "Distances use the fault area's approximate geometry center, not an address-level point.",
+                source_mode=getattr(self.client, "last_faults_source", None),
+            ),
         )
 
     async def dam_occupancy(
@@ -151,7 +185,8 @@ class IskiService:
             safe_limit = validate_limit(limit or self.settings.max_limit, self.settings.max_limit)
             safe_dam_name = validate_text(dam_name, field="dam_name", max_length=80) if dam_name else None
             safe_min = self._validate_min_occupancy(min_occupancy)
-            rows = [self._dam_row(row) for row in await self._dams()]
+            source_result = await self._dams()
+            rows = [self._dam_row(row) for row in source_result.value]
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[ISKI_DAMS_SOURCE])
         except SourceRateLimitExceeded as exc:
@@ -175,24 +210,62 @@ class IskiService:
             summary=f"{len(data)} ISKI dam occupancy record(s) returned.",
             data=data,
             sources=[ISKI_DAMS_SOURCE],
-            freshness=Freshness(status="fresh", ttl_seconds=self.settings.iski_dams_cache_ttl_seconds),
+            freshness=self._cache_freshness(
+                source_result,
+                ttl_seconds=self.settings.iski_dams_cache_ttl_seconds,
+                source_mode=getattr(self.client, "last_dams_source", None),
+            ),
             limits=[f"limit={safe_limit}", "source=live ISKI dam JSON"],
-            warnings=["ISKI dam source does not publish an explicit source_updated_at timestamp."],
+            warnings=self._source_warnings(
+                source_result,
+                "ISKI dam source does not publish an explicit source_updated_at timestamp.",
+                source_mode=getattr(self.client, "last_dams_source", None),
+            ),
         )
 
-    async def _active_fault_geojson(self) -> dict[str, Any]:
-        return await cached_source_data(
+    async def _active_fault_geojson(self) -> CachedSourceData:
+        return await cached_source_data_with_status(
             "iski.active_faults",
             ttl_seconds=self.settings.iski_faults_cache_ttl_seconds,
             loader=self.client.active_faults,
+            stale_if_error_seconds=self.settings.iski_faults_stale_if_error_seconds,
         )
 
-    async def _dams(self) -> list[dict[str, Any]]:
-        return await cached_source_data(
+    async def _dams(self) -> CachedSourceData:
+        return await cached_source_data_with_status(
             "iski.dams",
             ttl_seconds=self.settings.iski_dams_cache_ttl_seconds,
             loader=self.client.dams,
+            stale_if_error_seconds=self.settings.iski_dams_stale_if_error_seconds,
         )
+
+    def _cache_freshness(
+        self,
+        result: CachedSourceData,
+        *,
+        ttl_seconds: int,
+        source_mode: str | None = None,
+    ) -> Freshness:
+        status = "stale" if result.is_stale or source_mode == "snapshot" else "fresh"
+        return Freshness(status=status, ttl_seconds=ttl_seconds)
+
+    def _source_warnings(
+        self,
+        result: CachedSourceData,
+        warning: str,
+        *,
+        source_mode: str | None = None,
+    ) -> list[str]:
+        warnings = [warning]
+        if source_mode == "snapshot":
+            warnings.insert(0, "ISKI live sources unavailable; returning configured snapshot fallback.")
+        if result.is_stale:
+            error_type = type(result.error).__name__ if result.error else "unknown"
+            warnings.insert(
+                0,
+                f"ISKI live source unavailable; returning cached snapshot refreshed at {result.refreshed_at_iso}. Last error: {error_type}.",
+            )
+        return warnings
 
     def _fault_row(self, feature: dict[str, Any]) -> dict[str, Any]:
         props = feature.get("properties") or {}

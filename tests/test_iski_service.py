@@ -101,6 +101,24 @@ class FailingIski:
         raise RuntimeError("down")
 
 
+class FlakyIski:
+    def __init__(self):
+        self.fault_calls = 0
+        self.dam_calls = 0
+
+    async def active_faults(self):
+        self.fault_calls += 1
+        if self.fault_calls > 1:
+            raise RuntimeError("temporary fault source outage")
+        return FAULTS_GEOJSON
+
+    async def dams(self):
+        self.dam_calls += 1
+        if self.dam_calls > 1:
+            raise RuntimeError("temporary dam source outage")
+        return DAMS
+
+
 def service(client=None):
     clear_source_cache()
     return IskiService(settings=Settings(), client=client or FakeIski())
@@ -197,3 +215,47 @@ async def test_iski_faults_use_ttl_cache():
     assert second["ok"] is True
     assert fake.fault_calls == 1
     assert any(row["source"] == "iski.active_faults" and row["is_fresh"] for row in source_cache_snapshot())
+
+
+@pytest.mark.asyncio
+async def test_iski_faults_return_stale_cache_when_source_fails_after_refresh():
+    clear_source_cache()
+    fake = FlakyIski()
+    svc = IskiService(
+        settings=Settings(
+            iski_faults_cache_ttl_seconds=0,
+            iski_faults_stale_if_error_seconds=60,
+        ),
+        client=fake,
+    )
+
+    first = await svc.active_faults(limit=5)
+    second = await svc.active_faults(limit=5)
+
+    assert first["ok"] is True
+    assert second["ok"] is True
+    assert second["freshness"]["status"] == "stale"
+    assert "returning cached snapshot" in second["warnings"][0]
+    assert fake.fault_calls == 2
+
+
+@pytest.mark.asyncio
+async def test_iski_dams_return_stale_cache_when_source_fails_after_refresh():
+    clear_source_cache()
+    fake = FlakyIski()
+    svc = IskiService(
+        settings=Settings(
+            iski_dams_cache_ttl_seconds=0,
+            iski_dams_stale_if_error_seconds=60,
+        ),
+        client=fake,
+    )
+
+    first = await svc.dam_occupancy(limit=5)
+    second = await svc.dam_occupancy(limit=5)
+
+    assert first["ok"] is True
+    assert second["ok"] is True
+    assert second["freshness"]["status"] == "stale"
+    assert "returning cached snapshot" in second["warnings"][0]
+    assert fake.dam_calls == 2
