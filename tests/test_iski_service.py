@@ -119,6 +119,23 @@ class FlakyIski:
         return DAMS
 
 
+class SnapshotIski:
+    last_faults_source = "snapshot"
+    last_dams_source = "snapshot"
+
+    def __init__(self):
+        self.fault_calls = 0
+        self.dam_calls = 0
+
+    async def active_faults(self):
+        self.fault_calls += 1
+        return FAULTS_GEOJSON
+
+    async def dams(self):
+        self.dam_calls += 1
+        return DAMS
+
+
 def service(client=None):
     clear_source_cache()
     return IskiService(settings=Settings(), client=client or FakeIski())
@@ -259,3 +276,18 @@ async def test_iski_dams_return_stale_cache_when_source_fails_after_refresh():
     assert second["freshness"]["status"] == "stale"
     assert "returning cached snapshot" in second["warnings"][0]
     assert fake.dam_calls == 2
+
+
+@pytest.mark.asyncio
+async def test_iski_snapshot_source_mode_survives_cache_hits():
+    clear_source_cache()
+    fake = SnapshotIski()
+    svc = IskiService(settings=Settings(iski_faults_cache_ttl_seconds=30), client=fake)
+
+    first = await svc.active_faults(limit=5)
+    second = await svc.nearby_faults(lat=40.9929, lon=29.1241, radius_m=500, limit=5)
+
+    assert first["freshness"]["status"] == "stale"
+    assert second["freshness"]["status"] == "stale"
+    assert "returning configured snapshot fallback" in second["warnings"][0]
+    assert fake.fault_calls == 1

@@ -8,7 +8,7 @@ from app.core.error_responses import source_error_envelope, validation_error_env
 from app.core.geo import google_maps_url, haversine_m
 from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
-from app.core.source_cache import CachedSourceData, cached_source_data_with_status
+from app.core.source_cache import CachedSourceData, SourceLoadResult, cached_source_data_with_status
 from app.core.validation import InputValidationError, validate_lat_lon, validate_limit, validate_radius, validate_text
 from app.services.places import normalize_place
 
@@ -79,13 +79,13 @@ class IskiService:
             freshness=self._cache_freshness(
                 source_result,
                 ttl_seconds=self.settings.iski_faults_cache_ttl_seconds,
-                source_mode=getattr(self.client, "last_faults_source", None),
+                source_mode=self._source_mode(source_result, "last_faults_source"),
             ),
             limits=[f"limit={safe_limit}", "source=live ISKI GeoJSON"],
             warnings=self._source_warnings(
                 source_result,
                 "ISKI active faults source does not publish an explicit source_updated_at timestamp.",
-                source_mode=getattr(self.client, "last_faults_source", None),
+                source_mode=self._source_mode(source_result, "last_faults_source"),
             ),
             next_queries=["Use istanbul_iski_nearby_faults with coordinates when distance matters."],
         )
@@ -114,13 +114,13 @@ class IskiService:
             freshness=self._cache_freshness(
                 source_result,
                 ttl_seconds=self.settings.iski_faults_cache_ttl_seconds,
-                source_mode=getattr(self.client, "last_faults_source", None),
+                source_mode=self._source_mode(source_result, "last_faults_source"),
             ),
             limits=["source=live ISKI GeoJSON", "exact active fault number match"],
             warnings=self._source_warnings(
                 source_result,
                 "Only currently active faults from the live map source are searchable.",
-                source_mode=getattr(self.client, "last_faults_source", None),
+                source_mode=self._source_mode(source_result, "last_faults_source"),
             ),
         )
 
@@ -164,13 +164,13 @@ class IskiService:
             freshness=self._cache_freshness(
                 source_result,
                 ttl_seconds=self.settings.iski_faults_cache_ttl_seconds,
-                source_mode=getattr(self.client, "last_faults_source", None),
+                source_mode=self._source_mode(source_result, "last_faults_source"),
             ),
             limits=[f"radius_m={radius_m}", f"limit={safe_limit}", "distance uses feature center"],
             warnings=self._source_warnings(
                 source_result,
                 "Distances use the fault area's approximate geometry center, not an address-level point.",
-                source_mode=getattr(self.client, "last_faults_source", None),
+                source_mode=self._source_mode(source_result, "last_faults_source"),
             ),
         )
 
@@ -213,13 +213,13 @@ class IskiService:
             freshness=self._cache_freshness(
                 source_result,
                 ttl_seconds=self.settings.iski_dams_cache_ttl_seconds,
-                source_mode=getattr(self.client, "last_dams_source", None),
+                source_mode=self._source_mode(source_result, "last_dams_source"),
             ),
             limits=[f"limit={safe_limit}", "source=live ISKI dam JSON"],
             warnings=self._source_warnings(
                 source_result,
                 "ISKI dam source does not publish an explicit source_updated_at timestamp.",
-                source_mode=getattr(self.client, "last_dams_source", None),
+                source_mode=self._source_mode(source_result, "last_dams_source"),
             ),
         )
 
@@ -227,7 +227,7 @@ class IskiService:
         return await cached_source_data_with_status(
             "iski.active_faults",
             ttl_seconds=self.settings.iski_faults_cache_ttl_seconds,
-            loader=self.client.active_faults,
+            loader=self._load_active_fault_geojson,
             stale_if_error_seconds=self.settings.iski_faults_stale_if_error_seconds,
         )
 
@@ -235,9 +235,30 @@ class IskiService:
         return await cached_source_data_with_status(
             "iski.dams",
             ttl_seconds=self.settings.iski_dams_cache_ttl_seconds,
-            loader=self.client.dams,
+            loader=self._load_dams,
             stale_if_error_seconds=self.settings.iski_dams_stale_if_error_seconds,
         )
+
+    async def _load_active_fault_geojson(self) -> SourceLoadResult:
+        value = await self.client.active_faults()
+        return SourceLoadResult(
+            value=value,
+            metadata={"source_mode": getattr(self.client, "last_faults_source", None)},
+        )
+
+    async def _load_dams(self) -> SourceLoadResult:
+        value = await self.client.dams()
+        return SourceLoadResult(
+            value=value,
+            metadata={"source_mode": getattr(self.client, "last_dams_source", None)},
+        )
+
+    def _source_mode(self, result: CachedSourceData, client_attr: str) -> str | None:
+        if result.metadata:
+            mode = result.metadata.get("source_mode")
+            if isinstance(mode, str):
+                return mode
+        return getattr(self.client, client_attr, None)
 
     def _cache_freshness(
         self,

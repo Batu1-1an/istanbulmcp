@@ -85,6 +85,25 @@ def _str_env(name: str, default: str | None = None) -> str | None:
     return value
 
 
+def _joined_env_parts(prefix: str) -> str | None:
+    direct = _str_env(prefix)
+    if direct is not None:
+        return direct
+
+    parts: list[str] = []
+    index = 1
+    while True:
+        value = _str_env(f"{prefix}_PART_{index}")
+        if value is None:
+            break
+        parts.append(value)
+        index += 1
+
+    if not parts:
+        return None
+    return "".join(parts)
+
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings(
@@ -118,8 +137,8 @@ def get_settings() -> Settings:
         iski_request_attempts=_int_env("ISKI_REQUEST_ATTEMPTS", 1),
         iski_api_base_url=os.getenv("ISKI_API_BASE_URL", "https://iskiapi.iski.istanbul/api"),
         iski_api_bearer_token=_str_env("ISKI_API_BEARER_TOKEN"),
-        iski_faults_snapshot_json=_str_env("ISKI_FAULTS_SNAPSHOT_JSON"),
-        iski_dams_snapshot_json=_str_env("ISKI_DAMS_SNAPSHOT_JSON"),
+        iski_faults_snapshot_json=_joined_env_parts("ISKI_FAULTS_SNAPSHOT_JSON"),
+        iski_dams_snapshot_json=_joined_env_parts("ISKI_DAMS_SNAPSHOT_JSON"),
         iski_rate_capacity=_int_env("ISKI_RATE_CAPACITY", 4),
         iski_rate_refill_per_second=_float_env("ISKI_RATE_REFILL_PER_SECOND", 1.0),
         iski_rate_max_wait_seconds=_float_env("ISKI_RATE_MAX_WAIT_SECONDS", 0.5),

@@ -15,6 +15,7 @@ class CacheEntry:
     refreshed_at_monotonic: float
     expires_at_monotonic: float
     refreshed_at_iso: str
+    metadata: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -24,6 +25,13 @@ class CachedSourceData:
     is_fresh: bool
     is_stale: bool
     error: Exception | None = None
+    metadata: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class SourceLoadResult:
+    value: Any
+    metadata: dict[str, Any] | None = None
 
 
 class SourceTTLCache:
@@ -64,6 +72,7 @@ class SourceTTLCache:
                 refreshed_at_iso=entry.refreshed_at_iso,
                 is_fresh=True,
                 is_stale=False,
+                metadata=entry.metadata,
             )
 
         lock = self._locks.setdefault(key, asyncio.Lock())
@@ -77,9 +86,14 @@ class SourceTTLCache:
                         refreshed_at_iso=entry.refreshed_at_iso,
                         is_fresh=True,
                         is_stale=False,
+                        metadata=entry.metadata,
                     )
 
                 value = await loader()
+                metadata = None
+                if isinstance(value, SourceLoadResult):
+                    metadata = value.metadata
+                    value = value.value
                 refreshed_at = datetime.now(timezone.utc).isoformat()
                 self._evict_before_insert(max_entries=max_entries, now=now)
                 self._entries[key] = CacheEntry(
@@ -87,12 +101,14 @@ class SourceTTLCache:
                     refreshed_at_monotonic=now,
                     expires_at_monotonic=now + ttl_seconds,
                     refreshed_at_iso=refreshed_at,
+                    metadata=metadata,
                 )
                 return CachedSourceData(
                     value=value,
                     refreshed_at_iso=refreshed_at,
                     is_fresh=True,
                     is_stale=False,
+                    metadata=metadata,
                 )
         except Exception as exc:
             stale_entry = self._entries.get(key)
@@ -107,6 +123,7 @@ class SourceTTLCache:
                     is_fresh=False,
                     is_stale=True,
                     error=exc,
+                    metadata=stale_entry.metadata,
                 )
             if self._entries.get(key) is None:
                 self._locks.pop(key, None)

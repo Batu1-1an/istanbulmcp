@@ -57,6 +57,20 @@ def test_status_returns_tool_inventory(monkeypatch, tmp_path):
     assert "istanbul_iski_dam_occupancy" in tool_names
 
 
+def test_settings_join_iski_snapshot_parts(monkeypatch):
+    from app.core.settings import get_settings
+
+    get_settings.cache_clear()
+    monkeypatch.delenv("ISKI_FAULTS_SNAPSHOT_JSON", raising=False)
+    monkeypatch.setenv("ISKI_FAULTS_SNAPSHOT_JSON_PART_1", '{"type":')
+    monkeypatch.setenv("ISKI_FAULTS_SNAPSHOT_JSON_PART_2", '"FeatureCollection"}')
+
+    settings = get_settings()
+
+    assert settings.iski_faults_snapshot_json == '{"type":"FeatureCollection"}'
+    get_settings.cache_clear()
+
+
 def test_mcp_health_does_not_expose_database_path():
     body = istanbul_health()
 
