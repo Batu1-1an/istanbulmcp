@@ -20,7 +20,7 @@ https://istanbulmcp-production.up.railway.app/mcp/
 
 ## Neden Var?
 
-İstanbul'da otopark, ulaşım, trafik, kütüphane, WiFi, müze, mahalle profili ve açık veri gibi konularda çok sayıda kamusal veri var. Bu veriler portallarda ve farklı servislerde duruyor; ancak yapay zekâ destekli araçlar veya ajanlar içinden doğrudan kullanmak çoğu zaman pratik değil.
+İstanbul'da otopark, ulaşım, trafik, su kesintisi, baraj doluluğu, kütüphane, WiFi, müze, mahalle profili ve açık veri gibi konularda çok sayıda kamusal veri var. Bu veriler portallarda ve farklı servislerde duruyor; ancak yapay zekâ destekli araçlar veya ajanlar içinden doğrudan kullanmak çoğu zaman pratik değil.
 
 Istanbul MCP bu boşluğu kapatır. Codex, Claude, Cursor, OpenCode, Windsurf, Antigravity gibi araçlar veya MCP destekleyen farklı ajan sistemleri tek bir endpoint üzerinden İstanbul verisiyle çalışabilir.
 
@@ -73,6 +73,8 @@ Bazı istemciler `url` yerine `serverUrl`, `"type": "remote"` veya `"transport":
 - Veri seti metadata bilgisi, resource listesi ve DataStore şeması döndürebilir.
 - Seçili CKAN DataStore resource'larını güvenli filtreler ve limitlerle sorgulayabilir.
 - İstanbul geneli trafik yoğunluğu indeksini döndürebilir.
+- Aktif İSKİ su arızalarını ilçe, arıza numarası veya koordinata yakınlıkla sorgulayabilir.
+- İSKİ baraj doluluk oranlarını ve baraj hacim bilgilerini listeleyebilir.
 - Yakındaki İSPARK otoparklarını kapasite, boş kapasite, açık/kapalı durumu, çalışma saati ve harita linkiyle listeleyebilir.
 - İlçe bazlı otopark sorularında sahte merkez mesafesi üretmeden ilçe kayıtlarını döndürebilir.
 - Yakındaki Metro İstanbul istasyonlarını, toplu taşıma duraklarını, WiFi noktalarını ve hava kalitesi istasyonlarını bulabilir.
@@ -108,6 +110,9 @@ Taksim'e arabayla gideceğim. Yakındaki otoparkların boş yer sayısını, ça
 Levent yakınındaki metro istasyonları hangileri? Hat bilgisi ve harita linkleriyle listele.
 500T hattı hangi duraklardan geçiyor? Durakları yönlerine göre sıralı ve harita linkleriyle göster.
 İstanbul trafik yoğunluğu şu an hangi seviyede?
+Şişli civarında aktif su kesintisi veya İSKİ arızası var mı?
+10000511943 numaralı İSKİ arızasının detayını gösterir misin?
+Baraj doluluk oranları şu an nasıl? En dolu 5 barajı listele.
 İBB açık veri kataloğunda müzelerle ilgili hangi veri setleri var?
 Beşiktaş'ta hangi kütüphaneler var?
 Kadıköy Rıhtım çevresinde ulaşım seçenekleri neler?
@@ -122,6 +127,10 @@ Taksim yakınındaki otopark sorusu; otopark adı, mesafe, kapasite, boş kapasi
 
 Trafik sorusu; şehir geneli trafik indeksini, ölçüm zamanını ve bu kaynağın yol bazlı kaza/olay detayı sağlamadığını belirten sınır bilgisini döndürür.
 
+İSKİ arıza sorusu; aktif arızanın ilçe, mahalle, açıklama, başlangıç zamanı, tahmini bitiş zamanı, yaklaşık geometri merkezi ve Google Maps linkini döndürür. Railway ortamından İSKİ canlı harita kaynağına erişilemediğinde yapılandırılmış snapshot fallback kullanılır ve sonuç `freshness.status=stale` olarak işaretlenir.
+
+Baraj doluluk sorusu; baraj adı, doluluk oranı, mevcut su hacmi, kapasite ve maksimum su seviyesi alanlarını döndürür. Canlı kaynak erişilemezse resmi İSKİ API veya snapshot fallback devreye girer.
+
 ## Veri Kaynakları
 
 Istanbul MCP şu kaynaklardan gelen verileri kullanır:
@@ -131,13 +140,14 @@ Istanbul MCP şu kaynaklardan gelen verileri kullanır:
 - İSPARK otopark servisleri
 - Metro İstanbul istasyon verileri
 - İETT SOAP servisleri
+- İSKİ harita ve baraj kaynakları
 - İBB WiFi, kütüphane, hava kalitesi ve mahalle profili kaynakları
 
 Tüm araç sonuçları standart bir cevap modeliyle döner: `summary`, `data`, `freshness`, `sources`, `limits`, `warnings` ve gerektiğinde `next_queries`.
 
 ## MCP Araçları
 
-Sunucu salt okunur MCP araçları sağlar:
+Sunucu 21 salt okunur MCP aracı sağlar:
 
 ```text
 istanbul_health
@@ -152,6 +162,10 @@ istanbul_parking_by_district
 istanbul_metro_stations_nearby
 istanbul_air_quality_nearby
 istanbul_traffic_status
+istanbul_iski_active_faults
+istanbul_iski_fault_by_number
+istanbul_iski_nearby_faults
+istanbul_iski_dam_occupancy
 istanbul_mobility_nearby
 istanbul_city_services_nearby
 istanbul_neighborhood_profile
@@ -173,6 +187,10 @@ istanbul_stops_for_line
 | `istanbul_metro_stations_nearby` | Koordinata yakın Metro İstanbul istasyonlarını hat bilgisiyle getirir. | "Levent yakınındaki metro istasyonları hangileri?" |
 | `istanbul_air_quality_nearby` | Koordinata yakın hava kalitesi istasyonlarını ve varsa son okumaları döndürür. | "Kadıköy çevresindeki hava kalitesi istasyonları nerede?" |
 | `istanbul_traffic_status` | İstanbul geneli trafik yoğunluğu indeksini döndürür. | "İstanbul trafik yoğunluğu şu an hangi seviyede?" |
+| `istanbul_iski_active_faults` | Aktif İSKİ su arızalarını listeler; ilçe filtresi ve limit destekler. | "Şişli'de aktif su kesintisi var mı?" |
+| `istanbul_iski_fault_by_number` | Aktif İSKİ arızasını arıza numarasıyla bulur. | "10000511943 numaralı İSKİ arızasının detayını göster." |
+| `istanbul_iski_nearby_faults` | Koordinata yakın aktif İSKİ arızalarını yaklaşık geometri merkezine göre sıralar. | "Taksim'e yakın aktif su arızaları var mı?" |
+| `istanbul_iski_dam_occupancy` | İSKİ baraj doluluk kayıtlarını döndürür; baraj adı ve minimum doluluk filtresi destekler. | "Baraj doluluk oranları şu an nasıl?" |
 | `istanbul_mobility_nearby` | Bilinen yer veya koordinat için otopark, metro, durak, hava kalitesi ve trafik özetini verir. | "Kadıköy Rıhtım çevresinde ulaşım seçenekleri neler?" |
 | `istanbul_city_services_nearby` | Yakındaki WiFi noktalarını ve ilçe düzeyindeki kütüphane bilgilerini getirir. | "Beşiktaş'ta hangi kütüphaneler var?" |
 | `istanbul_neighborhood_profile` | Mahalle profilini sosyal yardım, bina stoku ve deprem senaryosu verileriyle oluşturur. | "Kadıköy Caferağa mahalle profili nedir?" |
@@ -381,6 +399,8 @@ Sunucu salt okunur çalışır. Otopark rezervasyonu yapmaz, kamu verisini deği
 - Trafik aracı şehir geneli indeks döndürür; yol bazlı yoğunluk, kaza veya olay detayı sağlamaz.
 - Hava kalitesi kaynağı bazı istasyonlarda son okuma zamanı verdiği halde AQI veya concentration değerini boş döndürebilir.
 - İETT SOAP servisleri bakım saatlerinde veya kaynak kesintilerinde geçici olarak yanıt vermeyebilir.
+- İSKİ canlı kaynakları bazı Railway çıkışlarından zaman aşımına düşebilir. Bu durumda arıza ve baraj araçları yapılandırılmış snapshot fallback döndürebilir; cevap `stale` olarak işaretlenir ve uyarı alanında belirtilir.
+- İSKİ arıza mesafeleri adres noktası değil, kaynak geometrinin yaklaşık merkezi üzerinden hesaplanır.
 - Tam rota planlama, gerçek zamanlı varış tahmini ve harita UI bu sürümün kapsamı dışındadır.
 - Kütüphane gibi bazı kayıtlar koordinat değil adres içerir; bu durumda kesin koordinat yerine harita arama linki döner.
 - Tüm İBB veri setleri normalize edilmez; katalog araması geniş, özel araçlar ise MVP kapsamındaki alanlara odaklıdır.
@@ -421,6 +441,10 @@ python scripts/live_mcp_uat.py
 - `AIR_QUALITY_RATE_CAPACITY`
 - `AIR_QUALITY_RATE_REFILL_PER_SECOND`
 - `AIR_QUALITY_RATE_MAX_WAIT_SECONDS`
+- `ISKI_FAULTS_CACHE_TTL_SECONDS`
+- `ISKI_DAMS_CACHE_TTL_SECONDS`
+- `ISKI_FAULTS_STALE_IF_ERROR_SECONDS`
+- `ISKI_DAMS_STALE_IF_ERROR_SECONDS`
 
 Herkese açık MCP koruma limitleri:
 
@@ -429,6 +453,18 @@ Herkese açık MCP koruma limitleri:
 - `MCP_RATE_LIMIT_REFILL_PER_SECOND`
 - `MCP_RATE_LIMIT_MAX_CLIENTS`
 - `MCP_MAX_CONCURRENT_REQUESTS`
+
+İSKİ kaynak erişimi ve fallback değişkenleri:
+
+- `ISKI_REQUEST_TIMEOUT_SECONDS`
+- `ISKI_REQUEST_ATTEMPTS`
+- `ISKI_API_BASE_URL`
+- `ISKI_API_BEARER_TOKEN`
+- `ISKI_DAMS_SNAPSHOT_JSON`
+- `ISKI_FAULTS_SNAPSHOT_JSON`
+- `ISKI_FAULTS_SNAPSHOT_JSON_PART_1`, `ISKI_FAULTS_SNAPSHOT_JSON_PART_2`, ...
+
+`ISKI_API_BEARER_TOKEN` yalnızca İSKİ'nin kendi web istemcisinin kullandığı resmi API fallback'i için gerekir. Snapshot fallback değerleri canlı kaynak erişilemediğinde sonuç döndürmek için kullanılır; bu durumda `freshness.status` genellikle `stale` olur.
 
 Örnek ortam değişkenleri için [.env.example](.env.example) dosyasına bakın.
 
