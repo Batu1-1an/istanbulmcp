@@ -287,6 +287,43 @@ Windsurf/Cascade yapılandırması `~/.codeium/windsurf/mcp_config.json` dosyas�
 }
 ```
 
+### Devin / Devin CLI
+
+Devin CLI, remote HTTP MCP sunucularını `devin mcp` komutlarıyla veya JSON config dosyalarıyla ekleyebilir. Istanbul MCP herkese açık olduğu için API key veya özel header gerekmez:
+
+```bash
+devin mcp add istanbul --transport http --url https://istanbulmcp-production.up.railway.app/mcp/
+devin mcp list
+devin mcp get istanbul
+```
+
+Devin CLI config dosyasında (`.devin/config.json`, `.devin/config.local.json` veya `~/.config/devin/config.json`) remote HTTP yapılandırması:
+
+```json
+{
+  "mcpServers": {
+    "istanbul": {
+      "url": "https://istanbulmcp-production.up.railway.app/mcp/",
+      "transport": "http"
+    }
+  }
+}
+```
+
+Devin uygulamasında veya `serverUrl` isteyen MCP ekranlarında aynı endpoint şu şekilde verilebilir:
+
+```json
+{
+  "mcpServers": {
+    "istanbul": {
+      "serverUrl": "https://istanbulmcp-production.up.railway.app/mcp/"
+    }
+  }
+}
+```
+
+Kurumsal Devin çalışma alanlarında MCP sunucuları veya tool kullanımı yönetici politikalarıyla sınırlandırılmış olabilir. Devin tool izni isterse Istanbul MCP araçlarını onaylayın.
+
 ### Google Antigravity
 
 Google Antigravity'nin herkese açık resmi sitesinde bu kontrolde MCP için stabil bir JSON şeması veya dosya yolu doğrulanamadı. Antigravity kullanıyorsanız uygulamanın kendi **MCP / raw config** ekranını esas alın.
@@ -310,6 +347,8 @@ Kontrol edilen resmi kaynaklar:
 - [Cursor MCP dokümanı](https://cursor.com/docs/mcp)
 - [OpenCode MCP servers dokümanı](https://opencode.ai/docs/mcp-servers/)
 - [Windsurf/Cascade MCP dokümanı](https://docs.windsurf.com/windsurf/cascade/mcp.md)
+- [Devin CLI MCP dokümanı](https://cli.devin.ai/docs/extensibility/mcp/configuration)
+- [Devin MCP dokümanı](https://docs.devin.ai/work-with-devin/devin-mcp)
 
 ## HTTP Sağlık Kontrolleri
 
