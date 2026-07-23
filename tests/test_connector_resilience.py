@@ -1,12 +1,14 @@
 import httpx
 import pytest
 import json
+from datetime import datetime, timezone
 
 from app.connectors.http_retry import request_with_retries, retry_after_seconds
-from app.connectors.iski import IskiClient
+from app.connectors.iski import IskiClient, IskiPayloadError
 from app.connectors.ispark import IsparkClient
 from app.connectors.metro import MetroClient
 from app.connectors.traffic import TrafficClient
+from app.core.rate_limit import SourceRateLimitExceeded
 
 
 class RecordingLimiter:
@@ -19,6 +21,17 @@ class RecordingLimiter:
 
     def penalize(self, retry_after_seconds: float) -> None:
         self.penalties.append(retry_after_seconds)
+
+
+class ExhaustingLimiter(RecordingLimiter):
+    def __init__(self, allowed: int):
+        super().__init__()
+        self.allowed = allowed
+
+    async def acquire(self, source: str) -> None:
+        await super().acquire(source)
+        if len(self.acquired) > self.allowed:
+            raise SourceRateLimitExceeded(source=source, retry_after_seconds=1.0)
 
 
 async def no_sleep(_delay: float) -> None:
@@ -203,11 +216,15 @@ async def test_iski_active_faults_fall_back_to_configured_snapshot() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectTimeout("map source unavailable", request=request)
 
-    snapshot = {"type": "FeatureCollection", "features": []}
+    snapshot = {
+        "captured_at": "2026-07-23T10:30:00Z",
+        "payload": {"type": "FeatureCollection", "features": []},
+    }
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
         iski = IskiClient(
             base_url="https://example.test/map",
             active_faults_snapshot_json=json.dumps(snapshot),
+            now=lambda: datetime(2026, 7, 23, 11, 0, tzinfo=timezone.utc),
             attempts=1,
             http_client=http_client,
             rate_limiter=RecordingLimiter(),
@@ -215,7 +232,7 @@ async def test_iski_active_faults_fall_back_to_configured_snapshot() -> None:
 
         faults = await iski.active_faults()
 
-    assert faults == snapshot
+    assert faults == snapshot["payload"]
     assert iski.last_faults_source == "snapshot"
 
 
@@ -224,13 +241,17 @@ async def test_iski_dams_fall_back_to_configured_snapshot_after_api_timeout() ->
     async def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectTimeout("source unavailable", request=request)
 
-    snapshot = {"data": [{"kaynakAdi": "Omerli", "dolulukOrani": "89.16"}]}
+    snapshot = {
+        "captured_at": "2026-07-23T10:30:00Z",
+        "payload": {"data": [{"kaynakAdi": "Omerli", "dolulukOrani": "89.16"}]},
+    }
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
         iski = IskiClient(
             base_url="https://example.test/map",
             api_base_url="https://example.test/api",
             api_bearer_token="token",
             dams_snapshot_json=json.dumps(snapshot),
+            now=lambda: datetime(2026, 7, 23, 11, 0, tzinfo=timezone.utc),
             attempts=1,
             http_client=http_client,
             rate_limiter=RecordingLimiter(),
@@ -240,3 +261,336 @@ async def test_iski_dams_fall_back_to_configured_snapshot_after_api_timeout() ->
 
     assert dams == [{"kaynakAdi": "Omerli", "dolulukOrani": "89.16"}]
     assert iski.last_dams_source == "snapshot"
+
+
+@pytest.mark.asyncio
+async def test_iski_active_faults_prefer_authenticated_relay() -> None:
+    calls: list[str] = []
+    payload = {"type": "FeatureCollection", "features": []}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        assert request.headers["authorization"] == "Bearer relay-secret"
+        return httpx.Response(200, json=payload)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        iski = IskiClient(
+            base_url="https://direct.example",
+            relay_base_url="https://relay.example",
+            relay_token="relay-secret",
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+        faults = await iski.active_faults()
+
+    assert faults == payload
+    assert calls == ["https://relay.example/iski/faults"]
+    assert iski.last_faults_source == "relay_geojson"
+
+
+@pytest.mark.asyncio
+async def test_iski_active_faults_preserve_edevlet_relay_provenance() -> None:
+    payload = {"type": "FeatureCollection", "relay_source": "edevlet", "features": []}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        iski = IskiClient(
+            relay_base_url="https://relay.example",
+            relay_token="relay-secret",
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+        faults = await iski.active_faults()
+
+    assert faults == payload
+    assert iski.last_faults_source == "relay_edevlet"
+
+
+@pytest.mark.asyncio
+async def test_iski_preserves_stale_relay_cache_metadata() -> None:
+    payload = {
+        "type": "FeatureCollection",
+        "relay_source": "edevlet",
+        "relay_cache_status": "stale",
+        "relay_cached_at": "2026-07-23T10:30:00Z",
+        "features": [],
+    }
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        iski = IskiClient(
+            relay_base_url="https://relay.example",
+            relay_token="relay-secret",
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+        await iski.active_faults()
+
+    assert iski.last_faults_source_updated_at == "2026-07-23T10:30:00Z"
+    assert iski.last_faults_source_stale is True
+
+
+@pytest.mark.asyncio
+async def test_iski_dams_preserve_edevlet_relay_provenance() -> None:
+    payload = {
+        "relay_source": "edevlet",
+        "data": [{"kaynakAdi": "Omerli", "biriktirmeHacmi": 244.54, "dolulukOrani": 80.68}],
+    }
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        iski = IskiClient(
+            relay_base_url="https://relay.example",
+            relay_token="relay-secret",
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+        dams = await iski.dams()
+
+    assert dams == payload["data"]
+    assert iski.last_dams_source == "relay_edevlet"
+
+
+@pytest.mark.asyncio
+async def test_iski_active_faults_use_direct_source_after_relay_failure() -> None:
+    calls: list[str] = []
+    payload = {"type": "FeatureCollection", "features": []}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.host)
+        if request.url.host == "relay.example":
+            return httpx.Response(502)
+        return httpx.Response(200, json=payload)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        iski = IskiClient(
+            base_url="https://direct.example",
+            relay_base_url="https://relay.example",
+            relay_token="relay-secret",
+            attempts=1,
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+        faults = await iski.active_faults()
+
+    assert faults == payload
+    assert calls == ["relay.example", "direct.example"]
+    assert iski.last_faults_source == "live_geojson"
+
+
+@pytest.mark.asyncio
+async def test_iski_active_faults_fall_back_when_relay_payload_is_invalid() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "relay.example":
+            return httpx.Response(200, json={"unexpected": True})
+        return httpx.Response(200, json={"type": "FeatureCollection", "features": []})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        iski = IskiClient(
+            base_url="https://direct.example",
+            relay_base_url="https://relay.example",
+            relay_token="relay-secret",
+            attempts=1,
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+        faults = await iski.active_faults()
+
+    assert faults == {"type": "FeatureCollection", "features": []}
+    assert iski.last_faults_source == "live_geojson"
+
+
+@pytest.mark.asyncio
+async def test_iski_active_faults_fall_back_when_relay_feature_is_invalid() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "relay.example":
+            return httpx.Response(200, json={"type": "FeatureCollection", "features": [None]})
+        return httpx.Response(200, json={"type": "FeatureCollection", "features": []})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        iski = IskiClient(
+            base_url="https://direct.example",
+            relay_base_url="https://relay.example",
+            relay_token="relay-secret",
+            attempts=1,
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+        faults = await iski.active_faults()
+
+    assert faults == {"type": "FeatureCollection", "features": []}
+    assert iski.last_faults_source == "live_geojson"
+
+
+@pytest.mark.asyncio
+async def test_iski_dams_fall_back_when_relay_row_is_invalid() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "relay.example":
+            return httpx.Response(200, json={"data": ["invalid"]})
+        return httpx.Response(200, json={"data": []})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        iski = IskiClient(
+            base_url="https://direct.example",
+            relay_base_url="https://relay.example",
+            relay_token="relay-secret",
+            attempts=1,
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+        dams = await iski.dams()
+
+    assert dams == []
+    assert iski.last_dams_source == "live_json"
+
+
+@pytest.mark.asyncio
+async def test_iski_active_faults_use_official_api_after_geojson_failure() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "direct.example":
+            raise httpx.ConnectTimeout("map unavailable", request=request)
+        if request.url.path.endswith("/bolgeselAriza/listesi"):
+            return httpx.Response(200, json={"data": [{"ilceKodu": "IL", "ilceAdi": "Bağcılar"}]})
+        if request.url.path.endswith("/bolgeselAriza/arizaDetayi"):
+            assert request.method == "POST"
+            assert request.url.params["ilceKodu"] == "IL"
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "arizaNo": "100",
+                            "ilceKodu": "IL",
+                            "ilceAdi": "BAĞCILAR",
+                            "mahalleKodu": "117",
+                            "mahalleAdi": "DEMİRKAPI MAH",
+                            "arizaNeviAciklamasi": "BAKIM",
+                            "baslamaTarihi": "23/07/2026",
+                            "tahminiBitisTarihi": "23/07/2026 20:00:00",
+                        }
+                    ]
+                },
+            )
+        return httpx.Response(404)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        iski = IskiClient(
+            base_url="https://direct.example",
+            api_base_url="https://api.example/api",
+            api_bearer_token="api-secret",
+            attempts=1,
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+        faults = await iski.active_faults()
+
+    assert faults["features"][0]["properties"]["ARIZA_NO"] == "100"
+    assert faults["features"][0]["geometry"] is None
+    assert iski.last_faults_source == "official_api"
+
+
+@pytest.mark.asyncio
+async def test_iski_rate_limited_official_fault_api_still_uses_snapshot() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "direct.example":
+            raise httpx.ConnectTimeout("map unavailable", request=request)
+        if request.url.path.endswith("/bolgeselAriza/listesi"):
+            return httpx.Response(200, json={"data": [{"ilceKodu": "IL"}]})
+        return httpx.Response(500)
+
+    payload = {"type": "FeatureCollection", "features": []}
+    snapshot = json.dumps({"captured_at": "2026-07-23T10:30:00Z", "payload": payload})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        iski = IskiClient(
+            base_url="https://direct.example",
+            api_base_url="https://api.example/api",
+            api_bearer_token="api-secret",
+            active_faults_snapshot_json=snapshot,
+            now=lambda: datetime(2026, 7, 23, 11, 0, tzinfo=timezone.utc),
+            attempts=1,
+            http_client=http_client,
+            rate_limiter=ExhaustingLimiter(allowed=2),
+        )
+        faults = await iski.active_faults()
+
+    assert faults == payload
+    assert iski.last_faults_source == "snapshot"
+
+
+@pytest.mark.asyncio
+async def test_iski_accepts_timestamped_snapshot_within_age_limit() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("source unavailable", request=request)
+
+    payload = {"type": "FeatureCollection", "features": []}
+    snapshot = json.dumps({"captured_at": "2026-07-23T10:30:00Z", "payload": payload})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        iski = IskiClient(
+            base_url="https://direct.example",
+            active_faults_snapshot_json=snapshot,
+            faults_snapshot_max_age_seconds=3600,
+            now=lambda: datetime(2026, 7, 23, 11, 0, tzinfo=timezone.utc),
+            attempts=1,
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+        faults = await iski.active_faults()
+
+    assert faults == payload
+    assert iski.last_faults_source == "snapshot"
+    assert iski.last_faults_source_updated_at == "2026-07-23T10:30:00+00:00"
+
+
+@pytest.mark.asyncio
+async def test_iski_rejects_expired_or_undated_snapshots() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("source unavailable", request=request)
+
+    payload = {"type": "FeatureCollection", "features": []}
+    expired = json.dumps({"captured_at": "2026-07-23T08:00:00Z", "payload": payload})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        for snapshot in (expired, json.dumps(payload)):
+            iski = IskiClient(
+                base_url="https://direct.example",
+                active_faults_snapshot_json=snapshot,
+                faults_snapshot_max_age_seconds=3600,
+                now=lambda: datetime(2026, 7, 23, 11, 0, tzinfo=timezone.utc),
+                attempts=1,
+                http_client=http_client,
+                rate_limiter=RecordingLimiter(),
+            )
+            with pytest.raises(IskiPayloadError):
+                await iski.active_faults()
+
+
+@pytest.mark.asyncio
+async def test_iski_failure_logs_do_not_expose_tokens(caplog) -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("source unavailable", request=request)
+
+    payload = {"type": "FeatureCollection", "features": []}
+    snapshot = json.dumps({"captured_at": "2026-07-23T10:30:00Z", "payload": payload})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        iski = IskiClient(
+            base_url="https://direct.example",
+            relay_base_url="https://relay.example",
+            relay_token="relay-secret",
+            active_faults_snapshot_json=snapshot,
+            now=lambda: datetime(2026, 7, 23, 11, 0, tzinfo=timezone.utc),
+            attempts=1,
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+        with caplog.at_level("WARNING", logger="istanbul_mcp.connectors.iski"):
+            await iski.active_faults()
+
+    records = [json.loads(record.message) for record in caplog.records]
+    assert records
+    assert all(set(record) == {"event", "source", "duration_ms", "error_type"} for record in records)
+    assert "relay-secret" not in caplog.text

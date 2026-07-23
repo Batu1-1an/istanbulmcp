@@ -15,6 +15,8 @@ from app.services.places import normalize_place
 
 ISKI_FAULTS_URL = "https://harita.iski.gov.tr/data/mahallelerKesinti.geojson"
 ISKI_DAMS_URL = "https://harita.iski.gov.tr/data/baraj.json"
+EDEVLET_ISKI_FAULTS_URL = "https://www.turkiye.gov.tr/istanbul-su-ve-kanalizasyon-idaresi-ariza-bakim-bilgisi-sorgulama"
+EDEVLET_ISKI_DAMS_URL = "https://www.turkiye.gov.tr/istanbul-su-ve-kanalizasyon-idaresi-baraj-doluluk-oranlari"
 
 ISKI_FAULTS_SOURCE = Source(
     name="ISKI active water faults GeoJSON",
@@ -44,8 +46,15 @@ class IskiService:
             attempts=settings.iski_request_attempts,
             api_base_url=settings.iski_api_base_url,
             api_bearer_token=settings.iski_api_bearer_token,
+            relay_base_url=settings.iski_relay_base_url,
+            relay_token=settings.iski_relay_token,
+            relay_timeout=settings.iski_relay_timeout_seconds,
             active_faults_snapshot_json=settings.iski_faults_snapshot_json,
             dams_snapshot_json=settings.iski_dams_snapshot_json,
+            faults_snapshot_captured_at=settings.iski_faults_snapshot_captured_at,
+            dams_snapshot_captured_at=settings.iski_dams_snapshot_captured_at,
+            faults_snapshot_max_age_seconds=settings.iski_faults_snapshot_max_age_seconds,
+            dams_snapshot_max_age_seconds=settings.iski_dams_snapshot_max_age_seconds,
         )
 
     async def active_faults(
@@ -72,20 +81,22 @@ class IskiService:
         rows.sort(key=lambda row: (row.get("started_at") or "", row.get("fault_number") or ""))
         data = rows[:safe_limit]
         suffix = f" in {safe_district}" if safe_district else ""
+        source_mode = self._source_mode(source_result, "last_faults_source")
         return success_envelope(
             summary=f"{len(data)} active ISKI water fault(s) returned{suffix}.",
             data=data,
-            sources=[ISKI_FAULTS_SOURCE],
+            sources=[self._source_for("faults", source_mode)],
             freshness=self._cache_freshness(
                 source_result,
                 ttl_seconds=self.settings.iski_faults_cache_ttl_seconds,
-                source_mode=self._source_mode(source_result, "last_faults_source"),
+                source_mode=source_mode,
             ),
-            limits=[f"limit={safe_limit}", "source=live ISKI GeoJSON"],
+            limits=[f"limit={safe_limit}", self._source_limit("faults", source_mode)],
             warnings=self._source_warnings(
                 source_result,
                 "ISKI active faults source does not publish an explicit source_updated_at timestamp.",
-                source_mode=self._source_mode(source_result, "last_faults_source"),
+                kind="faults",
+                source_mode=source_mode,
             ),
             next_queries=["Use istanbul_iski_nearby_faults with coordinates when distance matters."],
         )
@@ -103,6 +114,7 @@ class IskiService:
             return self._source_error("ISKI active water faults source is unavailable.", exc, sources=[ISKI_FAULTS_SOURCE])
 
         matches = [row for row in rows if str(row.get("fault_number")) == safe_fault_number]
+        source_mode = self._source_mode(source_result, "last_faults_source")
         return success_envelope(
             summary=(
                 f"ISKI fault {safe_fault_number} found."
@@ -110,17 +122,18 @@ class IskiService:
                 else f"No active ISKI fault found for number {safe_fault_number}."
             ),
             data=matches[:1],
-            sources=[ISKI_FAULTS_SOURCE],
+            sources=[self._source_for("faults", source_mode)],
             freshness=self._cache_freshness(
                 source_result,
                 ttl_seconds=self.settings.iski_faults_cache_ttl_seconds,
-                source_mode=self._source_mode(source_result, "last_faults_source"),
+                source_mode=source_mode,
             ),
-            limits=["source=live ISKI GeoJSON", "exact active fault number match"],
+            limits=[self._source_limit("faults", source_mode), "exact active fault number match"],
             warnings=self._source_warnings(
                 source_result,
                 "Only currently active faults from the live map source are searchable.",
-                source_mode=self._source_mode(source_result, "last_faults_source"),
+                kind="faults",
+                source_mode=source_mode,
             ),
         )
 
@@ -157,20 +170,27 @@ class IskiService:
                 nearby.append(item)
         nearby.sort(key=lambda row: row["distance_m"])
         data = nearby[:safe_limit]
+        source_mode = self._source_mode(source_result, "last_faults_source")
         return success_envelope(
             summary=f"{len(data)} active ISKI water fault(s) found within {radius_m} meters.",
             data=data,
-            sources=[ISKI_FAULTS_SOURCE],
+            sources=[self._source_for("faults", source_mode)],
             freshness=self._cache_freshness(
                 source_result,
                 ttl_seconds=self.settings.iski_faults_cache_ttl_seconds,
-                source_mode=self._source_mode(source_result, "last_faults_source"),
+                source_mode=source_mode,
             ),
-            limits=[f"radius_m={radius_m}", f"limit={safe_limit}", "distance uses feature center"],
+            limits=[
+                f"radius_m={radius_m}",
+                f"limit={safe_limit}",
+                "distance uses feature center",
+                self._source_limit("faults", source_mode),
+            ],
             warnings=self._source_warnings(
                 source_result,
                 "Distances use the fault area's approximate geometry center, not an address-level point.",
-                source_mode=self._source_mode(source_result, "last_faults_source"),
+                kind="faults",
+                source_mode=source_mode,
             ),
         )
 
@@ -206,20 +226,22 @@ class IskiService:
             rows = [row for row in rows if row.get("occupancy_rate") is not None and row["occupancy_rate"] >= safe_min]
         rows.sort(key=lambda row: row.get("occupancy_rate") or -1, reverse=True)
         data = rows[:safe_limit]
+        source_mode = self._source_mode(source_result, "last_dams_source")
         return success_envelope(
             summary=f"{len(data)} ISKI dam occupancy record(s) returned.",
             data=data,
-            sources=[ISKI_DAMS_SOURCE],
+            sources=[self._source_for("dams", source_mode)],
             freshness=self._cache_freshness(
                 source_result,
                 ttl_seconds=self.settings.iski_dams_cache_ttl_seconds,
-                source_mode=self._source_mode(source_result, "last_dams_source"),
+                source_mode=source_mode,
             ),
-            limits=[f"limit={safe_limit}", "source=live ISKI dam JSON"],
+            limits=[f"limit={safe_limit}", self._source_limit("dams", source_mode)],
             warnings=self._source_warnings(
                 source_result,
                 "ISKI dam source does not publish an explicit source_updated_at timestamp.",
-                source_mode=self._source_mode(source_result, "last_dams_source"),
+                kind="dams",
+                source_mode=source_mode,
             ),
         )
 
@@ -243,14 +265,24 @@ class IskiService:
         value = await self.client.active_faults()
         return SourceLoadResult(
             value=value,
-            metadata={"source_mode": getattr(self.client, "last_faults_source", None)},
+            metadata={
+                "source_mode": getattr(self.client, "last_faults_source", None),
+                "source_updated_at": getattr(self.client, "last_faults_source_updated_at", None),
+                "source_stale": bool(getattr(self.client, "last_faults_source_stale", False)),
+            },
+            max_cache_age_seconds=getattr(self.client, "last_faults_cache_max_age_seconds", None),
         )
 
     async def _load_dams(self) -> SourceLoadResult:
         value = await self.client.dams()
         return SourceLoadResult(
             value=value,
-            metadata={"source_mode": getattr(self.client, "last_dams_source", None)},
+            metadata={
+                "source_mode": getattr(self.client, "last_dams_source", None),
+                "source_updated_at": getattr(self.client, "last_dams_source_updated_at", None),
+                "source_stale": bool(getattr(self.client, "last_dams_source_stale", False)),
+            },
+            max_cache_age_seconds=getattr(self.client, "last_dams_cache_max_age_seconds", None),
         )
 
     def _source_mode(self, result: CachedSourceData, client_attr: str) -> str | None:
@@ -267,17 +299,83 @@ class IskiService:
         ttl_seconds: int,
         source_mode: str | None = None,
     ) -> Freshness:
-        status = "stale" if result.is_stale or source_mode == "snapshot" else "fresh"
-        return Freshness(status=status, ttl_seconds=ttl_seconds)
+        source_stale = bool(result.metadata and result.metadata.get("source_stale"))
+        status = "stale" if result.is_stale or source_stale or source_mode == "snapshot" else "fresh"
+        source_updated_at = None
+        if result.metadata and isinstance(result.metadata.get("source_updated_at"), str):
+            source_updated_at = result.metadata["source_updated_at"]
+        return Freshness(status=status, ttl_seconds=ttl_seconds, source_updated_at=source_updated_at)
+
+    def _source_for(self, kind: str, source_mode: str | None) -> Source:
+        if source_mode == "relay_edevlet":
+            return Source(
+                name=(
+                    "Official e-Devlet ISKI outage relay"
+                    if kind == "faults"
+                    else "Official e-Devlet ISKI dam occupancy relay"
+                ),
+                publisher="Republic of Turkiye e-Government Gateway",
+                license=None,
+                url=EDEVLET_ISKI_FAULTS_URL if kind == "faults" else EDEVLET_ISKI_DAMS_URL,
+            )
+        if source_mode in {"relay_geojson", "relay_json"}:
+            path = "iski/faults" if kind == "faults" else "iski/dams"
+            return Source(
+                name=f"ISKI {'active water faults' if kind == 'faults' else 'dam occupancy'} relay",
+                publisher="Istanbul Water and Sewerage Administration",
+                license=None,
+                url=f"{(self.settings.iski_relay_base_url or '').rstrip('/')}/{path}",
+            )
+        if source_mode == "official_api":
+            path = "iski/bolgeselAriza/listesi" if kind == "faults" else "iski/baraj/listesi/v2"
+            return Source(
+                name=f"ISKI official {'active faults' if kind == 'faults' else 'dam occupancy'} API",
+                publisher="Istanbul Water and Sewerage Administration",
+                license=None,
+                url=f"{self.settings.iski_api_base_url.rstrip('/')}/{path}",
+            )
+        if source_mode == "snapshot":
+            return Source(
+                name=f"Configured ISKI {'active faults' if kind == 'faults' else 'dam'} snapshot",
+                publisher="Istanbul Water and Sewerage Administration",
+                license=None,
+                url=None,
+            )
+        return ISKI_FAULTS_SOURCE if kind == "faults" else ISKI_DAMS_SOURCE
+
+    def _source_limit(self, kind: str, source_mode: str | None) -> str:
+        if source_mode == "relay_edevlet":
+            return f"source=official e-Devlet {'outage' if kind == 'faults' else 'dam'} relay"
+        labels = {
+            "relay_geojson": "ISKI relay GeoJSON",
+            "relay_json": "ISKI relay JSON",
+            "live_geojson": "live ISKI GeoJSON",
+            "live_json": "live ISKI dam JSON",
+            "official_api": "official ISKI API",
+            "snapshot": "configured ISKI snapshot",
+        }
+        return f"source={labels.get(source_mode or '', 'unknown ISKI source')}"
 
     def _source_warnings(
         self,
         result: CachedSourceData,
         warning: str,
         *,
+        kind: str,
         source_mode: str | None = None,
     ) -> list[str]:
         warnings = [warning]
+        if result.metadata and result.metadata.get("source_stale"):
+            warnings.insert(0, "The relay cache is stale; background source refresh is in progress or failed.")
+        if source_mode == "relay_edevlet":
+            warnings.insert(
+                0,
+                (
+                    "The official e-Devlet outage table does not provide fault numbers or geometry."
+                    if kind == "faults"
+                    else "The official e-Devlet dam table does not provide current volume, yield, or maximum water level."
+                ),
+            )
         if source_mode == "snapshot":
             warnings.insert(0, "ISKI live sources unavailable; returning configured snapshot fallback.")
         if result.is_stale:

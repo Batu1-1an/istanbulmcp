@@ -399,7 +399,7 @@ Sunucu salt okunur çalışır. Otopark rezervasyonu yapmaz, kamu verisini deği
 - Trafik aracı şehir geneli indeks döndürür; yol bazlı yoğunluk, kaza veya olay detayı sağlamaz.
 - Hava kalitesi kaynağı bazı istasyonlarda son okuma zamanı verdiği halde AQI veya concentration değerini boş döndürebilir.
 - İETT SOAP servisleri bakım saatlerinde veya kaynak kesintilerinde geçici olarak yanıt vermeyebilir.
-- İSKİ canlı kaynakları bazı Railway çıkışlarından zaman aşımına düşebilir. Bu durumda arıza ve baraj araçları yapılandırılmış snapshot fallback döndürebilir; cevap `stale` olarak işaretlenir ve uyarı alanında belirtilir.
+- İSKİ canlı kaynakları bazı Railway çıkışlarından zaman aşımına düşebilir. Üretim kurulumu bu trafiği sabit hedefli ve kimlik doğrulamalı Cloudflare Worker relay üzerinden geçirir. Relay, resmi e-Devlet tablolarını ve İSKİ JSON kaynaklarını kullanır; başarılı yanıtları Workers KV'de global olarak paylaşır ve stale-while-revalidate ile yeniler. Relay ve doğrudan kaynaklar kullanılamazsa yalnızca capture zamanı bulunan ve azami yaş sınırını aşmamış snapshot döndürülebilir.
 - İSKİ arıza mesafeleri adres noktası değil, kaynak geometrinin yaklaşık merkezi üzerinden hesaplanır.
 - Tam rota planlama, gerçek zamanlı varış tahmini ve harita UI bu sürümün kapsamı dışındadır.
 - Kütüphane gibi bazı kayıtlar koordinat değil adres içerir; bu durumda kesin koordinat yerine harita arama linki döner.
@@ -460,11 +460,18 @@ Herkese açık MCP koruma limitleri:
 - `ISKI_REQUEST_ATTEMPTS`
 - `ISKI_API_BASE_URL`
 - `ISKI_API_BEARER_TOKEN`
+- `ISKI_RELAY_BASE_URL`
+- `ISKI_RELAY_TOKEN`
+- `ISKI_RELAY_TIMEOUT_SECONDS`
 - `ISKI_DAMS_SNAPSHOT_JSON`
 - `ISKI_FAULTS_SNAPSHOT_JSON`
 - `ISKI_FAULTS_SNAPSHOT_JSON_PART_1`, `ISKI_FAULTS_SNAPSHOT_JSON_PART_2`, ...
+- `ISKI_FAULTS_SNAPSHOT_CAPTURED_AT`
+- `ISKI_DAMS_SNAPSHOT_CAPTURED_AT`
+- `ISKI_FAULTS_SNAPSHOT_MAX_AGE_SECONDS`
+- `ISKI_DAMS_SNAPSHOT_MAX_AGE_SECONDS`
 
-`ISKI_API_BEARER_TOKEN` yalnızca İSKİ'nin kendi web istemcisinin kullandığı resmi API fallback'i için gerekir. Snapshot fallback değerleri canlı kaynak erişilemediğinde sonuç döndürmek için kullanılır; bu durumda `freshness.status` genellikle `stale` olur.
+`ISKI_RELAY_TOKEN`, Cloudflare Worker'daki `RELAY_TOKEN` secret değeriyle aynı olmalıdır. `ISKI_API_BEARER_TOKEN`, İSKİ'nin kendi web istemcisinin kullandığı resmi API fallback'i için gerekir. Snapshot JSON tercihen `{"captured_at":"...","payload":...}` zarfını kullanır; eski çıplak payload biçimi için ilgili `*_SNAPSHOT_CAPTURED_AT` değişkeni zorunludur. Süresi geçmiş veya tarihsiz snapshot aktif veri olarak sunulmaz.
 
 Örnek ortam değişkenleri için [.env.example](.env.example) dosyasına bakın.
 

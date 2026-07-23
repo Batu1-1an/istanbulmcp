@@ -11,6 +11,31 @@ railway up
 
 Set environment variables from `.env.example` as needed. At minimum, Railway should provide `PORT`; the app defaults to `.data/istanbul_mcp.sqlite3` for SQLite.
 
+## ISKI Relay
+
+Railway egress can time out against ISKI hosts. Deploy the fixed-route Cloudflare Worker before configuring the Railway service:
+
+```bash
+npm install --prefix workers/iski-relay
+npm test --prefix workers/iski-relay
+npm run typecheck --prefix workers/iski-relay
+npx wrangler secret put RELAY_TOKEN --config workers/iski-relay/wrangler.jsonc
+npx wrangler deploy --config workers/iski-relay/wrangler.jsonc
+```
+
+Set these Railway variables after deployment:
+
+- `ISKI_RELAY_BASE_URL`: deployed Worker base URL, without a trailing slash.
+- `ISKI_RELAY_TOKEN`: the same secret stored as the Worker's `RELAY_TOKEN`.
+- `ISKI_RELAY_TIMEOUT_SECONDS`: defaults to `15`; allows a cold relay cache to complete without increasing direct ISKI timeouts.
+- `ISKI_FAULTS_SNAPSHOT_CAPTURED_AT` and `ISKI_DAMS_SNAPSHOT_CAPTURED_AT`: timezone-aware ISO 8601 capture times when legacy bare snapshots are configured.
+- `ISKI_FAULTS_SNAPSHOT_MAX_AGE_SECONDS`: defaults to `21600` (6 hours).
+- `ISKI_DAMS_SNAPSHOT_MAX_AGE_SECONDS`: defaults to `86400` (24 hours).
+
+The Worker exposes unauthenticated `GET /healthz` and authenticated `GET /iski/faults` and `GET /iski/dams`. It does not accept arbitrary target URLs. The tracked Wrangler configuration binds the `CACHE` Workers KV namespace. Successful payloads are retained for 24 hours, considered fresh for 5 minutes, returned immediately when stale, and refreshed in the background. Stale cache age is propagated to MCP freshness metadata. Error responses are never cached, and KV read/write failures bypass the cache. Do not place relay or ISKI bearer tokens in tracked files or command arguments.
+
+After a new cache namespace or cache-key version is deployed, warm both routes from a network that can reach the official sources. The resulting KV values are shared across Cloudflare colos, including the colo reached by Railway.
+
 Abuse and cache guard variables can be tuned per Railway environment:
 
 - `MCP_MAX_BODY_BYTES`

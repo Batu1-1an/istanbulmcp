@@ -16,6 +16,7 @@ class CacheEntry:
     expires_at_monotonic: float
     refreshed_at_iso: str
     metadata: dict[str, Any] | None = None
+    max_age_at_monotonic: float | None = None
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,7 @@ class CachedSourceData:
 class SourceLoadResult:
     value: Any
     metadata: dict[str, Any] | None = None
+    max_cache_age_seconds: float | None = None
 
 
 class SourceTTLCache:
@@ -91,17 +93,28 @@ class SourceTTLCache:
 
                 value = await loader()
                 metadata = None
+                max_cache_age_seconds = None
                 if isinstance(value, SourceLoadResult):
                     metadata = value.metadata
+                    max_cache_age_seconds = value.max_cache_age_seconds
                     value = value.value
                 refreshed_at = datetime.now(timezone.utc).isoformat()
                 self._evict_before_insert(max_entries=max_entries, now=now)
+                max_age_at = (
+                    now + max(0.0, max_cache_age_seconds)
+                    if max_cache_age_seconds is not None
+                    else None
+                )
+                expires_at = now + ttl_seconds
+                if max_age_at is not None:
+                    expires_at = min(expires_at, max_age_at)
                 self._entries[key] = CacheEntry(
                     value=value,
                     refreshed_at_monotonic=now,
-                    expires_at_monotonic=now + ttl_seconds,
+                    expires_at_monotonic=expires_at,
                     refreshed_at_iso=refreshed_at,
                     metadata=metadata,
+                    max_age_at_monotonic=max_age_at,
                 )
                 return CachedSourceData(
                     value=value,
@@ -112,10 +125,17 @@ class SourceTTLCache:
                 )
         except Exception as exc:
             stale_entry = self._entries.get(key)
+            stale_deadline = (
+                stale_entry.expires_at_monotonic + stale_if_error_seconds
+                if stale_entry is not None
+                else 0
+            )
+            if stale_entry is not None and stale_entry.max_age_at_monotonic is not None:
+                stale_deadline = min(stale_deadline, stale_entry.max_age_at_monotonic)
             if (
                 stale_entry is not None
                 and stale_if_error_seconds > 0
-                and time.monotonic() <= stale_entry.expires_at_monotonic + stale_if_error_seconds
+                and time.monotonic() <= stale_deadline
             ):
                 return CachedSourceData(
                     value=stale_entry.value,

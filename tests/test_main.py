@@ -71,6 +71,46 @@ def test_settings_join_iski_snapshot_parts(monkeypatch):
     get_settings.cache_clear()
 
 
+def test_settings_load_iski_relay_and_snapshot_age_limits(monkeypatch):
+    from app.core.settings import get_settings
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("ISKI_RELAY_BASE_URL", "https://relay.example")
+    monkeypatch.setenv("ISKI_RELAY_TOKEN", "secret-value")
+    monkeypatch.setenv("ISKI_FAULTS_SNAPSHOT_CAPTURED_AT", "2026-07-23T10:00:00Z")
+    monkeypatch.setenv("ISKI_DAMS_SNAPSHOT_CAPTURED_AT", "2026-07-23T09:00:00Z")
+
+    settings = get_settings()
+
+    assert settings.iski_relay_base_url == "https://relay.example"
+    assert settings.iski_relay_token == "secret-value"
+    assert settings.iski_relay_timeout_seconds == 15.0
+    assert settings.iski_faults_snapshot_captured_at == "2026-07-23T10:00:00Z"
+    assert settings.iski_dams_snapshot_captured_at == "2026-07-23T09:00:00Z"
+    assert settings.iski_faults_snapshot_max_age_seconds == 21_600
+    assert settings.iski_dams_snapshot_max_age_seconds == 86_400
+    get_settings.cache_clear()
+
+
+def test_status_reports_iski_relay_without_exposing_token():
+    from app.core.settings import Settings
+    from app.core.status import build_status
+
+    body = build_status(
+        Settings(
+            iski_relay_base_url="https://relay.example",
+            iski_relay_token="must-not-appear",
+        )
+    )
+
+    assert body["limits"]["iski_relay_enabled"] is True
+    assert body["limits"]["iski_snapshot_max_age_seconds"] == {
+        "faults": 21_600,
+        "dams": 86_400,
+    }
+    assert "must-not-appear" not in json.dumps(body)
+
+
 def test_mcp_health_does_not_expose_database_path():
     body = istanbul_health()
 

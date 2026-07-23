@@ -80,6 +80,11 @@ DAMS = [
 
 
 class FakeIski:
+    last_faults_source = "live_geojson"
+    last_dams_source = "live_json"
+    last_faults_source_updated_at = None
+    last_dams_source_updated_at = None
+
     def __init__(self):
         self.fault_calls = 0
         self.dam_calls = 0
@@ -122,6 +127,8 @@ class FlakyIski:
 class SnapshotIski:
     last_faults_source = "snapshot"
     last_dams_source = "snapshot"
+    last_faults_source_updated_at = "2026-07-23T10:30:00+00:00"
+    last_dams_source_updated_at = "2026-07-23T10:00:00+00:00"
 
     def __init__(self):
         self.fault_calls = 0
@@ -134,6 +141,35 @@ class SnapshotIski:
     async def dams(self):
         self.dam_calls += 1
         return DAMS
+
+
+class ExpiringSnapshotIski(SnapshotIski):
+    last_faults_cache_max_age_seconds = 1
+
+    async def active_faults(self):
+        self.fault_calls += 1
+        if self.fault_calls > 1:
+            raise RuntimeError("snapshot expired and live sources remain unavailable")
+        return FAULTS_GEOJSON
+
+
+class RelayIski(FakeIski):
+    last_faults_source = "relay_geojson"
+    last_dams_source = "relay_json"
+    last_faults_source_updated_at = None
+    last_dams_source_updated_at = None
+
+
+class EdevletRelayIski(FakeIski):
+    last_faults_source = "relay_edevlet"
+    last_dams_source = "relay_edevlet"
+    last_faults_source_updated_at = None
+    last_dams_source_updated_at = None
+
+
+class StaleRelayIski(EdevletRelayIski):
+    last_faults_source_updated_at = "2026-07-23T10:30:00Z"
+    last_faults_source_stale = True
 
 
 def service(client=None):
@@ -291,3 +327,117 @@ async def test_iski_snapshot_source_mode_survives_cache_hits():
     assert second["freshness"]["status"] == "stale"
     assert "returning configured snapshot fallback" in second["warnings"][0]
     assert fake.fault_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_iski_snapshot_cache_does_not_outlive_snapshot_age(monkeypatch):
+    clear_source_cache()
+    clock = [100.0]
+    monkeypatch.setattr("app.core.source_cache.time.monotonic", lambda: clock[0])
+    fake = ExpiringSnapshotIski()
+    svc = IskiService(
+        settings=Settings(iski_faults_cache_ttl_seconds=30, iski_faults_stale_if_error_seconds=60),
+        client=fake,
+    )
+
+    first = await svc.active_faults(limit=1)
+    clock[0] = 102.0
+    second = await svc.active_faults(limit=1)
+
+    assert first["ok"] is True
+    assert second["ok"] is False
+    assert fake.fault_calls == 2
+
+
+@pytest.mark.asyncio
+async def test_iski_relay_provenance_is_reported_truthfully():
+    clear_source_cache()
+    svc = IskiService(
+        settings=Settings(iski_relay_base_url="https://relay.example", iski_relay_token="secret"),
+        client=RelayIski(),
+    )
+
+    result = await svc.active_faults(limit=1)
+
+    assert result["freshness"]["status"] == "fresh"
+    assert result["sources"][0]["name"] == "ISKI active water faults relay"
+    assert result["sources"][0]["url"] == "https://relay.example/iski/faults"
+    assert "source=ISKI relay GeoJSON" in result["limits"]
+
+
+@pytest.mark.asyncio
+async def test_iski_edevlet_relay_provenance_is_reported_truthfully():
+    clear_source_cache()
+    svc = IskiService(
+        settings=Settings(iski_relay_base_url="https://relay.example", iski_relay_token="secret"),
+        client=EdevletRelayIski(),
+    )
+
+    result = await svc.active_faults(limit=1)
+
+    assert result["sources"][0]["name"] == "Official e-Devlet ISKI outage relay"
+    assert result["sources"][0]["url"].startswith("https://www.turkiye.gov.tr/")
+    assert "source=official e-Devlet outage relay" in result["limits"]
+    assert any("does not provide fault numbers or geometry" in warning for warning in result["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_iski_edevlet_dam_relay_provenance_is_reported_truthfully():
+    clear_source_cache()
+    svc = IskiService(
+        settings=Settings(iski_relay_base_url="https://relay.example", iski_relay_token="secret"),
+        client=EdevletRelayIski(),
+    )
+
+    result = await svc.dam_occupancy(limit=1)
+
+    assert result["sources"][0]["name"] == "Official e-Devlet ISKI dam occupancy relay"
+    assert result["sources"][0]["url"].endswith("baraj-doluluk-oranlari")
+    assert "source=official e-Devlet dam relay" in result["limits"]
+    assert any("does not provide current volume" in warning for warning in result["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_iski_stale_relay_cache_is_not_reported_as_fresh():
+    clear_source_cache()
+    svc = IskiService(
+        settings=Settings(iski_relay_base_url="https://relay.example", iski_relay_token="secret"),
+        client=StaleRelayIski(),
+    )
+
+    result = await svc.active_faults(limit=1)
+
+    assert result["freshness"]["status"] == "stale"
+    assert result["freshness"]["source_updated_at"] == "2026-07-23T10:30:00Z"
+    assert any("relay cache is stale" in warning for warning in result["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_iski_snapshot_reports_capture_time_and_not_live_limit():
+    clear_source_cache()
+    svc = IskiService(settings=Settings(), client=SnapshotIski())
+
+    result = await svc.active_faults(limit=1)
+
+    assert result["freshness"]["status"] == "stale"
+    assert result["freshness"]["source_updated_at"] == "2026-07-23T10:30:00+00:00"
+    assert result["sources"][0]["name"] == "Configured ISKI active faults snapshot"
+    assert "source=configured ISKI snapshot" in result["limits"]
+    assert "source=live ISKI GeoJSON" not in result["limits"]
+
+
+def test_iski_service_passes_relay_and_snapshot_settings_to_client():
+    svc = IskiService(
+        settings=Settings(
+            iski_relay_base_url="https://relay.example",
+            iski_relay_token="secret",
+            iski_faults_snapshot_captured_at="2026-07-23T10:30:00Z",
+            iski_dams_snapshot_captured_at="2026-07-23T10:00:00Z",
+        )
+    )
+
+    assert svc.client.relay_base_url == "https://relay.example"
+    assert svc.client.relay_token == "secret"
+    assert svc.client.relay_timeout == 15.0
+    assert svc.client.faults_snapshot_captured_at == "2026-07-23T10:30:00Z"
+    assert svc.client.dams_snapshot_captured_at == "2026-07-23T10:00:00Z"

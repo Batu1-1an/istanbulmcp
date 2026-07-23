@@ -51,9 +51,15 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
             "iski_request_timeout_seconds": settings.iski_request_timeout_seconds,
             "iski_request_attempts": settings.iski_request_attempts,
             "iski_api_fallback_enabled": bool(settings.iski_api_bearer_token),
+            "iski_relay_enabled": bool(settings.iski_relay_base_url and settings.iski_relay_token),
+            "iski_relay_timeout_seconds": settings.iski_relay_timeout_seconds,
             "iski_snapshot_fallback_enabled": {
                 "faults": bool(settings.iski_faults_snapshot_json),
                 "dams": bool(settings.iski_dams_snapshot_json),
+            },
+            "iski_snapshot_max_age_seconds": {
+                "faults": settings.iski_faults_snapshot_max_age_seconds,
+                "dams": settings.iski_dams_snapshot_max_age_seconds,
             },
             "cache_ttl_seconds": {
                 "ckan_catalog": settings.ckan_catalog_cache_ttl_seconds,
