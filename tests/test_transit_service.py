@@ -106,6 +106,19 @@ class DuplicateIett(FakeIett):
         return rows + [dict(rows[0])]
 
 
+class ProductionShapeIett(FakeIett):
+    async def disruptions(self):
+        return [
+            {
+                "HATKODU": "10B",
+                "HAT": "BOSTANCI - KADIKÖY",
+                "TIP": "Günlük",
+                "MESAJ": "Recep Peker Caddesi kapalıdır.",
+                "GUNCELLEME_SAATI": "Kayit Saati: 16:07",
+            }
+        ]
+
+
 def service(tmp_path):
     clear_source_cache()
     settings = Settings(database_path=tmp_path / "transit.sqlite3")
@@ -223,6 +236,24 @@ async def test_disruptions_filters_line_and_excludes_empty_messages(tmp_path):
     assert result["data"][0]["message"] == "Sefer değişikliği"
     assert result["data"][0]["updated_at"] == "2026-08-24T10:30:00+03:00"
     assert any("line_code=34A" in item for item in result["limits"])
+
+
+@pytest.mark.asyncio
+async def test_disruptions_prefers_source_line_code_and_preserves_route_label(tmp_path):
+    clear_source_cache()
+    settings = Settings(database_path=tmp_path / "transit.sqlite3")
+    svc = TransitService(
+        settings=settings,
+        iett_client=ProductionShapeIett(),
+        geo_repository=GeoRepository(settings.database_path),
+    )
+
+    result = await svc.disruptions(line_code="10b")
+
+    assert result["ok"] is True
+    assert result["data"][0]["line_code"] == "10B"
+    assert result["data"][0]["route_label"] == "BOSTANCI - KADIKÖY"
+    assert result["data"][0]["updated_at"] == "Kayit Saati: 16:07"
 
 
 @pytest.mark.asyncio

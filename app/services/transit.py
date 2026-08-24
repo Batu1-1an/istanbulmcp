@@ -115,12 +115,13 @@ class TransitService:
                 if not isinstance(row, dict):
                     raise ValueError("IETT disruption row must be an object")
                 message = self._text(row.get("MESAJ"))
-                row_line_code = self._upper_text(row.get("HAT") or row.get("HATKODU"))
+                row_line_code = self._upper_text(row.get("HATKODU") or row.get("HAT"))
                 if not message or (safe_line_code is not None and row_line_code != safe_line_code):
                     continue
                 data.append(
                     {
                         "line_code": row_line_code,
+                        "route_label": self._text(row.get("HAT")),
                         "type": self._text(row.get("TIP")),
                         "message": message,
                         "updated_at": self._text(row.get("GUNCELLEME_SAATI")),

@@ -2,7 +2,7 @@
 <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
   <soap:Body>
     <GetDuyurular_jsonResponse xmlns="http://tempuri.org/">
-      <GetDuyurular_jsonResult>[{"HAT":"34A","TIP":"HAT DUYURUSU","MESAJ":"Gece seferinde değişiklik.","GUNCELLEME_SAATI":"2026-08-24T10:30:00+03:00"},{"HAT":"500T","TIP":"BİLGİLENDİRME","MESAJ":"500T güzergahı güncellendi.","GUNCELLEME_SAATI":"2026-08-24T09:15:00+03:00"},{"HAT":"34A","TIP":"HAT DUYURUSU","MESAJ":"","GUNCELLEME_SAATI":"2026-08-24T08:00:00+03:00"}]</GetDuyurular_jsonResult>
+      <GetDuyurular_jsonResult>[{"HATKODU":"34A","HAT":"BEYLİKDÜZÜ - SÖĞÜTLÜÇEŞME","TIP":"HAT DUYURUSU","MESAJ":"Gece seferinde değişiklik.","GUNCELLEME_SAATI":"2026-08-24T10:30:00+03:00"},{"HATKODU":"500T","HAT":"TUZLA ŞİFA MAHALLESİ - CEVİZLİBAĞ","TIP":"BİLGİLENDİRME","MESAJ":"500T güzergahı güncellendi.","GUNCELLEME_SAATI":"2026-08-24T09:15:00+03:00"},{"HATKODU":"34A","HAT":"BEYLİKDÜZÜ - SÖĞÜTLÜÇEŞME","TIP":"HAT DUYURUSU","MESAJ":"","GUNCELLEME_SAATI":"2026-08-24T08:00:00+03:00"}]</GetDuyurular_jsonResult>
     </GetDuyurular_jsonResponse>
   </soap:Body>
 </soap:Envelope>

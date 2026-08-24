@@ -106,7 +106,8 @@ async def test_disruptions_parses_fixture_and_uses_configured_endpoint():
         rows = await client.disruptions()
 
     assert len(rows) == 3
-    assert rows[0]["HAT"] == "34A"
+    assert rows[0]["HATKODU"] == "34A"
+    assert rows[0]["HAT"] == "BEYLİKDÜZÜ - SÖĞÜTLÜÇEŞME"
     assert limiter.acquired == ["iett"]
 
 

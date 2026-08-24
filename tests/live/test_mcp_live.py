@@ -135,6 +135,19 @@ def test_live_mcp_transit_disruptions_tool():
     assert "iett" in {source["source"] for source in payload["sources"]}
 
 
+def test_live_mcp_transit_disruptions_line_filter_preserves_line_code():
+    payload, error, _elapsed = rpc_call(
+        os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
+        9012,
+        "istanbul_transit_disruptions",
+        {"line_code": "34A", "limit": 5},
+    )
+
+    assert error is None
+    assert payload["ok"] is True
+    assert all(row["line_code"] == "34A" for row in payload["data"])
+
+
 def test_live_mcp_planned_departures_tool():
     payload, error, _elapsed = rpc_call(
         os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),

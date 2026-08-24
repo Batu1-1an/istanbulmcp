@@ -65,6 +65,6 @@ Neighborhood matching normalizes Turkish characters, source mojibake variants su
 
 IETT SOAP services may be unavailable during nightly maintenance. Transit tools return structured warnings/errors rather than inventing missing data.
 
-`istanbul_transit_disruptions` returns non-empty current IETT announcements, optionally filtered by an exact normalized `line_code`. `limit` defaults to 20 and is capped at 100. Empty announcement messages are omitted; an empty filtered result is still a successful envelope.
+`istanbul_transit_disruptions` returns non-empty current IETT announcements, optionally filtered by an exact normalized `line_code`. `limit` defaults to 20 and is capped at 100. Empty announcement messages are omitted; an empty filtered result is still a successful envelope. Live IETT payloads may also provide a human-readable `route_label`; it is kept separate from the actual line code.
 
 `istanbul_planned_departures` requires a normalized `line_code` and uses the IETT planned-service schedule endpoint. `limit` defaults to 20 and is capped at 100. Results preserve direction, route, day type, and planned departure time, and include the explicit limits `main-terminal planned departures` and `not intermediate-stop ETA`. They are scheduled main-terminal departures, not live intermediate-stop arrival estimates.
