@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import math
+import re
 from typing import Any
 
-from app.connectors.ckan import CkanClient
+from app.connectors.ckan import CkanClient, CkanError
 from app.connectors.air_quality import AirQualityClient
 from app.connectors.ispark import IsparkClient
 from app.connectors.metro import MetroClient
@@ -11,7 +13,7 @@ from app.core.envelope import Freshness, Source, success_envelope
 from app.core.error_responses import source_error_envelope, validation_error_envelope
 from app.core.geo import google_maps_search_url, google_maps_url, parse_wkt_point
 from app.core.settings import Settings
-from app.core.source_cache import cached_source_data
+from app.core.source_cache import CachedSourceData, SourceLoadResult, cached_source_data, cached_source_data_with_status
 from app.core.validation import InputValidationError, validate_bbox, validate_lat_lon, validate_limit, validate_radius, validate_text
 from app.services.places import ResolvedPlace, district_from_text, is_district_place, known_place_names, normalize_place, resolve_place
 from app.storage.geo import GeoRepository
@@ -29,10 +31,14 @@ OPEN_DATA_SOURCE = Source(
     url="https://data.ibb.gov.tr",
 )
 
-GTFS_STOPS_RESOURCE_ID = "d1f7c258-bbc1-406f-9ab2-7a7c1797c673"
+GTFS_DATASET_ID = "iett-gtfs-verisi"
+GTFS_SOURCE_NAME = "IBB Open Data Portal - Public GTFS stops"
 WIFI_LOCATIONS_RESOURCE_ID = "5d0a0b1e-9e56-4038-b966-7d3e7b46f882"
 LIBRARY_LOCATIONS_RESOURCE_ID = "2ee4476c-9984-43de-96de-7aeda4da9aee"
 CKAN_POINT_PREFETCH_LIMIT = 100
+# Deliberately broad province envelope: it rejects clearly foreign coordinates while
+# retaining Istanbul's outlying districts and islands without a polygon dependency.
+ISTANBUL_GTFS_BOUNDS = (40.70, 41.50, 27.80, 30.20)
 
 
 class CityService:
@@ -221,6 +227,7 @@ class CityService:
             return validation_error_envelope(exc, sources=[CITY_SOURCE, OPEN_DATA_SOURCE])
 
         warnings: list[str] = []
+        gtfs_source = Source(name=GTFS_SOURCE_NAME, dataset_id=GTFS_DATASET_ID, url="https://data.ibb.gov.tr")
         parking = await self.parking_nearby(lat=resolved.lat, lon=resolved.lon, radius_m=radius_m, limit=safe_limit)
         metro = await self.metro_stations_nearby(lat=resolved.lat, lon=resolved.lon, radius_m=radius_m, limit=safe_limit)
         traffic = await self.traffic_status()
@@ -228,7 +235,7 @@ class CityService:
         public_stops: list[dict[str, Any]] = []
         air_quality_stations: list[dict[str, Any]] = []
         try:
-            public_stops = await self._public_transport_stops_nearby(
+            public_stops, gtfs_source = await self._public_transport_stops_nearby(
                 lat=resolved.lat,
                 lon=resolved.lon,
                 radius_m=radius_m,
@@ -267,7 +274,7 @@ class CityService:
             data=data,
             sources=[
                 CITY_SOURCE,
-                Source(name="IBB Open Data Portal - Public GTFS stops", resource_id=GTFS_STOPS_RESOURCE_ID, url="https://data.ibb.gov.tr"),
+                gtfs_source,
             ],
             freshness=Freshness(status="fresh", ttl_seconds=300),
             limits=[f"radius_m={radius_m}", f"limit_per_section={safe_limit}", "traffic=citywide"],
@@ -366,7 +373,7 @@ class CityService:
     ) -> dict:
         try:
             safe_limit = self._validate_geo(lat, lon, radius_m, limit)
-            warnings = await self._refresh_requested(types)
+            warnings, extra_sources = await self._refresh_requested(types)
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[CITY_SOURCE])
         except Exception as exc:
@@ -375,7 +382,7 @@ class CityService:
         return success_envelope(
             summary=f"{len(data)} city feature(s) found within {radius_m} meters.",
             data=data,
-            sources=[CITY_SOURCE],
+            sources=[CITY_SOURCE, *extra_sources],
             freshness=Freshness(status="fresh", ttl_seconds=300),
             limits=[f"radius_m={radius_m}", f"limit={safe_limit}"],
             warnings=warnings,
@@ -385,7 +392,7 @@ class CityService:
         try:
             min_lon, min_lat, max_lon, max_lat = validate_bbox(bbox)
             safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
-            warnings = await self._refresh_requested(types)
+            warnings, extra_sources = await self._refresh_requested(types)
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[CITY_SOURCE])
         except Exception as exc:
@@ -401,7 +408,7 @@ class CityService:
         return success_envelope(
             summary=f"{len(data)} city feature(s) found in bbox.",
             data=data,
-            sources=[CITY_SOURCE],
+            sources=[CITY_SOURCE, *extra_sources],
             freshness=Freshness(status="fresh", ttl_seconds=300),
             limits=[f"limit={safe_limit}"],
             warnings=warnings,
@@ -412,9 +419,10 @@ class CityService:
         validate_radius(radius_m, self.settings.max_radius_m)
         return validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
 
-    async def _refresh_requested(self, types: list[str] | None) -> list[str]:
+    async def _refresh_requested(self, types: list[str] | None) -> tuple[list[str], list[Source]]:
         requested = set(types or ["parking", "metro_station", "air_quality_station"])
         warnings: list[str] = []
+        sources: list[Source] = []
         if "parking" in requested:
             try:
                 parks = await self._parks()
@@ -435,8 +443,8 @@ class CityService:
                 warnings.append(f"Air quality station source refresh failed: {type(exc).__name__}.")
         if "public_transport_stop" in requested:
             try:
-                stops = await self._gtfs_stops()
-                self.geo.upsert_features([feature for row in stops if (feature := self._gtfs_stop_feature(row))])
+                cached = await self._gtfs_stops()
+                sources.append(self._gtfs_source(cached))
             except Exception as exc:
                 warnings.append(f"Public transport stop source refresh failed: {type(exc).__name__}.")
         if "wifi" in requested:
@@ -445,7 +453,7 @@ class CityService:
                 self.geo.upsert_features([feature for row in wifi_locations if (feature := self._wifi_feature(row))])
             except Exception as exc:
                 warnings.append(f"WiFi source refresh failed: {type(exc).__name__}.")
-        return warnings
+        return warnings, sources
 
     async def _parks(self) -> list[dict[str, Any]]:
         return await cached_source_data(
@@ -482,16 +490,103 @@ class CityService:
             loader=self.traffic.index_history,
         )
 
-    async def _gtfs_stops(self) -> list[dict[str, Any]]:
-        async def load() -> list[dict[str, Any]]:
-            result = await self.ckan.datastore_search(resource_id=GTFS_STOPS_RESOURCE_ID, limit=CKAN_POINT_PREFETCH_LIMIT)
-            return result.get("records", [])
+    async def _gtfs_stops(self) -> CachedSourceData:
+        async def load() -> SourceLoadResult:
+            resource = await self._resolve_gtfs_stops_resource()
+            records: list[dict[str, Any]] = []
+            offset = 0
+            reported_total: int | None = None
 
-        return await cached_source_data(
+            while True:
+                result = await self.ckan.datastore_search(
+                    resource_id=resource["id"],
+                    limit=CKAN_POINT_PREFETCH_LIMIT,
+                    offset=offset,
+                )
+                page = result.get("records") or []
+                if reported_total is None:
+                    reported_total = self._int_or_none(result.get("total"))
+                records.extend(page)
+                if not page:
+                    break
+                offset += len(page)
+                if reported_total is not None and offset >= reported_total:
+                    break
+                if reported_total is None and len(page) < CKAN_POINT_PREFETCH_LIMIT:
+                    break
+
+            if reported_total is None:
+                reported_total = len(records)
+            if len(records) != reported_total:
+                raise CkanError(
+                    f"GTFS stops pagination incomplete: received {len(records)} of {reported_total} records."
+                )
+
+            features = [feature for row in records if (feature := self._gtfs_stop_feature(row))]
+            self.geo.replace_features(
+                source="gtfs",
+                feature_type="public_transport_stop",
+                features=features,
+            )
+            return SourceLoadResult(
+                value=records,
+                metadata={
+                    "dataset_id": GTFS_DATASET_ID,
+                    "resource_id": resource["id"],
+                    "source_updated_at": resource.get("last_modified")
+                    or resource.get("metadata_modified")
+                    or resource.get("created"),
+                    "scope": "all_active_datastore_records",
+                    "reported_total": reported_total,
+                    "received_total": len(records),
+                    "accepted_total": len(features),
+                    "skipped_total": len(records) - len(features),
+                },
+            )
+
+        return await cached_source_data_with_status(
             "ckan.public_gtfs.stops",
             ttl_seconds=60 * 60 * 24,
             loader=load,
         )
+
+    async def _resolve_gtfs_stops_resource(self) -> dict[str, Any]:
+        package = await self.ckan.package_show(GTFS_DATASET_ID)
+        resources = package.get("resources") or []
+        candidates = [resource for resource in resources if resource.get("datastore_active") and self._is_gtfs_stops_resource(resource)]
+        if len(candidates) != 1:
+            raise CkanError(f"Expected exactly one active GTFS stops resource, found {len(candidates)}.")
+        resource = candidates[0]
+        if not resource.get("id"):
+            raise CkanError("Active GTFS stops resource has no resource ID.")
+        return resource
+
+    def _is_gtfs_stops_resource(self, resource: dict[str, Any]) -> bool:
+        searchable = " ".join(str(resource.get(key) or "") for key in ("name", "description", "url")).casefold()
+        tokens = set(re.findall(r"[a-z0-9çğıöşü]+", searchable))
+        return bool(tokens & {"stops", "durak", "duraklar"})
+
+    def _gtfs_source(self, cached: CachedSourceData) -> Source:
+        metadata = cached.metadata or {}
+        return Source(
+            name=GTFS_SOURCE_NAME,
+            dataset_id=metadata.get("dataset_id", GTFS_DATASET_ID),
+            resource_id=metadata.get("resource_id"),
+            source_updated_at=metadata.get("source_updated_at"),
+            last_successful_refresh_at=cached.refreshed_at_iso,
+            scope=metadata.get("scope"),
+            reported_total=metadata.get("reported_total"),
+            received_total=metadata.get("received_total"),
+            accepted_total=metadata.get("accepted_total"),
+            skipped_total=metadata.get("skipped_total"),
+            url="https://data.ibb.gov.tr",
+        )
+
+    def _int_or_none(self, value: Any) -> int | None:
+        try:
+            return int(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
 
     async def _wifi_locations(self) -> list[dict[str, Any]]:
         async def load() -> list[dict[str, Any]]:
@@ -515,10 +610,17 @@ class CityService:
             loader=load,
         )
 
-    async def _public_transport_stops_nearby(self, *, lat: float, lon: float, radius_m: int, limit: int) -> list[dict[str, Any]]:
-        stops = await self._gtfs_stops()
-        self.geo.upsert_features([feature for row in stops if (feature := self._gtfs_stop_feature(row))])
-        return self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=limit, types=["public_transport_stop"])
+    async def _public_transport_stops_nearby(
+        self,
+        *,
+        lat: float,
+        lon: float,
+        radius_m: int,
+        limit: int,
+    ) -> tuple[list[dict[str, Any]], Source]:
+        cached = await self._gtfs_stops()
+        nearby = self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=limit, types=["public_transport_stop"])
+        return nearby, self._gtfs_source(cached)
 
     async def _wifi_nearby(self, *, lat: float, lon: float, radius_m: int, limit: int) -> list[dict[str, Any]]:
         locations = await self._wifi_locations()
@@ -631,14 +733,26 @@ class CityService:
     def _gtfs_stop_feature(self, stop: dict[str, Any]) -> dict[str, Any] | None:
         lat = self._float_or_none(stop.get("stop_lat"))
         lon = self._float_or_none(stop.get("stop_lon"))
-        stop_id = stop.get("stop_id")
-        if lat is None or lon is None or not stop_id:
+        stop_id = str(stop.get("stop_id") or "").strip()
+        if (
+            lat is None
+            or lon is None
+            or not math.isfinite(lat)
+            or not math.isfinite(lon)
+            or lat == 0
+            or lon == 0
+            or not (-90 <= lat <= 90)
+            or not (-180 <= lon <= 180)
+            or not (ISTANBUL_GTFS_BOUNDS[0] <= lat <= ISTANBUL_GTFS_BOUNDS[1])
+            or not (ISTANBUL_GTFS_BOUNDS[2] <= lon <= ISTANBUL_GTFS_BOUNDS[3])
+            or not stop_id
+        ):
             return None
         return {
             "id": f"gtfs_stop:{stop_id}",
             "source": "gtfs",
             "feature_type": "public_transport_stop",
-            "source_id": str(stop_id),
+            "source_id": stop_id,
             "name": stop.get("stop_name") or str(stop_id),
             "lat": lat,
             "lon": lon,

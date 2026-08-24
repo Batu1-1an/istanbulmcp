@@ -16,54 +16,30 @@ class GeoRepository:
     def upsert_features(self, features: list[dict[str, Any]]) -> None:
         with connect(self.database_path) as conn:
             for feature in features:
-                conn.execute(
-                    """
-                    INSERT INTO geo_features (
-                      id, source, feature_type, source_id, name, lat, lon,
-                      geometry_json, district, neighborhood, properties_json, valid_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(id) DO UPDATE SET
-                      source=excluded.source,
-                      feature_type=excluded.feature_type,
-                      source_id=excluded.source_id,
-                      name=excluded.name,
-                      lat=excluded.lat,
-                      lon=excluded.lon,
-                      geometry_json=excluded.geometry_json,
-                      district=excluded.district,
-                      neighborhood=excluded.neighborhood,
-                      properties_json=excluded.properties_json,
-                      valid_at=excluded.valid_at,
-                      retrieved_at=CURRENT_TIMESTAMP
-                    """,
-                    (
-                        feature["id"],
-                        feature["source"],
-                        feature["feature_type"],
-                        feature["source_id"],
-                        feature["name"],
-                        feature["lat"],
-                        feature["lon"],
-                        json.dumps(feature.get("geometry"), ensure_ascii=False),
-                        feature.get("district"),
-                        feature.get("neighborhood"),
-                        json.dumps(feature.get("properties") or {}, ensure_ascii=False),
-                        feature.get("valid_at"),
-                    ),
-                )
-                rowid = conn.execute(
-                    "SELECT rowid FROM geo_features WHERE id = ?",
-                    (feature["id"],),
-                ).fetchone()[0]
-                lon = feature["lon"]
-                lat = feature["lat"]
-                conn.execute(
-                    """
-                    INSERT OR REPLACE INTO geo_features_rtree(rowid, min_lon, max_lon, min_lat, max_lat)
-                    VALUES (?, ?, ?, ?, ?)
-                    """,
-                    (rowid, lon, lon, lat, lat),
-                )
+                self._insert_feature(conn, feature)
+            conn.commit()
+
+    def replace_features(
+        self,
+        *,
+        source: str,
+        feature_type: str,
+        features: list[dict[str, Any]],
+    ) -> None:
+        """Replace one source/type layer atomically, preserving it on failure."""
+        with connect(self.database_path) as conn:
+            rows = conn.execute(
+                "SELECT rowid FROM geo_features WHERE source = ? AND feature_type = ?",
+                (source, feature_type),
+            ).fetchall()
+            for row in rows:
+                conn.execute("DELETE FROM geo_features_rtree WHERE rowid = ?", (row["rowid"],))
+            conn.execute(
+                "DELETE FROM geo_features WHERE source = ? AND feature_type = ?",
+                (source, feature_type),
+            )
+            for feature in features:
+                self._insert_feature(conn, feature)
             conn.commit()
 
     def nearby(
@@ -135,3 +111,53 @@ class GeoRepository:
         if maps_url := google_maps_url(item.get("lat"), item.get("lon")):
             item["maps_url"] = maps_url
         return item
+
+    def _insert_feature(self, conn, feature: dict[str, Any]) -> None:
+        conn.execute(
+            """
+            INSERT INTO geo_features (
+              id, source, feature_type, source_id, name, lat, lon,
+              geometry_json, district, neighborhood, properties_json, valid_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              source=excluded.source,
+              feature_type=excluded.feature_type,
+              source_id=excluded.source_id,
+              name=excluded.name,
+              lat=excluded.lat,
+              lon=excluded.lon,
+              geometry_json=excluded.geometry_json,
+              district=excluded.district,
+              neighborhood=excluded.neighborhood,
+              properties_json=excluded.properties_json,
+              valid_at=excluded.valid_at,
+              retrieved_at=CURRENT_TIMESTAMP
+            """,
+            (
+                feature["id"],
+                feature["source"],
+                feature["feature_type"],
+                feature["source_id"],
+                feature["name"],
+                feature["lat"],
+                feature["lon"],
+                json.dumps(feature.get("geometry"), ensure_ascii=False),
+                feature.get("district"),
+                feature.get("neighborhood"),
+                json.dumps(feature.get("properties") or {}, ensure_ascii=False),
+                feature.get("valid_at"),
+            ),
+        )
+        rowid = conn.execute(
+            "SELECT rowid FROM geo_features WHERE id = ?",
+            (feature["id"],),
+        ).fetchone()[0]
+        lon = feature["lon"]
+        lat = feature["lat"]
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO geo_features_rtree(rowid, min_lon, max_lon, min_lat, max_lat)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (rowid, lon, lon, lat, lat),
+        )

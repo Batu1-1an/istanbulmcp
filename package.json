@@ -1,0 +1,7 @@
+{
+  "name": "istanbulmcp-railway-iac",
+  "private": true,
+  "devDependencies": {
+    "railway": "3.10.0"
+  }
+}

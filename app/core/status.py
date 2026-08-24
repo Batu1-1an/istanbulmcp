@@ -30,6 +30,8 @@ TOOL_SOURCES = {
     "istanbul_neighborhood_profile": "ckan",
     "istanbul_transit_line_info": "iett",
     "istanbul_stops_for_line": "iett",
+    "istanbul_transit_disruptions": "iett",
+    "istanbul_planned_departures": "iett",
 }
 
 

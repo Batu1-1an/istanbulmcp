@@ -8,7 +8,7 @@ from app.core.geo import google_maps_url
 from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
 from app.core.source_cache import cached_source_data
-from app.core.validation import InputValidationError, validate_line_code
+from app.core.validation import InputValidationError, validate_line_code, validate_limit
 from app.core.error_responses import validation_error_envelope
 from app.storage.geo import GeoRepository
 
@@ -88,6 +88,127 @@ class TransitService:
             limits=["IETT SOAP may be unavailable during nightly maintenance."],
         )
 
+    async def disruptions(self, *, line_code: str | None = None, limit: int | None = None) -> dict[str, Any]:
+        safe_line_code: str | None = None
+        try:
+            if line_code is not None:
+                safe_line_code = validate_line_code(line_code)
+            safe_limit = validate_limit(
+                self.settings.default_limit if limit is None else limit,
+                self.settings.max_limit,
+            )
+            rows = await self._disruption_rows()
+        except InputValidationError as exc:
+            return validation_error_envelope(exc, sources=[IETT_SOURCE])
+        except SourceRateLimitExceeded as exc:
+            return self._rate_limited("IETT disruptions", exc)
+        except Exception as exc:
+            return error_envelope(
+                summary="IETT disruptions are unavailable.",
+                warning=f"IETT SOAP request failed: {type(exc).__name__}",
+                sources=[IETT_SOURCE],
+            )
+
+        try:
+            data = []
+            for row in rows:
+                if not isinstance(row, dict):
+                    raise ValueError("IETT disruption row must be an object")
+                message = self._text(row.get("MESAJ"))
+                row_line_code = self._upper_text(row.get("HAT") or row.get("HATKODU"))
+                if not message or (safe_line_code is not None and row_line_code != safe_line_code):
+                    continue
+                data.append(
+                    {
+                        "line_code": row_line_code,
+                        "type": self._text(row.get("TIP")),
+                        "message": message,
+                        "updated_at": self._text(row.get("GUNCELLEME_SAATI")),
+                    }
+                )
+            data = self._deduplicate_rows(
+                data,
+                key_fields=("line_code", "type", "message", "updated_at"),
+            )
+        except Exception as exc:
+            return error_envelope(
+                summary="IETT disruptions are unavailable.",
+                warning=f"IETT SOAP request failed: {type(exc).__name__}",
+                sources=[IETT_SOURCE],
+            )
+        data = data[:safe_limit]
+        filter_label = f" for line {safe_line_code}" if safe_line_code else ""
+        summary = f"{len(data)} IETT disruption(s) found{filter_label}." if data else f"No IETT disruptions found{filter_label}."
+        limits = [f"limit={safe_limit}", "IETT SOAP may be unavailable during nightly maintenance."]
+        if safe_line_code:
+            limits.append(f"line_code={safe_line_code}")
+        return success_envelope(
+            summary=summary,
+            data=data,
+            sources=[IETT_SOURCE],
+            freshness=Freshness(status="fresh", ttl_seconds=self.settings.iett_line_cache_ttl_seconds),
+            limits=limits,
+        )
+
+    async def planned_departures(self, *, line_code: str, limit: int | None = None) -> dict[str, Any]:
+        try:
+            safe_line_code = validate_line_code(line_code)
+            safe_limit = validate_limit(
+                self.settings.default_limit if limit is None else limit,
+                self.settings.max_limit,
+            )
+            rows = await self._planned_departure_rows(safe_line_code)
+        except InputValidationError as exc:
+            return validation_error_envelope(exc, sources=[IETT_SOURCE])
+        except SourceRateLimitExceeded as exc:
+            return self._rate_limited("IETT planned departures", exc)
+        except Exception as exc:
+            return error_envelope(
+                summary=f"IETT planned departures are unavailable for line {line_code}.",
+                warning=f"IETT SOAP request failed: {type(exc).__name__}",
+                sources=[IETT_SOURCE],
+            )
+
+        try:
+            data = []
+            for row in rows:
+                if not isinstance(row, dict):
+                    raise ValueError("IETT planned departure row must be an object")
+                normalized = self._planned_departure_row(row, safe_line_code)
+                if normalized is not None:
+                    data.append(normalized)
+            data = self._deduplicate_rows(
+                data,
+                key_fields=("line_code", "direction", "day_type_code", "planned_departure_time", "route"),
+            )
+            data.sort(
+                key=lambda row: (
+                    row["day_type_label"],
+                    row["direction"] or "",
+                    row["planned_departure_time"],
+                    row["route"] or "",
+                )
+            )
+        except Exception as exc:
+            return error_envelope(
+                summary=f"IETT planned departures are unavailable for line {line_code}.",
+                warning=f"IETT SOAP request failed: {type(exc).__name__}",
+                sources=[IETT_SOURCE],
+            )
+        data = data[:safe_limit]
+        return success_envelope(
+            summary=f"{len(data)} planned main-terminal departure(s) found for line {safe_line_code}." if data else f"No planned main-terminal departures found for line {safe_line_code}.",
+            data=data,
+            sources=[IETT_SOURCE],
+            freshness=Freshness(status="fresh", ttl_seconds=self.settings.iett_line_cache_ttl_seconds),
+            limits=[
+                f"limit={safe_limit}",
+                "main-terminal planned departures",
+                "not intermediate-stop ETA",
+                "IETT SOAP may be unavailable during nightly maintenance.",
+            ],
+        )
+
     async def _line_info_rows(self, line_code: str) -> list[dict[str, Any]]:
         return await cached_source_data(
             f"iett.line_info.{line_code}",
@@ -101,6 +222,63 @@ class TransitService:
             ttl_seconds=self.settings.iett_stops_cache_ttl_seconds,
             loader=lambda: self.iett.stops_for_line(line_code),
         )
+
+    async def _disruption_rows(self) -> list[dict[str, Any]]:
+        return await cached_source_data(
+            "iett.disruptions",
+            ttl_seconds=self.settings.iett_line_cache_ttl_seconds,
+            loader=self.iett.disruptions,
+        )
+
+    async def _planned_departure_rows(self, line_code: str) -> list[dict[str, Any]]:
+        return await cached_source_data(
+            f"iett.planned_departures.{line_code}",
+            ttl_seconds=self.settings.iett_line_cache_ttl_seconds,
+            loader=lambda: self.iett.planned_departures(line_code),
+        )
+
+    def _planned_departure_row(self, row: dict[str, Any], line_code: str) -> dict[str, Any] | None:
+        source_line_code = self._upper_text(row.get("SHATKODU") or row.get("HATKODU")) or ""
+        if source_line_code != line_code:
+            return None
+        planned_departure_time = self._text(row.get("DT"))
+        if not planned_departure_time:
+            raise ValueError("IETT planned departure row is missing DT")
+        day_type_code = self._upper_text(row.get("SGUNTIPI"))
+        day_type_label = {"I": "weekday", "C": "saturday", "P": "sunday"}.get(day_type_code, "unknown")
+        return {
+            "line_code": source_line_code,
+            "line_name": self._text(row.get("HATADI")),
+            "route": self._text(row.get("SGUZERGAH")),
+            "direction": self._text(row.get("SYON")),
+            "day_type_code": day_type_code,
+            "day_type_label": day_type_label,
+            "planned_departure_time": planned_departure_time,
+        }
+
+    @staticmethod
+    def _text(value: Any) -> str | None:
+        if value is None:
+            return None
+        value = str(value).strip()
+        return value or None
+
+    @classmethod
+    def _upper_text(cls, value: Any) -> str | None:
+        value = cls._text(value)
+        return value.upper() if value else None
+
+    @staticmethod
+    def _deduplicate_rows(rows: list[dict[str, Any]], *, key_fields: tuple[str, ...]) -> list[dict[str, Any]]:
+        seen: set[tuple[Any, ...]] = set()
+        unique: list[dict[str, Any]] = []
+        for row in rows:
+            identity = tuple(row.get(field) for field in key_fields)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            unique.append(row)
+        return unique
 
     def _stop_row(self, row: dict[str, Any]) -> dict[str, Any]:
         lon = self._float_or_none(row.get("XKOORDINATI"))

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <GetPlanlananSeferSaati_jsonResponse xmlns="http://tempuri.org/">
+      <GetPlanlananSeferSaati_jsonResult>[{"SHATKODU":"500T","HATADI":"TUZLA ŞİFA MAHALLESİ - CEVİZLİBAĞ","SGUZERGAH":"TUZLA - CEVİZLİBAĞ","SYON":"G","SGUNTIPI":"I","DT":"06:00"},{"SHATKODU":"500T","HATADI":"TUZLA ŞİFA MAHALLESİ - CEVİZLİBAĞ","SGUZERGAH":"TUZLA - CEVİZLİBAĞ","SYON":"D","SGUNTIPI":"C","DT":"08:30"},{"SHATKODU":"500T","HATADI":"TUZLA ŞİFA MAHALLESİ - CEVİZLİBAĞ","SGUZERGAH":"TUZLA - CEVİZLİBAĞ","SYON":"G","SGUNTIPI":"P","DT":"09:00"},{"SHATKODU":"500T","HATADI":"TUZLA ŞİFA MAHALLESİ - CEVİZLİBAĞ","SGUZERGAH":"TUZLA - CEVİZLİBAĞ","SYON":"G","SGUNTIPI":"X","DT":"10:00"},{"SHATKODU":"34A","HATADI":"OTHER","SGUZERGAH":"OTHER","SYON":"G","SGUNTIPI":"I","DT":"05:00"}]</GetPlanlananSeferSaati_jsonResult>
+    </GetPlanlananSeferSaati_jsonResponse>
+  </soap:Body>
+</soap:Envelope>

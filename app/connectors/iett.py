@@ -22,12 +22,16 @@ class IettClient:
         *,
         ulasim_url: str = "https://api.ibb.gov.tr/iett/UlasimAnaVeri/HatDurakGuzergah.asmx",
         ibb_url: str = "https://api.ibb.gov.tr/iett/ibb/ibb.asmx",
+        duyurular_url: str = "https://api.ibb.gov.tr/iett/UlasimDinamikVeri/Duyurular.asmx",
+        planlanan_sefer_saati_url: str = "https://api.ibb.gov.tr/iett/UlasimAnaVeri/PlanlananSeferSaati.asmx",
         timeout: float = 20.0,
         http_client: httpx.AsyncClient | None = None,
         rate_limiter: RateLimiter | None = None,
     ):
         self.ulasim_url = ulasim_url
         self.ibb_url = ibb_url
+        self.duyurular_url = duyurular_url
+        self.planlanan_sefer_saati_url = planlanan_sefer_saati_url
         self.timeout = timeout
         self._client = http_client
         self._rate_limiter = rate_limiter or iett_rate_limiter()
@@ -40,7 +44,7 @@ class IettClient:
         )
         if not isinstance(text, str):
             raise IettSoapError("SOAP JSON result was not text")
-        return json.loads(text or "[]")
+        return self._parse_json_rows(text, "GetHat_json")
 
     async def stops_for_line(self, line_code: str) -> list[dict[str, Any]]:
         xml_node = await self._soap_call(
@@ -52,6 +56,30 @@ class IettClient:
         if not isinstance(xml_node, ET.Element):
             return []
         return [self._table_to_dict(table) for table in xml_node.iter() if self._local_name(table.tag) == "Table"]
+
+    async def disruptions(self) -> list[dict[str, Any]]:
+        text = await self._soap_call(self.duyurular_url, "GetDuyurular_json", {})
+        if not isinstance(text, str):
+            raise IettSoapError("SOAP JSON result was not text")
+        return self._parse_json_rows(text, "GetDuyurular_json")
+
+    async def planned_departures(self, line_code: str) -> list[dict[str, Any]]:
+        text = await self._soap_call(
+            self.planlanan_sefer_saati_url,
+            "GetPlanlananSeferSaati_json",
+            {"HatKodu": line_code},
+        )
+        if not isinstance(text, str):
+            raise IettSoapError("SOAP JSON result was not text")
+        return self._parse_json_rows(text, "GetPlanlananSeferSaati_json")
+
+    def _parse_json_rows(self, text: str, method: str) -> list[dict[str, Any]]:
+        value = json.loads(text or "[]")
+        if not isinstance(value, list):
+            raise IettSoapError(f"SOAP JSON result for {method} was not a list")
+        if any(not isinstance(row, dict) for row in value):
+            raise IettSoapError(f"SOAP JSON result for {method} contains a non-object row")
+        return value
 
     async def _soap_call(
         self,

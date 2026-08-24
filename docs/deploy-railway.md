@@ -1,15 +1,28 @@
 # Railway Deployment
 
-The project is designed for Railway using the included `Dockerfile` and `railway.json`.
+The project is designed for Railway using the included `Dockerfile` and `.railway/railway.ts` Infrastructure as Code file. The service remains a single read-only web service; this feature adds no Railway volume, backup, replica increase, or new service.
 
-## Commands
+## Plan-only verification
+
+The IaC file uses the pinned Railway TypeScript SDK declared in the root `package.json`. Install it once before running the Railway plan commands:
+
+```bash
+npm install
+```
 
 ```bash
 railway status
-railway up
+railway config pull
+railway config plan --detailed-exit-code
 ```
 
-Set environment variables from `.env.example` as needed. At minimum, Railway should provide `PORT`; the app defaults to `.data/istanbul_mcp.sqlite3` for SQLite.
+`railway config plan` is the normal verification command. It does not change Railway. Exit code `0` means no diff; exit code `2` means a diff is available for review. For the 2026-08-25 local verification, `railway status` plus the plan completed in 3.67 seconds and reported two expected configuration changes copied from the retired `railway.json`: Dockerfile builder and healthcheck/restart settings. It reported no service, replica, volume, or backup addition/drift. No `railway config apply` or `railway up` was run.
+
+The imported `.railway/railway.ts` preserves the linked `istanbulmcp` service, the healthcheck at `/healthz` with a 30-second timeout, the existing single-region replica intent, and secret values through `preserve()`. The old `railway.json` was removed after those settings were represented in IaC.
+
+Rollback boundary: until an explicitly approved `railway config apply` or deploy is run, Railway production has not changed and there is no production rollback to perform. To roll back this local migration, restore the previous tracked files or revert the local IaC commit; do not apply a rollback command by default.
+
+Set environment variables from `.env.example` as needed. At minimum, Railway should provide `PORT`; the app defaults to `.data/istanbul_mcp.sqlite3` for SQLite. Do not add a volume or backup solely to support this feature.
 
 ## ISKI Relay
 

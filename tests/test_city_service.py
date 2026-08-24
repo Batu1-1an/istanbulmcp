@@ -2,9 +2,13 @@ import pytest
 
 from app.core.settings import Settings
 from app.core.source_cache import clear_source_cache, source_cache_snapshot
-from app.services.city import CityService
-from app.services.city import GTFS_STOPS_RESOURCE_ID, LIBRARY_LOCATIONS_RESOURCE_ID, WIFI_LOCATIONS_RESOURCE_ID
+from app.connectors.ckan import CkanError
+from app.services.city import CityService, ISTANBUL_GTFS_BOUNDS
+from app.services.city import LIBRARY_LOCATIONS_RESOURCE_ID, WIFI_LOCATIONS_RESOURCE_ID
 from app.storage.geo import GeoRepository
+
+
+GTFS_FIXTURE_RESOURCE_ID = "fixture-active-stops"
 
 
 class FakeIspark:
@@ -79,9 +83,23 @@ class FakeTraffic:
 
 
 class FakeCkan:
+    async def package_show(self, dataset_id):
+        return {
+            "name": dataset_id,
+            "resources": [
+                {
+                    "id": GTFS_FIXTURE_RESOURCE_ID,
+                    "name": "stops.txt",
+                    "format": "CSV",
+                    "datastore_active": True,
+                    "last_modified": "2026-08-24T08:00:00Z",
+                }
+            ],
+        }
+
     async def datastore_search(self, *, resource_id, limit, filters=None, offset=0):
         records = {
-            GTFS_STOPS_RESOURCE_ID: [
+            GTFS_FIXTURE_RESOURCE_ID: [
                 {
                     "stop_id": "s1",
                     "stop_code": "1001",
@@ -135,6 +153,88 @@ class FakeCkan:
         return {"records": records.get(resource_id, [])[:limit], "total": len(records.get(resource_id, []))}
 
 
+class PagedGtfsCkan:
+    def __init__(self):
+        self.datastore_calls = []
+        self.records = [
+            {
+                "stop_id": f"far-{index}",
+                "stop_name": f"Far Stop {index}",
+                "stop_lat": "41.2000",
+                "stop_lon": "29.2000",
+            }
+            for index in range(100)
+        ]
+        self.records.extend(
+            [
+                {"stop_id": "outside-first-page", "stop_name": "Kadikoy Rihtim", "stop_lat": "40.9910", "stop_lon": "29.0305"},
+                {"stop_id": "invalid", "stop_name": "Invalid", "stop_lat": "not-a-number", "stop_lon": "29.0305"},
+            ]
+        )
+
+    async def package_show(self, dataset_id):
+        return {
+            "name": dataset_id,
+            "resources": [
+                {"id": "active-stops", "name": "GTFS stops", "datastore_active": True, "last_modified": "2026-08-24T08:00:00Z"},
+                {"id": "other", "name": "routes.txt", "datastore_active": True},
+            ],
+        }
+
+    async def datastore_search(self, *, resource_id, limit, filters=None, offset=0):
+        self.datastore_calls.append({"resource_id": resource_id, "limit": limit, "offset": offset})
+        page = self.records[offset : offset + limit]
+        return {"records": page, "total": len(self.records)}
+
+
+class IncompleteGtfsCkan(PagedGtfsCkan):
+    async def datastore_search(self, *, resource_id, limit, filters=None, offset=0):
+        self.datastore_calls.append({"resource_id": resource_id, "limit": limit, "offset": offset})
+        return {"records": self.records[offset : offset + limit] if offset == 0 else [], "total": len(self.records)}
+
+
+class AmbiguousGtfsCkan(PagedGtfsCkan):
+    async def package_show(self, dataset_id):
+        return {
+            "name": dataset_id,
+            "resources": [
+                {"id": "active-stops", "name": "stops.txt", "datastore_active": True},
+                {"id": "active-stops-copy", "name": "GTFS stops backup", "datastore_active": True},
+            ],
+        }
+
+
+class MissingGtfsCkan(PagedGtfsCkan):
+    async def package_show(self, dataset_id):
+        return {
+            "name": dataset_id,
+            "resources": [{"id": "routes", "name": "routes.txt", "datastore_active": True}],
+        }
+
+
+class OutsideIstanbulGtfsCkan(PagedGtfsCkan):
+    def __init__(self):
+        super().__init__()
+        self.records.append(
+            {
+                "stop_id": "outside-istanbul",
+                "stop_name": "Paris Stop",
+                "stop_lat": "48.8566",
+                "stop_lon": "2.3522",
+            }
+        )
+
+
+class CountingGeoRepository(GeoRepository):
+    def __init__(self, database_path):
+        super().__init__(database_path)
+        self.replace_calls = 0
+
+    def replace_features(self, **kwargs):
+        self.replace_calls += 1
+        return super().replace_features(**kwargs)
+
+
 class FailingAir:
     async def stations(self):
         raise RuntimeError("down")
@@ -162,6 +262,20 @@ def service(tmp_path):
         air_quality_client=FakeAir(),
         traffic_client=FakeTraffic(),
         ckan_client=FakeCkan(),
+    )
+
+
+def paged_gtfs_service(tmp_path, ckan):
+    clear_source_cache()
+    settings = Settings(database_path=tmp_path / "paged-city.sqlite3")
+    return CityService(
+        settings=settings,
+        geo_repository=CountingGeoRepository(settings.database_path),
+        ispark_client=FakeIspark(),
+        metro_client=FakeMetro(),
+        air_quality_client=FakeAir(),
+        traffic_client=FakeTraffic(),
+        ckan_client=ckan,
     )
 
 
@@ -324,6 +438,110 @@ async def test_mobility_nearby_aggregates_sections_for_place(tmp_path):
     assert payload["public_transport_stops"][0]["name"] == "Kadikoy Rihtim"
     assert payload["public_transport_stops"][0]["maps_url"].startswith("https://www.google.com/maps/search/")
     assert payload["traffic"]["traffic_index"] == 63
+
+
+@pytest.mark.asyncio
+async def test_mobility_nearby_uses_active_paged_gtfs_and_reports_context(tmp_path):
+    ckan = PagedGtfsCkan()
+    svc = paged_gtfs_service(tmp_path, ckan)
+
+    first = await svc.mobility_nearby(lat=40.9910, lon=29.0303, radius_m=500, limit=5)
+    second = await svc.mobility_nearby(lat=40.9910, lon=29.0303, radius_m=500, limit=5)
+
+    first_payload = first["data"][0]
+    gtfs_source = next(source for source in first["sources"] if source.get("dataset_id") == "iett-gtfs-verisi")
+
+    assert first["ok"] is True
+    assert second["ok"] is True
+    assert first_payload["public_transport_stops"][0]["source_id"] == "outside-first-page"
+    assert len(ckan.datastore_calls) == 2
+    assert [call["offset"] for call in ckan.datastore_calls] == [0, 100]
+    assert gtfs_source["resource_id"] == "active-stops"
+    assert gtfs_source["source_updated_at"] == "2026-08-24T08:00:00Z"
+    assert gtfs_source["scope"] == "all_active_datastore_records"
+    assert gtfs_source["reported_total"] == 102
+    assert gtfs_source["received_total"] == 102
+    assert gtfs_source["accepted_total"] == 101
+    assert gtfs_source["skipped_total"] == 1
+    assert gtfs_source["last_successful_refresh_at"]
+    assert svc.geo.replace_calls == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ckan_factory", [MissingGtfsCkan, AmbiguousGtfsCkan])
+async def test_gtfs_resource_candidates_fail_without_replacing_existing_layer(tmp_path, ckan_factory):
+    svc = paged_gtfs_service(tmp_path, ckan_factory())
+    svc.geo.upsert_features(
+        [
+            {
+                "id": "gtfs_stop:old",
+                "source": "gtfs",
+                "feature_type": "public_transport_stop",
+                "source_id": "old",
+                "name": "Old Stop",
+                "lat": 40.991,
+                "lon": 29.0305,
+            }
+        ]
+    )
+
+    with pytest.raises(CkanError):
+        await svc._gtfs_stops()
+
+    nearby = svc.geo.nearby(lat=40.991, lon=29.0305, radius_m=100, limit=5, types=["public_transport_stop"])
+    assert [row["source_id"] for row in nearby] == ["old"]
+    assert svc.geo.replace_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_incomplete_gtfs_pagination_fails_without_replacing_existing_layer(tmp_path):
+    svc = paged_gtfs_service(tmp_path, IncompleteGtfsCkan())
+    svc.geo.upsert_features(
+        [
+            {
+                "id": "gtfs_stop:old",
+                "source": "gtfs",
+                "feature_type": "public_transport_stop",
+                "source_id": "old",
+                "name": "Old Stop",
+                "lat": 40.991,
+                "lon": 29.0305,
+            }
+        ]
+    )
+
+    with pytest.raises(CkanError, match="pagination incomplete"):
+        await svc._gtfs_stops()
+
+    nearby = svc.geo.nearby(lat=40.991, lon=29.0305, radius_m=100, limit=5, types=["public_transport_stop"])
+    assert [row["source_id"] for row in nearby] == ["old"]
+    assert svc.geo.replace_calls == 0
+
+
+def test_gtfs_resource_name_matches_stops_but_not_stop_times(tmp_path):
+    svc = service(tmp_path)
+
+    assert svc._is_gtfs_stops_resource({"name": "stops.txt"}) is True
+    assert svc._is_gtfs_stops_resource({"name": "stop_times.txt"}) is False
+
+
+def test_gtfs_coordinate_bounds_accept_edges_and_reject_outside(tmp_path):
+    svc = service(tmp_path)
+    min_lat, max_lat, min_lon, max_lon = ISTANBUL_GTFS_BOUNDS
+
+    assert svc._gtfs_stop_feature({"stop_id": "edge", "stop_lat": min_lat, "stop_lon": min_lon})
+    assert svc._gtfs_stop_feature({"stop_id": "outside", "stop_lat": min_lat - 0.01, "stop_lon": min_lon}) is None
+
+
+@pytest.mark.asyncio
+async def test_gtfs_outside_istanbul_coordinates_are_counted_as_skipped(tmp_path):
+    svc = paged_gtfs_service(tmp_path, OutsideIstanbulGtfsCkan())
+
+    cached = await svc._gtfs_stops()
+
+    assert cached.metadata["reported_total"] == 103
+    assert cached.metadata["accepted_total"] == 101
+    assert cached.metadata["skipped_total"] == 2
 
 
 @pytest.mark.asyncio

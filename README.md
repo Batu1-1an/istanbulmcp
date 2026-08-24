@@ -147,7 +147,7 @@ Tüm araç sonuçları standart bir cevap modeliyle döner: `summary`, `data`, `
 
 ## MCP Araçları
 
-Sunucu 21 salt okunur MCP aracı sağlar:
+Sunucu 23 salt okunur MCP aracı sağlar:
 
 ```text
 istanbul_health
@@ -171,6 +171,8 @@ istanbul_city_services_nearby
 istanbul_neighborhood_profile
 istanbul_transit_line_info
 istanbul_stops_for_line
+istanbul_transit_disruptions
+istanbul_planned_departures
 ```
 
 | Araç | Ne işe yarar? | Örnek soru |
@@ -196,6 +198,8 @@ istanbul_stops_for_line
 | `istanbul_neighborhood_profile` | Mahalle profilini sosyal yardım, bina stoku ve deprem senaryosu verileriyle oluşturur. | "Kadıköy Caferağa mahalle profili nedir?" |
 | `istanbul_transit_line_info` | İETT hat adı, tarife, uzunluk ve tahmini süre gibi temel hat bilgilerini getirir. | "500T hattının bilgileri nedir?" |
 | `istanbul_stops_for_line` | İETT hattının duraklarını yönlerine göre sıralı ve harita linkleriyle döndürür. | "500T hattı hangi duraklardan geçiyor?" |
+| `istanbul_transit_disruptions` | Güncel İETT duyurularını listeler; isteğe bağlı tam hat kodu filtresi ve limit destekler. | "34A için güncel bir duyuru var mı?" |
+| `istanbul_planned_departures` | Bir hattın planlanan ana durak kalkışlarını gün ve yön bilgisiyle listeler. Bu veri ara durak ETA'sı değildir. | "34A'nın bugün planlanan kalkışları neler?" |
 
 Parametreler, davranışlar ve sınırlar için [docs/tool-reference.md](docs/tool-reference.md) dosyasına bakın.
 
@@ -483,8 +487,10 @@ Temel komutlar:
 
 ```bash
 railway status
-railway up
+railway config plan --detailed-exit-code
 ```
+
+Merge sonrası yerel testler ve `railway config plan --detailed-exit-code` başarılıysa kontrollü deploy için `railway up --detach --yes` kullanılabilir. `railway config apply` ayrı altyapı değişiklikleri için ayrıca onay gerektirir; geçiş ve geri alma sınırı için [docs/deploy-railway.md](docs/deploy-railway.md) dosyasına bakın.
 
 ## Proje Planı
 

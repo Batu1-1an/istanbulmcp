@@ -120,3 +120,30 @@ def test_live_mcp_neighborhood_profile_tool():
     assert payload["ok"] is True
     assert len(payload["data"]) == 1
     assert payload["data"][0]["coverage"]["earthquake_scenario"] is True
+
+
+def test_live_mcp_transit_disruptions_tool():
+    payload, error, _elapsed = rpc_call(
+        os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
+        9010,
+        "istanbul_transit_disruptions",
+        {"limit": 5},
+    )
+
+    assert error is None
+    assert payload["ok"] is True
+    assert "iett" in {source["source"] for source in payload["sources"]}
+
+
+def test_live_mcp_planned_departures_tool():
+    payload, error, _elapsed = rpc_call(
+        os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
+        9011,
+        "istanbul_planned_departures",
+        {"line_code": "34A", "limit": 5},
+    )
+
+    assert error is None
+    assert payload["ok"] is True
+    assert "main-terminal" in payload["limits"]
+    assert "not intermediate-stop ETA" in payload["limits"]

@@ -292,3 +292,15 @@ async def istanbul_transit_line_info(line_code: str) -> dict:
 async def istanbul_stops_for_line(line_code: str) -> dict:
     """Return ordered IETT stops for a line."""
     return await TransitService(settings=get_settings()).stops_for_line(line_code)
+
+
+@mcp.tool()
+async def istanbul_transit_disruptions(line_code: str | None = None, limit: int | None = None) -> dict:
+    """Return current IETT disruptions, optionally filtered by line."""
+    return await TransitService(settings=get_settings()).disruptions(line_code=line_code, limit=limit)
+
+
+@mcp.tool()
+async def istanbul_planned_departures(line_code: str, limit: int | None = None) -> dict:
+    """Return planned main-terminal IETT departures, not intermediate-stop ETA."""
+    return await TransitService(settings=get_settings()).planned_departures(line_code=line_code, limit=limit)

@@ -38,6 +38,8 @@ CRITICAL_FLOWS = [
     Flow("Kadıköy mahalle profil adayları listeleniyor mu?", "istanbul_neighborhood_profile", {"district": "Kadıköy", "limit": 3}, min_data=1),
     Flow("34A hat bilgisi dönüyor mu?", "istanbul_transit_line_info", {"line_code": "34A"}, min_data=1),
     Flow("34A durakları dönüyor mu?", "istanbul_stops_for_line", {"line_code": "34A"}, min_data=1),
+    Flow("İETT duyuruları dönüyor mu?", "istanbul_transit_disruptions", {}, min_data=1),
+    Flow("34A planlanan kalkışları dönüyor mu?", "istanbul_planned_departures", {"line_code": "34A", "limit": 5}, min_data=1),
     Flow("Invalid radius envelope dönüyor mu?", "istanbul_air_quality_nearby", {"lat": 40.9909, "lon": 29.0303, "radius_m": 7000, "limit": 1}, expect_ok=False),
 ]
 
@@ -103,6 +105,44 @@ def run_flows(base_url: str) -> dict[str, Any]:
     }
 
 
+def run_performance_samples(base_url: str, sample_count: int) -> dict[str, Any] | None:
+    if sample_count <= 0:
+        return None
+
+    # Warm the same transit cache used by the timed calls, but exclude this
+    # request from the latency ratio.
+    rpc_call(base_url, 7000, "istanbul_transit_disruptions", {})
+    samples = []
+    for index in range(sample_count):
+        payload, error, elapsed = rpc_call(
+            base_url,
+            7001 + index,
+            "istanbul_transit_disruptions",
+            {"limit": 5},
+        )
+        samples.append(
+            {
+                "n": index + 1,
+                "elapsed_ms": round(elapsed * 1000, 1),
+                "within_five_seconds": error is None and isinstance(payload, dict) and payload.get("ok") is True and elapsed <= 5,
+                "ok": isinstance(payload, dict) and payload.get("ok") is True,
+                "error": error,
+            }
+        )
+    within_five_seconds = sum(1 for sample in samples if sample["within_five_seconds"])
+    ratio = within_five_seconds / sample_count
+    return {
+        "tool": "istanbul_transit_disruptions",
+        "warmup": "one untimed request",
+        "sample_count": sample_count,
+        "within_five_seconds": within_five_seconds,
+        "within_five_seconds_ratio": round(ratio, 4),
+        "threshold": 0.95,
+        "passed": ratio >= 0.95,
+        "samples": samples,
+    }
+
+
 def write_reports(report: dict[str, Any], output_dir: Path) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -125,6 +165,20 @@ def write_reports(report: dict[str, Any], output_dir: Path) -> tuple[Path, Path]
         summary = str(row.get("summary") or "").replace("|", "\\|")[:160]
         question = row["question"].replace("|", "\\|")
         lines.append(f"| {row['n']} | {result} | `{row['tool']}` | {question} | {row['data_count']} | {row['elapsed_ms']} | {summary} |")
+    performance = report.get("performance")
+    if performance:
+        lines.extend(
+            [
+                "",
+                "## Warm-cache performance",
+                "",
+                f"- Tool: `{performance['tool']}`",
+                f"- Samples: {performance['sample_count']} plus one untimed warm-up",
+                f"- Within 5 seconds: {performance['within_five_seconds']} ({performance['within_five_seconds_ratio']:.1%})",
+                f"- Threshold: {performance['threshold']:.1%}",
+                f"- Result: {'PASS' if performance['passed'] else 'FAIL'}",
+            ]
+        )
     md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return json_path, md_path
 
@@ -133,14 +187,25 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run opt-in live MCP UAT flows.")
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     parser.add_argument("--output-dir", default=".planning/reports")
+    parser.add_argument(
+        "--performance-samples",
+        type=int,
+        default=0,
+        help="Run a warm-cache transit timing sample (use at least 20).",
+    )
     args = parser.parse_args()
+    if 0 < args.performance_samples < 20:
+        parser.error("--performance-samples must be 0 or at least 20")
 
     report = run_flows(args.base_url)
+    report["performance"] = run_performance_samples(args.base_url, args.performance_samples)
     json_path, md_path = write_reports(report, Path(args.output_dir))
-    print(f"PASS={report['passed']} FAIL={report['failed']}")
+    performance = report["performance"]
+    performance_failed = bool(performance and not performance["passed"])
+    print(f"PASS={report['passed']} FAIL={report['failed']} PERFORMANCE_FAIL={int(performance_failed)}")
     print(f"JSON={json_path}")
     print(f"MD={md_path}")
-    return 0 if report["failed"] == 0 else 1
+    return 0 if report["failed"] == 0 and not performance_failed else 1
 
 
 if __name__ == "__main__":

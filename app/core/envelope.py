@@ -24,6 +24,13 @@ class Source(BaseModel):
     publisher: str = "Istanbul Metropolitan Municipality"
     dataset_id: str | None = None
     resource_id: str | None = None
+    source_updated_at: str | None = None
+    last_successful_refresh_at: str | None = None
+    scope: str | None = None
+    reported_total: int | None = None
+    received_total: int | None = None
+    accepted_total: int | None = None
+    skipped_total: int | None = None
     license: str | None = "Istanbul Metropolitan Municipality Open Data License"
     url: str | None = None
 

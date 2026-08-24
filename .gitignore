@@ -1,9 +1,14 @@
 .venv/
 .data/
+.agents/
+.pi/
 __pycache__/
 .pytest_cache/
 *.py[cod]
 .planning/
+.specify/
+specs/
+docs/research/
 node_modules/
 .wrangler/
 .dev.vars

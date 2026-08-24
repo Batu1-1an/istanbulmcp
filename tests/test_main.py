@@ -49,12 +49,14 @@ def test_status_returns_tool_inventory(monkeypatch, tmp_path):
     assert body["abuse_guard"]["concurrency"]["max_concurrent"] > 0
     assert "database_path" not in body["database"]
     tool_names = {tool["name"] for tool in body["tools"]}
-    assert body["tool_count"] >= 21
+    assert body["tool_count"] == 23
     assert "istanbul_search_datasets" in tool_names
     assert "istanbul_neighborhood_profile" in tool_names
     assert "istanbul_parking_by_district" in tool_names
     assert "istanbul_iski_active_faults" in tool_names
     assert "istanbul_iski_dam_occupancy" in tool_names
+    assert "istanbul_transit_disruptions" in tool_names
+    assert "istanbul_planned_departures" in tool_names
 
 
 def test_settings_join_iski_snapshot_parts(monkeypatch):
@@ -134,13 +136,39 @@ def test_http_requests_are_logged_as_json(caplog):
 
 
 def test_mcp_initialize_endpoint():
+    expected_required = {
+        "istanbul_health": [],
+        "istanbul_search_datasets": ["query"],
+        "istanbul_get_dataset": ["dataset_id"],
+        "istanbul_get_resource_schema": ["resource_id"],
+        "istanbul_query_resource": ["resource_id"],
+        "istanbul_nearby": ["lat", "lon"],
+        "istanbul_bbox_search": ["bbox"],
+        "istanbul_parking_nearby": ["lat", "lon"],
+        "istanbul_parking_by_district": ["district"],
+        "istanbul_metro_stations_nearby": ["lat", "lon"],
+        "istanbul_air_quality_nearby": ["lat", "lon"],
+        "istanbul_traffic_status": [],
+        "istanbul_iski_active_faults": [],
+        "istanbul_iski_fault_by_number": ["fault_number"],
+        "istanbul_iski_nearby_faults": ["lat", "lon"],
+        "istanbul_iski_dam_occupancy": [],
+        "istanbul_mobility_nearby": [],
+        "istanbul_city_services_nearby": [],
+        "istanbul_neighborhood_profile": ["district"],
+        "istanbul_transit_line_info": ["line_code"],
+        "istanbul_stops_for_line": ["line_code"],
+        "istanbul_transit_disruptions": [],
+        "istanbul_planned_departures": ["line_code"],
+    }
     with TestClient(create_app(), base_url="http://localhost") as client:
+        headers = {
+            "accept": "application/json, text/event-stream",
+            "content-type": "application/json",
+        }
         response = client.post(
             "/mcp/",
-            headers={
-                "accept": "application/json, text/event-stream",
-                "content-type": "application/json",
-            },
+            headers=headers,
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -152,9 +180,22 @@ def test_mcp_initialize_endpoint():
                 },
             },
         )
+        listed = client.post(
+            "/mcp/",
+            headers=headers,
+            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+        )
 
     assert response.status_code == 200
     assert response.json()["result"]["serverInfo"]["name"] == "istanbul-mcp"
+    assert listed.status_code == 200
+    listed_tools = listed.json()["result"]["tools"]
+    schemas = {tool["name"]: tool["inputSchema"] for tool in listed_tools}
+    assert len(listed_tools) == 23
+    assert set(schemas) == set(expected_required)
+    for name, required in expected_required.items():
+        assert schemas[name].get("required", []) == required
+        assert set(required) <= set(schemas[name].get("properties", {}))
 
 
 def test_mcp_rejects_null_jsonrpc_id():
