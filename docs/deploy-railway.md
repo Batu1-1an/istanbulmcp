@@ -16,11 +16,28 @@ railway config pull
 railway config plan --detailed-exit-code
 ```
 
-`railway config plan` is the normal verification command. It does not change Railway. Exit code `0` means no diff; exit code `2` means a diff is available for review. For the 2026-08-25 local verification, `railway status` plus the plan completed in 3.67 seconds and reported two expected configuration changes copied from the retired `railway.json`: Dockerfile builder and healthcheck/restart settings. It reported no service, replica, volume, or backup addition/drift. No `railway config apply` or `railway up` was run.
+`railway config plan` is the normal verification command. It does not change Railway. Exit code `0` means no diff; a non-zero detailed-plan result means a diff is available for review. For the 2026-08-25 local verification, `railway status` plus the plan completed in 3.67 seconds and reported two expected configuration changes copied from the retired `railway.json`: Dockerfile builder and healthcheck/restart settings. It reported no service, replica, volume, or backup addition/drift. `railway config apply` was not run.
 
 The imported `.railway/railway.ts` preserves the linked `istanbulmcp` service, the healthcheck at `/healthz` with a 30-second timeout, the existing single-region replica intent, and secret values through `preserve()`. The old `railway.json` was removed after those settings were represented in IaC.
 
 Rollback boundary: until an explicitly approved `railway config apply` or deploy is run, Railway production has not changed and there is no production rollback to perform. To roll back this local migration, restore the previous tracked files or revert the local IaC commit; do not apply a rollback command by default.
+
+## Production deploy — 2026-08-25
+
+After commit `46ebfdf` was fast-forward merged to `main`, the application was deployed with:
+
+```bash
+railway up --detach --yes
+```
+
+Deployment `028bdb05-7249-40f5-a0c1-cba0a949cbe5` completed with `SUCCESS`. Post-deploy smoke checks passed:
+
+- `/healthz`: `ok=true`
+- `/readyz`: `ready=true`, SQLite WAL active, schema version `1`
+- `/status`: `ok=true`, `tool_count=23`
+- MCP `tools/list`: `23` tools, including `istanbul_transit_disruptions` and `istanbul_planned_departures`
+
+The IaC changes remain plan-only; `railway config apply` was not run.
 
 Set environment variables from `.env.example` as needed. At minimum, Railway should provide `PORT`; the app defaults to `.data/istanbul_mcp.sqlite3` for SQLite. Do not add a volume or backup solely to support this feature.
 
