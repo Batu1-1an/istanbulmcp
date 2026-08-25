@@ -1,0 +1,33 @@
+{
+  "Success": true,
+  "Data": [
+    {
+      "LineCode": "M7",
+      "LineName": "Yıldız-Mahmutbey",
+      "Status": "Çalışıyor",
+      "Description": "Seferler normal devam ediyor.",
+      "UpdatedAt": null
+    },
+    {
+      "LineCode": "T1",
+      "LineName": "Kabataş-Bağcılar",
+      "Status": "Sefer değişikliği",
+      "Description": "Kabataş yönünde gecikme yaşanıyor.",
+      "UpdatedAt": "2026-08-25T10:15:00+03:00"
+    },
+    {
+      "LineCode": "F1",
+      "LineName": "Taksim-Kabataş",
+      "Status": "Arıza",
+      "Description": "Teknik çalışma nedeniyle seferler sınırlı.",
+      "UpdatedAt": null
+    },
+    {
+      "LineCode": "TF1",
+      "LineName": "Maçka-Taşkışla",
+      "Status": "İptal",
+      "Description": "Seferler geçici olarak durduruldu.",
+      "UpdatedAt": null
+    }
+  ]
+}

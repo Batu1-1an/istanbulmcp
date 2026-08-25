@@ -63,6 +63,10 @@ class Settings:
     ckan_resource_cache_ttl_seconds: int = 900
     iett_line_cache_ttl_seconds: int = 900
     iett_stops_cache_ttl_seconds: int = 900
+    transport_disruptions_cache_ttl_seconds: int = 120
+    transport_notice_rate_capacity: int = 2
+    transport_notice_rate_refill_per_second: float = 0.5
+    transport_notice_rate_max_wait_seconds: float = 0.2
     source_cache_max_entries: int = 1024
     mcp_max_body_bytes: int = 256 * 1024
     mcp_rate_limit_capacity: int = 60
@@ -169,6 +173,10 @@ def get_settings() -> Settings:
         ckan_resource_cache_ttl_seconds=_int_env("CKAN_RESOURCE_CACHE_TTL_SECONDS", 900),
         iett_line_cache_ttl_seconds=_int_env("IETT_LINE_CACHE_TTL_SECONDS", 900),
         iett_stops_cache_ttl_seconds=_int_env("IETT_STOPS_CACHE_TTL_SECONDS", 900),
+        transport_disruptions_cache_ttl_seconds=_int_env("TRANSPORT_DISRUPTIONS_CACHE_TTL_SECONDS", 120),
+        transport_notice_rate_capacity=_int_env("TRANSPORT_NOTICE_RATE_CAPACITY", 2),
+        transport_notice_rate_refill_per_second=_float_env("TRANSPORT_NOTICE_RATE_REFILL_PER_SECOND", 0.5),
+        transport_notice_rate_max_wait_seconds=_float_env("TRANSPORT_NOTICE_RATE_MAX_WAIT_SECONDS", 0.2),
         source_cache_max_entries=_int_env("SOURCE_CACHE_MAX_ENTRIES", 1024),
         mcp_max_body_bytes=_int_env("MCP_MAX_BODY_BYTES", 256 * 1024),
         mcp_rate_limit_capacity=_int_env("MCP_RATE_LIMIT_CAPACITY", 60),

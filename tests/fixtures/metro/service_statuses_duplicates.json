@@ -1,0 +1,19 @@
+{
+  "Success": true,
+  "Data": [
+    {
+      "LineCode": "M7",
+      "LineName": "Yıldız-Mahmutbey",
+      "Status": "Arıza",
+      "Description": "Teknik arıza.",
+      "UpdatedAt": null
+    },
+    {
+      "LineCode": "M7",
+      "LineName": "Yıldız-Mahmutbey",
+      "Status": "Arıza",
+      "Description": "Teknik arıza.",
+      "UpdatedAt": null
+    }
+  ]
+}

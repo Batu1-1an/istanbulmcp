@@ -8,6 +8,7 @@ from app.services.city import CityService
 from app.services.catalog import CatalogService
 from app.services.iski import IskiService
 from app.services.neighborhood import NeighborhoodService
+from app.services.disruptions import TransportDisruptionService
 from app.services.transit import TransitService
 from app.storage.db import public_readiness, readiness
 
@@ -298,6 +299,22 @@ async def istanbul_stops_for_line(line_code: str) -> dict:
 async def istanbul_transit_disruptions(line_code: str | None = None, limit: int | None = None) -> dict:
     """Return current IETT disruptions, optionally filtered by line."""
     return await TransitService(settings=get_settings()).disruptions(line_code=line_code, limit=limit)
+
+
+@mcp.tool()
+async def istanbul_transport_disruptions(
+    mode: str | None = None,
+    operator: str | None = None,
+    line: str | None = None,
+    limit: int | None = None,
+) -> dict:
+    """Return current official disruptions and service announcements across supported transport operators."""
+    return await TransportDisruptionService(settings=get_settings()).disruptions(
+        mode=mode,
+        operator=operator,
+        line=line,
+        limit=limit,
+    )
 
 
 @mcp.tool()

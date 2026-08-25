@@ -22,6 +22,11 @@ class Freshness(BaseModel):
 class Source(BaseModel):
     name: str
     publisher: str = "Istanbul Metropolitan Municipality"
+    operator: str | None = None
+    modes: list[str] | None = None
+    coverage_kind: Literal["live_status", "official_announcements"] | None = None
+    coverage_status: Literal["checked", "unavailable"] | None = None
+    last_checked_at: str | None = None
     dataset_id: str | None = None
     resource_id: str | None = None
     source_updated_at: str | None = None

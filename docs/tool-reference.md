@@ -61,10 +61,13 @@ Neighborhood matching normalizes Turkish characters, source mojibake variants su
 - `istanbul_transit_line_info(line_code)`
 - `istanbul_stops_for_line(line_code)`
 - `istanbul_transit_disruptions(line_code?, limit?)`
+- `istanbul_transport_disruptions(mode?, operator?, line?, limit?)`
 - `istanbul_planned_departures(line_code, limit?)`
 
 IETT SOAP services may be unavailable during nightly maintenance. Transit tools return structured warnings/errors rather than inventing missing data.
 
 `istanbul_transit_disruptions` returns non-empty current IETT announcements, optionally filtered by an exact normalized `line_code`. `limit` defaults to 20 and is capped at 100. Empty announcement messages are omitted; an empty filtered result is still a successful envelope. Live IETT payloads may also provide a human-readable `route_label`; it is kept separate from the actual line code.
+
+`istanbul_transport_disruptions` combines four official scopes: IETT and Metro İstanbul live service statuses, Şehir Hatları cancellation announcements, and Marmaray official urgent notices. `mode` accepts `bus`, `metro`, `tram`, `funicular`, `cable_car`, `ferry`, or `suburban_rail`; `operator` accepts `iett`, `metro_istanbul`, `sehir_hatlari`, or `marmaray`. `line` is trimmed and matches either normalized `line_code` or `route_label` by exact case-insensitive equality, without moving a route label into the line-code field. The default limit is 20, the maximum is 100, and each source result is cached for 120 seconds. Source coverage is reported at the top level in `sources[]` using `coverage_status=checked|unavailable`; partial failures preserve successful data and report `freshness=unknown`. Unsupported live operators (İDO, Turyol, Dentur, minibüs, and taksi-dolmuş) are listed in `limits[]`, not presented as checked sources. Metro equipment faults, ETA, route planning, and GTFS `stop_times` archiving are outside this tool.
 
 `istanbul_planned_departures` requires a normalized `line_code` and uses the IETT planned-service schedule endpoint. `limit` defaults to 20 and is capped at 100. Results preserve direction, route, day type, and planned departure time, and include the explicit limits `main-terminal planned departures` and `not intermediate-stop ETA`. They are scheduled main-terminal departures, not live intermediate-stop arrival estimates.

@@ -45,11 +45,13 @@ def test_status_returns_tool_inventory(monkeypatch, tmp_path):
     assert body["limits"]["mcp_request_guard"]["max_body_bytes"] > 0
     assert "air_quality" in body["limits"]["source_rate_limits"]
     assert "iski" in body["limits"]["source_rate_limits"]
+    assert "transport_notice" in body["limits"]["source_rate_limits"]
+    assert body["limits"]["cache_ttl_seconds"]["transport_disruptions"] == 120
     assert body["abuse_guard"]["rate_limit"]["capacity"] > 0
     assert body["abuse_guard"]["concurrency"]["max_concurrent"] > 0
     assert "database_path" not in body["database"]
     tool_names = {tool["name"] for tool in body["tools"]}
-    assert body["tool_count"] == 23
+    assert body["tool_count"] == 24
     assert "istanbul_search_datasets" in tool_names
     assert "istanbul_neighborhood_profile" in tool_names
     assert "istanbul_parking_by_district" in tool_names
@@ -57,6 +59,7 @@ def test_status_returns_tool_inventory(monkeypatch, tmp_path):
     assert "istanbul_iski_dam_occupancy" in tool_names
     assert "istanbul_transit_disruptions" in tool_names
     assert "istanbul_planned_departures" in tool_names
+    assert "istanbul_transport_disruptions" in tool_names
 
 
 def test_settings_join_iski_snapshot_parts(monkeypatch):
@@ -160,6 +163,7 @@ def test_mcp_initialize_endpoint():
         "istanbul_stops_for_line": ["line_code"],
         "istanbul_transit_disruptions": [],
         "istanbul_planned_departures": ["line_code"],
+        "istanbul_transport_disruptions": [],
     }
     with TestClient(create_app(), base_url="http://localhost") as client:
         headers = {
@@ -191,7 +195,7 @@ def test_mcp_initialize_endpoint():
     assert listed.status_code == 200
     listed_tools = listed.json()["result"]["tools"]
     schemas = {tool["name"]: tool["inputSchema"] for tool in listed_tools}
-    assert len(listed_tools) == 23
+    assert len(listed_tools) == 24
     assert set(schemas) == set(expected_required)
     for name, required in expected_required.items():
         assert schemas[name].get("required", []) == required

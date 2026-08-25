@@ -39,6 +39,8 @@ Deployment `028bdb05-7249-40f5-a0c1-cba0a949cbe5` completed with `SUCCESS`. Post
 
 The IaC changes remain plan-only; `railway config apply` was not run.
 
+The historical production smoke above predates the local US5 multi-mode increment and therefore records the then-current `23`-tool deployment. The current local build has `24` tools, including `istanbul_transport_disruptions`; it has not been deployed as part of this implementation.
+
 Set environment variables from `.env.example` as needed. At minimum, Railway should provide `PORT`; the app defaults to `.data/istanbul_mcp.sqlite3` for SQLite. Do not add a volume or backup solely to support this feature.
 
 ## ISKI Relay

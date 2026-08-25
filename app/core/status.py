@@ -31,6 +31,7 @@ TOOL_SOURCES = {
     "istanbul_transit_line_info": "iett",
     "istanbul_stops_for_line": "iett",
     "istanbul_transit_disruptions": "iett",
+    "istanbul_transport_disruptions": "mixed_transport_official",
     "istanbul_planned_departures": "iett",
 }
 
@@ -68,6 +69,7 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
                 "ckan_resource": settings.ckan_resource_cache_ttl_seconds,
                 "iett_line": settings.iett_line_cache_ttl_seconds,
                 "iett_stops": settings.iett_stops_cache_ttl_seconds,
+                "transport_disruptions": settings.transport_disruptions_cache_ttl_seconds,
                 "ispark": settings.ispark_cache_ttl_seconds,
                 "metro": settings.metro_cache_ttl_seconds,
                 "air_quality_station": settings.air_quality_station_cache_ttl_seconds,
@@ -101,6 +103,11 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
                     "capacity": settings.iski_rate_capacity,
                     "refill_per_second": settings.iski_rate_refill_per_second,
                     "max_wait_seconds": settings.iski_rate_max_wait_seconds,
+                },
+                "transport_notice": {
+                    "capacity": settings.transport_notice_rate_capacity,
+                    "refill_per_second": settings.transport_notice_rate_refill_per_second,
+                    "max_wait_seconds": settings.transport_notice_rate_max_wait_seconds,
                 },
             },
             "mcp_request_guard": {

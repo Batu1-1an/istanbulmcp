@@ -57,6 +57,16 @@ def metro_rate_limiter() -> AsyncTokenBucket:
 
 
 @lru_cache
+def transport_notice_rate_limiter() -> AsyncTokenBucket:
+    settings = get_settings()
+    return AsyncTokenBucket(
+        capacity=settings.transport_notice_rate_capacity,
+        refill_per_second=settings.transport_notice_rate_refill_per_second,
+        max_wait_seconds=settings.transport_notice_rate_max_wait_seconds,
+    )
+
+
+@lru_cache
 def traffic_rate_limiter() -> AsyncTokenBucket:
     settings = get_settings()
     return AsyncTokenBucket(

@@ -148,6 +148,45 @@ def test_live_mcp_transit_disruptions_line_filter_preserves_line_code():
     assert all(row["line_code"] == "34A" for row in payload["data"])
 
 
+@pytest.mark.parametrize(
+    ("request_id", "args", "expected_operator", "expected_mode"),
+    [
+        (9013, {"limit": 5}, None, None),
+        (9014, {"mode": "metro", "limit": 5}, "metro_istanbul", "metro"),
+        (9015, {"mode": "ferry", "limit": 5}, "sehir_hatlari", "ferry"),
+        (9016, {"mode": "suburban_rail", "limit": 5}, "marmaray", "suburban_rail"),
+    ],
+)
+def test_live_mcp_transport_disruptions_coverage_flows(request_id, args, expected_operator, expected_mode):
+    payload, error, _elapsed = rpc_call(
+        os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
+        request_id,
+        "istanbul_transport_disruptions",
+        args,
+    )
+
+    assert error is None
+    assert "freshness" in payload
+    assert payload["sources"]
+    if expected_operator:
+        assert {source["operator"] for source in payload["sources"]} == {expected_operator}
+        assert all(row["mode"] == expected_mode for row in payload["data"])
+
+
+def test_live_mcp_transport_disruptions_partial_coverage_is_explicit():
+    payload, error, _elapsed = rpc_call(
+        os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
+        9017,
+        "istanbul_transport_disruptions",
+        {"operator": "marmaray", "limit": 5},
+    )
+
+    assert error is None
+    assert payload["sources"]
+    assert payload["sources"][0]["coverage_status"] in {"checked", "unavailable"}
+    assert "warnings" in payload
+
+
 def test_live_mcp_planned_departures_tool():
     payload, error, _elapsed = rpc_call(
         os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),

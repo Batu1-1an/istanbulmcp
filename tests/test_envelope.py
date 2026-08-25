@@ -46,3 +46,28 @@ def test_source_preserves_gtfs_refresh_context():
     assert payload["reported_total"] == 102
     assert payload["accepted_total"] == 101
     assert payload["skipped_total"] == 1
+
+
+def test_source_preserves_transport_coverage_context_without_changing_envelope_shape():
+    source = Source(
+        name="Metro İstanbul Service Status",
+        operator="metro_istanbul",
+        modes=["metro", "tram", "funicular", "cable_car"],
+        coverage_kind="live_status",
+        coverage_status="checked",
+        last_checked_at="2026-08-25T12:00:00Z",
+    )
+
+    payload = success_envelope(
+        summary="checked",
+        data=[{"operator": "metro_istanbul", "mode": "tram", "message": "delay"}],
+        sources=[source],
+        freshness=Freshness(status="fresh", ttl_seconds=120),
+    )
+
+    assert payload["data"][0]["operator"] == "metro_istanbul"
+    assert "source" not in payload["data"][0]
+    assert payload["sources"][0]["operator"] == "metro_istanbul"
+    assert payload["sources"][0]["coverage_status"] == "checked"
+    assert payload["sources"][0]["modes"] == ["metro", "tram", "funicular", "cable_car"]
+    assert payload["freshness"]["ttl_seconds"] == 120

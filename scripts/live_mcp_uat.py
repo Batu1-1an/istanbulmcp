@@ -39,6 +39,10 @@ CRITICAL_FLOWS = [
     Flow("34A hat bilgisi dönüyor mu?", "istanbul_transit_line_info", {"line_code": "34A"}, min_data=1),
     Flow("34A durakları dönüyor mu?", "istanbul_stops_for_line", {"line_code": "34A"}, min_data=1),
     Flow("İETT duyuruları dönüyor mu?", "istanbul_transit_disruptions", {}, min_data=1),
+    Flow("Tüm desteklenen ulaşım aksaklıkları dönüyor mu?", "istanbul_transport_disruptions", {"limit": 5}),
+    Flow("Metro aksaklık kapsamı dönüyor mu?", "istanbul_transport_disruptions", {"mode": "metro", "limit": 5}),
+    Flow("Vapur iptal duyuruları dönüyor mu?", "istanbul_transport_disruptions", {"mode": "ferry", "limit": 5}),
+    Flow("Marmaray duyuruları dönüyor mu?", "istanbul_transport_disruptions", {"mode": "suburban_rail", "limit": 5}),
     Flow("34A planlanan kalkışları dönüyor mu?", "istanbul_planned_departures", {"line_code": "34A", "limit": 5}, min_data=1),
     Flow("Invalid radius envelope dönüyor mu?", "istanbul_air_quality_nearby", {"lat": 40.9909, "lon": 29.0303, "radius_m": 7000, "limit": 1}, expect_ok=False),
 ]
@@ -111,13 +115,13 @@ def run_performance_samples(base_url: str, sample_count: int) -> dict[str, Any] 
 
     # Warm the same transit cache used by the timed calls, but exclude this
     # request from the latency ratio.
-    rpc_call(base_url, 7000, "istanbul_transit_disruptions", {})
+    rpc_call(base_url, 7000, "istanbul_transport_disruptions", {})
     samples = []
     for index in range(sample_count):
         payload, error, elapsed = rpc_call(
             base_url,
             7001 + index,
-            "istanbul_transit_disruptions",
+            "istanbul_transport_disruptions",
             {"limit": 5},
         )
         samples.append(
@@ -132,7 +136,7 @@ def run_performance_samples(base_url: str, sample_count: int) -> dict[str, Any] 
     within_five_seconds = sum(1 for sample in samples if sample["within_five_seconds"])
     ratio = within_five_seconds / sample_count
     return {
-        "tool": "istanbul_transit_disruptions",
+        "tool": "istanbul_transport_disruptions",
         "warmup": "one untimed request",
         "sample_count": sample_count,
         "within_five_seconds": within_five_seconds,
