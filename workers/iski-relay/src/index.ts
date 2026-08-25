@@ -2,6 +2,11 @@ const UPSTREAMS = {
   "/iski/faults": "https://harita.iski.gov.tr/data/mahallelerKesinti.geojson",
   "/iski/dams": "https://harita.iski.gov.tr/data/baraj.json",
 } as const;
+const TRANSPORT_UPSTREAMS = {
+  "/transport/sehir-hatlari": "https://www.sehirhatlari.istanbul/tr/iptal-seferler",
+} as const;
+const SEHIR_HATLARI_INDEX_URL = "https://sehirhatlari.istanbul/Default.aspx";
+const SEHIR_HATLARI_ORIGIN = "https://sehirhatlari.istanbul";
 
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const UPSTREAM_TIMEOUT_MS = 4_000;
@@ -10,10 +15,12 @@ const EDEVLET_FAULTS_URL =
 const EDEVLET_DAMS_URL = "https://www.turkiye.gov.tr/istanbul-su-ve-kanalizasyon-idaresi-baraj-doluluk-oranlari";
 
 type RelayPath = keyof typeof UPSTREAMS;
+type TransportRelayPath = keyof typeof TRANSPORT_UPSTREAMS;
 
 export type RelayEnv = {
   CACHE: KVNamespace;
   RELAY_TOKEN: string;
+  TRANSPORT_RELAY_TOKEN?: string;
 };
 
 export type RelayFetch = typeof fetch;
@@ -117,6 +124,10 @@ function isRelayPath(pathname: string): pathname is RelayPath {
   return Object.hasOwn(UPSTREAMS, pathname);
 }
 
+function isTransportRelayPath(pathname: string): pathname is TransportRelayPath {
+  return Object.hasOwn(TRANSPORT_UPSTREAMS, pathname);
+}
+
 function isTimeout(error: unknown): boolean {
   return error instanceof DOMException && (error.name === "TimeoutError" || error.name === "AbortError");
 }
@@ -157,6 +168,82 @@ async function readBoundedBody(response: Response): Promise<ArrayBuffer> {
     offset += chunk.byteLength;
   }
   return body.buffer;
+}
+
+async function fetchOfficialHtml(url: string, referer: string, fetcher: RelayFetch): Promise<Response> {
+  let upstream: Response;
+  try {
+    upstream = await fetcher(url, {
+      headers: {
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8",
+        Referer: referer,
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "same-origin",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36",
+        "Upgrade-Insecure-Requests": "1",
+      },
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (isTimeout(error)) throw new RelayUpstreamError("Upstream request timed out", 504);
+    throw new RelayUpstreamError("Upstream request failed", 502);
+  }
+  return upstream;
+}
+
+function cancellationDetailPath(html: string): string | null {
+  for (const match of html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+    const href = match[1].trim();
+    const label = match[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    if (
+      href.startsWith("/tr/duyurular/") &&
+      !href.includes("//") &&
+      /iptal/i.test(`${href} ${label}`)
+    ) {
+      return href;
+    }
+  }
+  return null;
+}
+
+function htmlResponse(body: ArrayBuffer, contentType: string | null): Response {
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Type": contentType ?? "text/html; charset=utf-8",
+      "X-Content-Type-Options": "nosniff",
+      "X-Relay-Source": "sehir_hatlari",
+    },
+  });
+}
+
+async function fetchTransportHtml(pathname: TransportRelayPath, fetcher: RelayFetch): Promise<Response> {
+  const primaryUrl = TRANSPORT_UPSTREAMS[pathname];
+  const primary = await fetchOfficialHtml(primaryUrl, "https://www.sehirhatlari.istanbul/tr/", fetcher);
+  if (primary.ok) return htmlResponse(await readBoundedBody(primary), primary.headers.get("Content-Type"));
+
+  console.error(JSON.stringify({ event: "transport_upstream_http_error", status: primary.status }));
+  const index = await fetchOfficialHtml(SEHIR_HATLARI_INDEX_URL, `${SEHIR_HATLARI_ORIGIN}/`, fetcher);
+  if (!index.ok) {
+    console.error(JSON.stringify({ event: "transport_index_http_error", status: index.status }));
+    throw new RelayUpstreamError("Upstream request failed", 502);
+  }
+
+  const indexBody = await readBoundedBody(index);
+  const detailPath = cancellationDetailPath(new TextDecoder().decode(indexBody));
+  if (!detailPath) throw new RelayUpstreamError("Official cancellation notice link is unavailable", 502);
+
+  const detailUrl = `${SEHIR_HATLARI_ORIGIN}${detailPath}`;
+  const detail = await fetchOfficialHtml(detailUrl, SEHIR_HATLARI_INDEX_URL, fetcher);
+  if (!detail.ok) {
+    console.error(JSON.stringify({ event: "transport_detail_http_error", status: detail.status }));
+    throw new RelayUpstreamError("Upstream request failed", 502);
+  }
+
+  return htmlResponse(await readBoundedBody(detail), detail.headers.get("Content-Type"));
 }
 
 async function fetchJson(pathname: RelayPath, upstreamUrl: string, fetcher: RelayFetch): Promise<Response> {
@@ -396,13 +483,32 @@ export async function handleRequest(
   cache?: RelayCache,
   waitUntil?: (promise: Promise<unknown>) => void,
 ): Promise<Response> {
-  const { pathname } = new URL(request.url);
+  const url = new URL(request.url);
+  const { pathname } = url;
 
   if (request.method !== "GET") {
     return jsonError("Method not allowed", 405, { Allow: "GET" });
   }
   if (pathname === "/healthz") {
     return Response.json({ ok: true, service: "istanbul-iski-relay" });
+  }
+  if (isTransportRelayPath(pathname)) {
+    if (url.search) return jsonError("Not found", 404);
+    if (!env.TRANSPORT_RELAY_TOKEN) {
+      console.error(JSON.stringify({ event: "relay_configuration_error", binding: "TRANSPORT_RELAY_TOKEN" }));
+      return jsonError("Relay is not configured", 500);
+    }
+    const authorization = request.headers.get("Authorization") ?? "";
+    const expected = `Bearer ${env.TRANSPORT_RELAY_TOKEN}`;
+    if (!(await tokensMatch(authorization, expected))) {
+      return jsonError("Unauthorized", 401);
+    }
+    try {
+      return await fetchTransportHtml(pathname, fetcher);
+    } catch (error) {
+      if (error instanceof RelayUpstreamError) return jsonError(error.message, error.status);
+      return jsonError("Upstream request failed", 502);
+    }
   }
   if (!isRelayPath(pathname)) {
     return jsonError("Not found", 404);

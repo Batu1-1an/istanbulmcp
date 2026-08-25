@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from html.parser import HTMLParser
 from typing import Any
+import unicodedata
 
 import httpx
 
@@ -12,6 +13,13 @@ from app.core.source_limits import transport_notice_rate_limiter
 
 class SehirHatlariPayloadError(RuntimeError):
     pass
+
+
+OFFICIAL_PAGE_HEADERS = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36",
+}
 
 
 class _CancellationParser(HTMLParser):
@@ -91,17 +99,100 @@ class _CancellationParser(HTMLParser):
         }
 
 
+class _OfficialCancellationParser(HTMLParser):
+    """Parse the current Şehir Hatları notice-detail HTML shape.
+
+    The page is a WebForms document whose cancellation content is a single
+    dated notice. It does not provide a trustworthy line identifier, so the
+    alternate shape intentionally produces a global ferry record only.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.page_seen = False
+        self.date_seen = False
+        self.content_depth = 0
+        self.date_depth = 0
+        self.date_parts: list[str] = []
+        self.message_parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributes = dict(attrs)
+        classes = set((attributes.get("class") or "").split())
+        if self.content_depth:
+            self.content_depth += 1
+            if tag == "p" and "news-detail-date" in classes:
+                self.date_depth = self.content_depth
+                self.date_parts = []
+            return
+        if tag == "div" and "notice-detail-text-content" in classes:
+            self.page_seen = True
+            self.content_depth = 1
+
+    def handle_data(self, data: str) -> None:
+        if not self.content_depth:
+            return
+        if self.date_depth:
+            self.date_parts.append(data)
+        else:
+            self.message_parts.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if not self.content_depth:
+            return
+        if self.date_depth == self.content_depth:
+            self.date_seen = True
+            self.date_depth = 0
+        if tag == "div" and self.content_depth == 1:
+            self.content_depth = 0
+            return
+        self.content_depth -= 1
+
+    @property
+    def date(self) -> str | None:
+        return self._clean("".join(self.date_parts))
+
+    @property
+    def message(self) -> str | None:
+        return self._clean(" ".join(self.message_parts))
+
+    @staticmethod
+    def _clean(value: Any) -> str | None:
+        if value is None:
+            return None
+        text = " ".join(str(value).split())
+        return text or None
+
+    @staticmethod
+    def is_explicit_empty(message: str) -> bool:
+        folded = unicodedata.normalize("NFKD", message.casefold())
+        folded = "".join(char for char in folded if not unicodedata.combining(char))
+        folded = folded.replace("ı", "i")
+        return any(
+            phrase in folded
+            for phrase in (
+                "iptal seferimiz bulunmamaktadir",
+                "iptal seferi bulunmamaktadir",
+                "iptal sefer bulunmamaktadir",
+            )
+        )
+
+
 class SehirHatlariClient:
     def __init__(
         self,
         *,
         url: str = "https://sehirhatlari.istanbul/tr/iptal-seferler",
         timeout: float = 15.0,
+        relay_url: str | None = None,
+        relay_token: str | None = None,
         http_client: httpx.AsyncClient | None = None,
         rate_limiter: RateLimiter | None = None,
     ) -> None:
         self.url = url
         self.timeout = timeout
+        self.relay_url = relay_url.rstrip("/") if relay_url else None
+        self.relay_token = relay_token.strip() if relay_token else None
         self._client = http_client
         self._rate_limiter = rate_limiter or transport_notice_rate_limiter()
 
@@ -110,30 +201,64 @@ class SehirHatlariClient:
         parser = _CancellationParser()
         parser.feed(html)
         parser.close()
-        if not parser.page_seen:
+        if parser.page_seen:
+            if not parser.articles and not parser.empty_seen:
+                raise SehirHatlariPayloadError("Sehir Hatlari cancellation page markup is unrecognized")
+            return parser.articles
+
+        official_parser = _OfficialCancellationParser()
+        official_parser.feed(html)
+        official_parser.close()
+        if not official_parser.page_seen or not official_parser.date_seen:
             raise SehirHatlariPayloadError("Sehir Hatlari cancellation page markup is unrecognized")
-        if not parser.articles and not parser.empty_seen:
-            raise SehirHatlariPayloadError("Sehir Hatlari cancellation page markup is unrecognized")
-        return parser.articles
+        message = official_parser.message
+        if not message:
+            raise SehirHatlariPayloadError("Sehir Hatlari official notice has no message")
+        if _OfficialCancellationParser.is_explicit_empty(message):
+            return []
+        return [
+            {
+                "operator": "sehir_hatlari",
+                "mode": "ferry",
+                "line_code": None,
+                "route_label": None,
+                "event_type": "cancellation",
+                "message": message,
+                "updated_at": official_parser.date,
+            }
+        ]
 
     async def _get_html(self) -> str:
         await self._rate_limiter.acquire("sehir_hatlari")
+        request_url = self.relay_url if self.relay_url and self.relay_token else self.url
+        request_headers = dict(OFFICIAL_PAGE_HEADERS)
+        if request_url == self.relay_url and self.relay_token:
+            request_headers["Authorization"] = f"Bearer {self.relay_token}"
+
+        try:
+            response = await self._request(request_url, request_headers)
+            response.raise_for_status()
+        except httpx.HTTPStatusError:
+            if request_url == self.url:
+                raise
+            response = await self._request(self.url, OFFICIAL_PAGE_HEADERS)
+            response.raise_for_status()
+        return response.text
+
+    async def _request(self, url: str, headers: dict[str, str]) -> httpx.Response:
         if self._client is None:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await request_with_retries(
+                return await request_with_retries(
                     client,
                     "GET",
-                    self.url,
+                    url,
                     rate_limiter=self._rate_limiter,
-                    headers={"Accept": "text/html"},
+                    headers=headers,
                 )
-        else:
-            response = await request_with_retries(
-                self._client,
-                "GET",
-                self.url,
-                rate_limiter=self._rate_limiter,
-                headers={"Accept": "text/html"},
-            )
-        response.raise_for_status()
-        return response.text
+        return await request_with_retries(
+            self._client,
+            "GET",
+            url,
+            rate_limiter=self._rate_limiter,
+            headers=headers,
+        )

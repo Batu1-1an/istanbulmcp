@@ -4,6 +4,8 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
+import httpx
+
 from app.connectors.iett import IettClient
 from app.connectors.marmaray import MarmarayClient
 from app.connectors.metro import MetroClient
@@ -53,8 +55,15 @@ class TransportDisruptionService:
         self.settings = settings
         self.iett = iett_client or IettClient(timeout=settings.request_timeout_seconds)
         self.metro = metro_client or MetroClient(timeout=settings.request_timeout_seconds)
-        self.sehir_hatlari = sehir_hatlari_client or SehirHatlariClient(timeout=settings.request_timeout_seconds)
-        self.marmaray = marmaray_client or MarmarayClient(timeout=settings.request_timeout_seconds)
+        self.sehir_hatlari = sehir_hatlari_client or SehirHatlariClient(
+            timeout=settings.request_timeout_seconds,
+            relay_url=settings.sehir_hatlari_relay_url,
+            relay_token=settings.sehir_hatlari_relay_token,
+        )
+        self.marmaray = marmaray_client or MarmarayClient(
+            timeout=settings.request_timeout_seconds,
+            api_basic_token=settings.marmaray_api_basic_token,
+        )
 
     async def disruptions(
         self,
@@ -204,7 +213,10 @@ class TransportDisruptionService:
                 coverage_status="unavailable",
                 last_checked_at=checked_at,
             )
-            warning = f"{spec.operator} kaynağı kullanılamadı: {type(exc).__name__}."
+            detail = type(exc).__name__
+            if isinstance(exc, httpx.HTTPStatusError):
+                detail = f"{detail} (HTTP {exc.response.status_code})"
+            warning = f"{spec.operator} kaynağı kullanılamadı: {detail}."
             return source, warning, []
 
     @staticmethod

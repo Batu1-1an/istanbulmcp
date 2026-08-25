@@ -56,6 +56,10 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
             "iski_api_fallback_enabled": bool(settings.iski_api_bearer_token),
             "iski_relay_enabled": bool(settings.iski_relay_base_url and settings.iski_relay_token),
             "iski_relay_timeout_seconds": settings.iski_relay_timeout_seconds,
+            "marmaray_api_fallback_enabled": bool(settings.marmaray_api_basic_token),
+            "sehir_hatlari_relay_enabled": bool(
+                settings.sehir_hatlari_relay_url and settings.sehir_hatlari_relay_token
+            ),
             "iski_snapshot_fallback_enabled": {
                 "faults": bool(settings.iski_faults_snapshot_json),
                 "dams": bool(settings.iski_dams_snapshot_json),

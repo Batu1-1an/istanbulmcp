@@ -67,6 +67,9 @@ class Settings:
     transport_notice_rate_capacity: int = 2
     transport_notice_rate_refill_per_second: float = 0.5
     transport_notice_rate_max_wait_seconds: float = 0.2
+    marmaray_api_basic_token: str | None = None
+    sehir_hatlari_relay_url: str | None = None
+    sehir_hatlari_relay_token: str | None = None
     source_cache_max_entries: int = 1024
     mcp_max_body_bytes: int = 256 * 1024
     mcp_rate_limit_capacity: int = 60
@@ -177,6 +180,9 @@ def get_settings() -> Settings:
         transport_notice_rate_capacity=_int_env("TRANSPORT_NOTICE_RATE_CAPACITY", 2),
         transport_notice_rate_refill_per_second=_float_env("TRANSPORT_NOTICE_RATE_REFILL_PER_SECOND", 0.5),
         transport_notice_rate_max_wait_seconds=_float_env("TRANSPORT_NOTICE_RATE_MAX_WAIT_SECONDS", 0.2),
+        marmaray_api_basic_token=_str_env("MARMARAY_API_BASIC_TOKEN"),
+        sehir_hatlari_relay_url=_str_env("SEHIR_HATLARI_RELAY_URL"),
+        sehir_hatlari_relay_token=_str_env("SEHIR_HATLARI_RELAY_TOKEN"),
         source_cache_max_entries=_int_env("SOURCE_CACHE_MAX_ENTRIES", 1024),
         mcp_max_body_bytes=_int_env("MCP_MAX_BODY_BYTES", 256 * 1024),
         mcp_rate_limit_capacity=_int_env("MCP_RATE_LIMIT_CAPACITY", 60),

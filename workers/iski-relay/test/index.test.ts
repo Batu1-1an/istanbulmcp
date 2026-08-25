@@ -10,7 +10,7 @@ import worker, {
   type RelayKv,
 } from "../src/index";
 
-const env = { RELAY_TOKEN: "test-relay-token" } as RelayEnv;
+const env = { RELAY_TOKEN: "test-relay-token", TRANSPORT_RELAY_TOKEN: "test-transport-token" } as RelayEnv;
 
 function request(path: string, init?: RequestInit): Request {
   return new Request(`https://relay.example${path}`, init);
@@ -19,6 +19,12 @@ function request(path: string, init?: RequestInit): Request {
 function authorizedRequest(path: string, init?: RequestInit): Request {
   const headers = new Headers(init?.headers);
   headers.set("Authorization", `Bearer ${env.RELAY_TOKEN}`);
+  return request(path, { ...init, headers });
+}
+
+function authorizedTransportRequest(path: string, init?: RequestInit): Request {
+  const headers = new Headers(init?.headers);
+  headers.set("Authorization", `Bearer ${env.TRANSPORT_RELAY_TOKEN}`);
   return request(path, { ...init, headers });
 }
 
@@ -42,6 +48,92 @@ describe("ISKI relay", () => {
 
     expect(response.status).toBe(405);
     expect(response.headers.get("Allow")).toBe("GET");
+  });
+
+  it("serves the fixed official Şehir Hatları HTML route with separate authentication", async () => {
+    let upstream = "";
+    const fetcher: RelayFetch = async (input) => {
+      upstream = String(input);
+      return new Response("<main data-page=\"cancelled-trips\"></main>", {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      });
+    };
+
+    const response = await handleRequest(
+      authorizedTransportRequest("/transport/sehir-hatlari"),
+      env,
+      fetcher,
+    );
+
+    expect(response.status).toBe(200);
+    expect(upstream).toBe("https://www.sehirhatlari.istanbul/tr/iptal-seferler");
+    expect(response.headers.get("Content-Type")).toContain("text/html");
+    await expect(response.text()).resolves.toContain("cancelled-trips");
+  });
+
+  it("rejects unknown transport relay paths and query-provided targets", async () => {
+    let called = false;
+    const fetcher: RelayFetch = async () => {
+      called = true;
+      return new Response("unexpected");
+    };
+
+    const response = await handleRequest(
+      authorizedTransportRequest("/transport/sehir-hatlari?url=https://example.com/private"),
+      env,
+      fetcher,
+    );
+
+    expect(response.status).toBe(404);
+    expect(called).toBe(false);
+  });
+
+  it("bounds the fixed transport HTML response", async () => {
+    const fetcher: RelayFetch = async () =>
+      new Response("x", { headers: { "Content-Length": String(2 * 1024 * 1024 + 1) } });
+
+    const response = await handleRequest(
+      authorizedTransportRequest("/transport/sehir-hatlari"),
+      env,
+      fetcher,
+    );
+
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toEqual({ error: "Upstream response is too large" });
+  });
+
+  it("uses the official announcement index when the canonical page is blocked", async () => {
+    const calls: string[] = [];
+    const fetcher: RelayFetch = async (input) => {
+      const url = String(input);
+      calls.push(url);
+      if (url === "https://www.sehirhatlari.istanbul/tr/iptal-seferler") {
+        return new Response("blocked", { status: 403 });
+      }
+      if (url === "https://sehirhatlari.istanbul/Default.aspx") {
+        return new Response(
+          '<a href="/tr/duyurular/23-agustos-iptal-seferler-duyurusu-3783"><p>23 Ağustos İptal Seferler Duyurusu</p></a>',
+        );
+      }
+      expect(url).toBe("https://sehirhatlari.istanbul/tr/duyurular/23-agustos-iptal-seferler-duyurusu-3783");
+      return new Response("<div class=notice-detail-text-content>official notice</div>", {
+        headers: { "Content-Type": "text/html" },
+      });
+    };
+
+    const response = await handleRequest(
+      authorizedTransportRequest("/transport/sehir-hatlari"),
+      env,
+      fetcher,
+    );
+
+    expect(response.status).toBe(200);
+    expect(calls).toEqual([
+      "https://www.sehirhatlari.istanbul/tr/iptal-seferler",
+      "https://sehirhatlari.istanbul/Default.aspx",
+      "https://sehirhatlari.istanbul/tr/duyurular/23-agustos-iptal-seferler-duyurusu-3783",
+    ]);
+    await expect(response.text()).resolves.toContain("official notice");
   });
 
   it("does not proxy unknown routes or query-provided targets", async () => {

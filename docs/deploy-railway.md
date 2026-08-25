@@ -39,7 +39,42 @@ Deployment `028bdb05-7249-40f5-a0c1-cba0a949cbe5` completed with `SUCCESS`. Post
 
 The IaC changes remain plan-only; `railway config apply` was not run.
 
-The historical production smoke above predates the local US5 multi-mode increment and therefore records the then-current `23`-tool deployment. The current local build has `24` tools, including `istanbul_transport_disruptions`; it has not been deployed as part of this implementation.
+The historical production smoke above predates the local US5 multi-mode increment and therefore records the then-current `23`-tool deployment. The approved follow-up deployment below contains the current `24`-tool build.
+
+## Production deploy — unified transport disruptions — 2026-08-25
+
+The current working tree was deployed with `railway up --detach --yes --message "Deploy unified transport disruptions"`.
+
+- Deployment: `7556e1bf-88a5-4c54-840e-d333e9c3efef`
+- Status: `SUCCESS`, one running SFO instance
+- `/healthz`: `ok=true`
+- `/readyz`: `ready=true`, SQLite WAL active, schema version `1`
+- `/status`: `ok=true`, `tool_count=24`, `istanbul_transport_disruptions` registered, disruption cache TTL `120`
+- MCP smoke: unified all-source call `ok=true` with 5 records; IETT and Metro sources `checked`; Şehir Hatları and Marmaray `unavailable` because their current HTML responses do not contain the recognized static page markers.
+- Existing `istanbul_transit_disruptions`: `ok=true`, 5 records.
+- Metro mode: `ok=true`, fresh empty result from a checked source.
+- Ferry and suburban-rail mode calls: structured `ok=false`, `freshness=broken`, source-specific warnings; no data was fabricated.
+
+The live HTML limitation is intentionally surfaced as source unavailability rather than treated as an empty “no disruption” result. No Railway volume, backup, replica increase, or new service was added.
+
+## Production source compatibility follow-up — 2026-08-25
+
+The live source check found that Şehir Hatları now serves a WebForms `notice-detail-text-content` block with a date-only value and the explicit message `İptal seferimiz bulunmamaktadır.`. The connector now recognizes that official shape, returns a checked empty result for that message, and preserves a global active notice without inventing a line code or time.
+
+At the time of this historical compatibility check, the Marmaray page served an Angular shell (`<app-root>`) without rendered notices and the first API probe returned HTTP `401 Unauthorized`; the connector then kept Marmaray as `coverage_status=unavailable` rather than treating the shell as an empty result.
+
+That historical compatibility build was deployed as `ca148d57-2ac8-40e3-9fac-211779745148`, followed by warning-format deployment `659e36f9-90c0-49c7-bb85-3ccc4631e6be`; current source-access results are recorded below.
+
+## Production source access resolution — 2026-08-25
+
+The remaining source-access implementation is deployed:
+
+- `MARMARAY_API_BASIC_TOKEN` is stored as a Railway secret. When the official Marmaray page is an Angular shell, the connector calls the official frontend API, validates the list shape, and returns source title/date fields only. The production `suburban_rail` MCP call is `ok=true`, `coverage_status=checked`, and currently has `data_count=0`.
+- The existing Cloudflare Worker now has authenticated fixed-target `GET /transport/sehir-hatlari`, bounded HTML handling, a separate `TRANSPORT_RELAY_TOKEN`, and an official announcement-index fallback. It accepts no user-supplied target URL.
+- The Railway service was moved to the single allowed Hobby-plan region `EU West` and deployed as `4ff48882-ecfa-4f66-bcd4-c977fcd880cd`. `/healthz`, `/readyz`, and `/status` passed; `/status` reports both source fallback flags enabled and `tool_count=24`.
+- Verification: Python `182 passed, 16 skipped`; Worker `25 passed`; Worker typecheck and dry-run passed. Real MCP calls confirmed Marmaray `checked` and all-source partial success.
+
+Şehir Hatları is still an external access blocker: the official canonical page returns HTTP `403` through the relay and through the EU Railway direct fallback. The service therefore correctly returns `coverage_status=unavailable` and never invents an empty ferry result. Completing this last production item requires an approved upstream allowlist or authorized Turkish egress path (tracked as T063); no third-party proxy or fabricated data was added.
 
 Set environment variables from `.env.example` as needed. At minimum, Railway should provide `PORT`; the app defaults to `.data/istanbul_mcp.sqlite3` for SQLite. Do not add a volume or backup solely to support this feature.
 

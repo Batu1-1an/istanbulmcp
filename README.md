@@ -203,7 +203,7 @@ istanbul_planned_departures
 | `istanbul_transport_disruptions` | İETT, Metro İstanbul, Şehir Hatları ve Marmaray'ın doğrulanmış resmî arıza/sefer duyurularını tek sonuçta birleştirir; ulaşım türü, işletme, hat etiketi ve limit filtresi destekler. | "Metro ve vapurlarda güncel aksaklık var mı?" |
 | `istanbul_planned_departures` | Bir hattın planlanan ana durak kalkışlarını gün ve yön bilgisiyle listeler. Bu veri ara durak ETA'sı değildir. | "34A'nın bugün planlanan kalkışları neler?" |
 
-`istanbul_transport_disruptions` yalnızca dört doğrulanmış resmî kapsamı kontrol eder: İETT ve Metro İstanbul canlı hizmet durumları; Şehir Hatları iptal seferleri; Marmaray resmî son dakika duyuruları. `mode`, `operator`, `line` ve `limit` isteğe bağlıdır. `line`, `line_code` veya `route_label` üzerinde büyük/küçük harften bağımsız tam eşleşir. Kaynaklar 120 saniye önbelleklenir; kısmi kaynak hataları `sources[].coverage_status=unavailable`, `freshness=unknown` ve `warnings` ile görünür. İDO, Turyol, Dentur, minibüs ve taksi-dolmuş canlı kapsama dahil değildir ve cevap `limits[]` içinde belirtilir. Metro ekipman arızası, rota motoru, ETA ve GTFS `stop_times` arşivi bu aracın kapsamı değildir.
+`istanbul_transport_disruptions` yalnızca dört doğrulanmış resmî kapsamı kontrol eder: İETT ve Metro İstanbul canlı hizmet durumları; Şehir Hatları iptal seferleri; Marmaray resmî son dakika duyuruları. `mode`, `operator`, `line` ve `limit` isteğe bağlıdır. `line`, `line_code` veya `route_label` üzerinde büyük/küçük harften bağımsız tam eşleşir. Kaynaklar 120 saniye önbelleklenir; kısmi kaynak hataları `sources[].coverage_status=unavailable`, `freshness=unknown` ve `warnings` ile görünür. Şehir Hatları sayfası genel ve tarihli bir duyuru verirse sistem hat kodu uydurmaz; relay veya doğrudan resmi sayfa erişimi `403` ile engellenirse bunu açıkça `unavailable` bildirir. Marmaray Angular kabuğu döndürdüğünde, yapılandırılmış `MARMARAY_API_BASIC_TOKEN` ile resmi frontend API’si kullanılır; API boş liste döndürürse bu checked empty sonucudur. İDO, Turyol, Dentur, minibüs ve taksi-dolmuş canlı kapsama dahil değildir ve cevap `limits[]` içinde belirtilir. Metro ekipman arızası, rota motoru, ETA ve GTFS `stop_times` arşivi bu aracın kapsamı değildir.
 
 Parametreler, davranışlar ve sınırlar için [docs/tool-reference.md](docs/tool-reference.md) dosyasına bakın.
 
@@ -453,6 +453,9 @@ python scripts/live_mcp_uat.py
 - `ISKI_DAMS_CACHE_TTL_SECONDS`
 - `ISKI_FAULTS_STALE_IF_ERROR_SECONDS`
 - `ISKI_DAMS_STALE_IF_ERROR_SECONDS`
+- `MARMARAY_API_BASIC_TOKEN`
+- `SEHIR_HATLARI_RELAY_URL`
+- `SEHIR_HATLARI_RELAY_TOKEN`
 
 Herkese açık MCP koruma limitleri:
 

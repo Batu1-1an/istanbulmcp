@@ -1,5 +1,6 @@
 import asyncio
 
+import httpx
 import pytest
 
 from app.core.settings import Settings
@@ -198,6 +199,18 @@ async def test_partial_source_failure_preserves_data_and_marks_unavailable(tmp_p
     metro_source = next(source for source in result["sources"] if source["operator"] == "metro_istanbul")
     assert metro_source["coverage_status"] == "unavailable"
     assert {row["operator"] for row in result["data"]} == {"iett", "sehir_hatlari", "marmaray"}
+
+
+@pytest.mark.asyncio
+async def test_http_source_failure_warning_preserves_upstream_status_without_body(tmp_path):
+    request = httpx.Request("GET", "https://example.test/notice")
+    response = httpx.Response(403, request=request)
+    error = httpx.HTTPStatusError("blocked", request=request, response=response)
+
+    result = await service(tmp_path, sehir=FakeSehirHatlari(error=error)).disruptions(mode="ferry")
+
+    assert result["ok"] is False
+    assert result["warnings"] == ["sehir_hatlari kaynağı kullanılamadı: HTTPStatusError (HTTP 403)."]
 
 
 @pytest.mark.asyncio
