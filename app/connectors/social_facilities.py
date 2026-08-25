@@ -144,6 +144,8 @@ def canonical_url(value: Any, *, base_url: str | None = None) -> str | None:
     parsed = urlparse(resolved)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         return None
+    if parsed.hostname in {"tesislerimiz.ibb.istanbul", "www.tesislerimiz.ibb.istanbul"}:
+        resolved = parsed._replace(scheme="https").geturl()
     return resolved
 
 
@@ -359,6 +361,7 @@ class SocialFacilitiesClient:
         links: list[tuple[str, str]] = []
         seen_pages: set[str] = set()
         page_url = self.catalog_url
+        page_partial = False
         for _ in range(max(1, min(self.settings.social_facilities_max_catalog_pages, 50))):
             if page_url in seen_pages:
                 break
@@ -367,6 +370,12 @@ class SocialFacilitiesClient:
                 html = await self._get_text(client, page_url, referer=self.catalog_url)
             except Exception as exc:
                 warnings.append(f"Live social-facility catalog unavailable: {type(exc).__name__}.")
+                if links:
+                    # Keep valid rows from pages already read.  A later-page
+                    # outage is partial coverage, not a reason to discard the
+                    # successful first page or label the whole source broken.
+                    page_partial = True
+                    break
                 self._live_failed = True
                 return [], None, 0, 0, True
             parser = _CatalogParser()
@@ -423,7 +432,7 @@ class SocialFacilitiesClient:
             raise
         except Exception as exc:
             warnings.append(f"Reservation enrichment unavailable: {type(exc).__name__}.")
-        return rows, reported, skipped, duplicates, bool(skipped or len(rows) < reported)
+        return rows, reported, skipped, duplicates, bool(page_partial or skipped or len(rows) < reported)
 
     async def _get_text(self, client: httpx.AsyncClient, url: str, *, referer: str | None = None) -> str:
         response = await request_with_retries(

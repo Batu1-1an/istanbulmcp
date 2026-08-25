@@ -8,6 +8,7 @@ import pytest
 from app.connectors.social_facilities import (
     SocialFacilitiesClient,
     SocialFacilitiesSourceError,
+    canonical_url,
     canonical_identity,
     implicit_coordinate,
     parse_map_coordinates,
@@ -28,6 +29,12 @@ def test_detail_parser_converts_map_lon_lat_and_keeps_url_separate():
     assert row["longitude"] == pytest.approx(28.9825361)
     assert row["source_id"] is None
     assert row["detail_url"].endswith("cihangir-sosyal-tesisi")
+
+
+def test_official_catalogue_http_pagination_is_upgraded_to_https():
+    assert canonical_url("http://tesislerimiz.ibb.istanbul/tesisler?page=2") == (
+        "https://tesislerimiz.ibb.istanbul/tesisler?page=2"
+    )
 
 
 def test_reservation_parser_requires_conservative_card_match():
@@ -94,6 +101,40 @@ async def test_client_uses_get_only_and_parses_catalog_details():
     assert not any("reservation/create" in url for _, url in calls)
     assert payload.reported_total == payload.accepted_total if hasattr(payload, "accepted_total") else True
     await client._http_client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_later_page_failure_preserves_first_page_rows_without_fallback_only():
+    catalog = "https://fixture.test/tesisler"
+    page_two = "https://tesislerimiz.ibb.istanbul/tesisler?page=2"
+    responses = {
+        catalog: httpx.Response(200, text=(FIXTURES / "catalog_page_1.html").read_text(encoding="utf-8"), request=httpx.Request("GET", catalog)),
+        page_two: httpx.Response(503, text="temporarily unavailable", request=httpx.Request("GET", page_two)),
+        "https://fixture.test/tesis/cihangir-sosyal-tesisi": httpx.Response(200, text=(FIXTURES / "detail_cihangir.html").read_text(encoding="utf-8"), request=httpx.Request("GET", "https://fixture.test/tesis/cihangir-sosyal-tesisi")),
+        "https://fixture.test/tesis/beykoz-koru": httpx.Response(200, text=(FIXTURES / "detail_beykoz.html").read_text(encoding="utf-8"), request=httpx.Request("GET", "https://fixture.test/tesis/beykoz-koru")),
+        "https://fixture.test/": httpx.Response(200, text=(FIXTURES / "reservation_home.html").read_text(encoding="utf-8"), request=httpx.Request("GET", "https://fixture.test/")),
+    }
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return responses.get(str(request.url), httpx.Response(404, request=request))
+
+    http_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    client = SocialFacilitiesClient(
+        settings=Settings(
+            social_facilities_catalog_url=catalog,
+            social_facilities_reservation_url="https://fixture.test/",
+            social_facilities_ckan_download_url="https://fixture.test/fallback.xlsx",
+            social_facilities_max_catalog_pages=2,
+            social_facilities_request_attempts=1,
+        ),
+        http_client=http_client,
+    )
+    payload = await client.fetch()
+    assert len(payload.rows) == 2
+    assert payload.partial_source is True
+    assert payload.fallback_only is False
+    assert any("partially" in warning.lower() for warning in payload.warnings)
+    await http_client.aclose()
 
 
 def test_identity_does_not_replace_source_id_with_detail_url():
