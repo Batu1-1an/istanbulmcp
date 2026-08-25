@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from html.parser import HTMLParser
 from typing import Any
+import re
+from urllib.parse import urljoin, urlparse
 import unicodedata
 
 import httpx
@@ -178,11 +180,143 @@ class _OfficialCancellationParser(HTMLParser):
         )
 
 
+class _ScheduleCatalogParser(HTMLParser):
+    """Collect canonical route links from the official tariff index."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._href: str | None = None
+        self._parts: list[str] = []
+        self.links: list[tuple[str, str]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag != "a" or self._href is not None:
+            return
+        href = dict(attrs).get("href")
+        if href:
+            self._href = href.strip()
+            self._parts = []
+
+    def handle_data(self, data: str) -> None:
+        if self._href is not None:
+            self._parts.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag != "a" or self._href is None:
+            return
+        label = _clean_text("".join(self._parts))
+        if label:
+            self.links.append((self._href, label))
+        self._href = None
+        self._parts = []
+
+
+class _ScheduleDetailParser(HTMLParser):
+    """Parse the published timetable tables used by Şehir Hatları route pages."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.page_title: str | None = None
+        self._heading_parts: list[str] = []
+        self._heading_tag: str | None = None
+        self._table: dict[str, Any] | None = None
+        self._capture: str | None = None
+        self._parts: list[str] = []
+        self.tables: list[dict[str, Any]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributes = dict(attrs)
+        classes = set((attributes.get("class") or "").split())
+        if tag in {"h1", "h2"} and self._heading_tag is None:
+            self._heading_tag = tag
+            self._heading_parts = []
+        if tag == "table" and "single-table" in classes:
+            self._table = {"info": "", "stop_name": None, "times": []}
+        if self._table is None:
+            return
+        if tag == "td" and "table-head-information" in classes:
+            self._capture = "info"
+            self._parts = []
+        elif tag == "th":
+            self._capture = "stop"
+            self._parts = []
+        elif tag == "tr" and "hours-tr" in classes:
+            self._capture = "time"
+            self._parts = []
+
+    def handle_data(self, data: str) -> None:
+        if self._heading_tag is not None:
+            self._heading_parts.append(data)
+        if self._capture is not None:
+            self._parts.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._heading_tag == tag:
+            if self.page_title is None:
+                self.page_title = _clean_text("".join(self._heading_parts))
+            self._heading_tag = None
+            self._heading_parts = []
+        if self._table is None:
+            return
+        if self._capture == "info" and tag == "td":
+            self._table["info"] = _clean_text("".join(self._parts)) or ""
+            self._capture = None
+            self._parts = []
+        elif self._capture == "stop" and tag == "th":
+            self._table["stop_name"] = _clean_text("".join(self._parts))
+            self._capture = None
+            self._parts = []
+        elif self._capture == "time" and tag == "tr":
+            raw = _clean_text("".join(self._parts))
+            if raw:
+                match = re.search(r"\b(\d{1,2}:\d{2})\b", raw)
+                if match:
+                    self._table["times"].append(
+                        {"time": match.group(1), "note": raw[len(match.group(1)):].strip() or None}
+                    )
+            self._capture = None
+            self._parts = []
+        if tag == "table":
+            if self._table.get("stop_name") and self._table.get("times"):
+                self.tables.append(self._table)
+            self._table = None
+
+
+def _clean_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = " ".join(str(value).split())
+    return text or None
+
+
+def _normalized_route(value: str) -> str:
+    folded = unicodedata.normalize("NFKD", value.casefold())
+    folded = "".join(char for char in folded if not unicodedata.combining(char)).replace("ı", "i")
+    return " ".join(folded.split())
+
+
+def _day_type(value: str) -> str:
+    folded = unicodedata.normalize("NFKD", value.casefold())
+    folded = "".join(char for char in folded if not unicodedata.combining(char))
+    if "her gun" in folded:
+        return "all_days"
+    if "cumartesi" in folded:
+        return "saturday"
+    if "pazar" in folded:
+        return "sunday"
+    if "resmi tatil" in folded or "resm tatil" in folded:
+        return "holiday"
+    if "hafta ici" in folded:
+        return "weekday"
+    return "unknown"
+
+
 class SehirHatlariClient:
     def __init__(
         self,
         *,
         url: str = "https://sehirhatlari.istanbul/tr/iptal-seferler",
+        schedule_index_url: str = "https://sehirhatlari.istanbul/tr/seferler",
         timeout: float = 15.0,
         relay_url: str | None = None,
         relay_token: str | None = None,
@@ -190,11 +324,13 @@ class SehirHatlariClient:
         rate_limiter: RateLimiter | None = None,
     ) -> None:
         self.url = url
+        self.schedule_index_url = schedule_index_url
         self.timeout = timeout
         self.relay_url = relay_url.rstrip("/") if relay_url else None
         self.relay_token = relay_token.strip() if relay_token else None
         self._client = http_client
         self._rate_limiter = rate_limiter or transport_notice_rate_limiter()
+        self.last_schedule_index_url: str = "https://sehirhatlari.istanbul/tr/seferler"
 
     async def cancellations(self) -> list[dict[str, Any]]:
         html = await self._get_html()
@@ -235,15 +371,152 @@ class SehirHatlariClient:
         if request_url == self.relay_url and self.relay_token:
             request_headers["Authorization"] = f"Bearer {self.relay_token}"
 
-        try:
-            response = await self._request(request_url, request_headers)
-            response.raise_for_status()
-        except httpx.HTTPStatusError:
-            if request_url == self.url:
-                raise
-            response = await self._request(self.url, OFFICIAL_PAGE_HEADERS)
-            response.raise_for_status()
-        return response.text
+        last_error: Exception | None = None
+        candidates = [request_url]
+        if request_url != self.url:
+            candidates.append(self.url)
+        candidates.extend(candidate for candidate in self._cancellation_candidates() if candidate not in candidates)
+        for candidate in candidates:
+            try:
+                headers = request_headers if candidate == request_url else OFFICIAL_PAGE_HEADERS
+                response = await self._request(candidate, headers)
+                response.raise_for_status()
+                return response.text
+            except Exception as exc:
+                last_error = exc
+        if last_error is not None:
+            raise last_error
+        raise SehirHatlariPayloadError("Şehir Hatları cancellation source has no URL candidates")
+
+    def _cancellation_candidates(self) -> list[str]:
+        parsed = urlparse(self.url)
+        if parsed.hostname not in {"sehirhatlari.istanbul", "www.sehirhatlari.istanbul"}:
+            return [self.url]
+        return [
+            "https://www.sehirhatlari.istanbul/tr/iptal-seferler",
+            "https://sehirhatlari.istanbul/tr/iptal-seferler",
+            "https://sehirhatlari.istanbul/tr/duyurular/iptal-seferler-905",
+        ]
+
+    def _schedule_candidates(self, url: str) -> list[str]:
+        parsed = urlparse(url)
+        if parsed.hostname not in {"sehirhatlari.istanbul", "www.sehirhatlari.istanbul"}:
+            return [url]
+        path = parsed.path or "/"
+        return [
+            f"https://www.sehirhatlari.istanbul{path}",
+            f"https://sehirhatlari.istanbul{path}",
+        ]
+
+    def _is_allowed_schedule_url(self, url: str) -> bool:
+        parsed = urlparse(url)
+        if parsed.scheme != "https" or not parsed.hostname:
+            return False
+        configured_host = urlparse(self.schedule_index_url).hostname
+        if configured_host in {"sehirhatlari.istanbul", "www.sehirhatlari.istanbul"}:
+            allowed_hosts = {"sehirhatlari.istanbul", "www.sehirhatlari.istanbul"}
+        else:
+            allowed_hosts = {configured_host}
+        return parsed.hostname in allowed_hosts
+
+    async def _get_schedule_html(self, url: str) -> tuple[str, str]:
+        if not self._is_allowed_schedule_url(url):
+            raise SehirHatlariPayloadError("Şehir Hatları schedule URL is outside the canonical operator scope")
+        last_error: Exception | None = None
+        for candidate in self._schedule_candidates(url):
+            try:
+                response = await self._request(candidate, OFFICIAL_PAGE_HEADERS)
+                response.raise_for_status()
+                return response.text, candidate
+            except Exception as exc:
+                last_error = exc
+        if last_error is not None:
+            raise last_error
+        raise SehirHatlariPayloadError("Şehir Hatları schedule source has no URL candidates")
+
+    async def schedule_catalog(self) -> list[dict[str, str]]:
+        """Resolve published route labels to canonical official detail URLs."""
+        html, source_url = await self._get_schedule_html(self.schedule_index_url)
+        self.last_schedule_index_url = source_url
+        parser = _ScheduleCatalogParser()
+        parser.feed(html)
+        parser.close()
+        routes: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for href, label in parser.links:
+            detail_url = urljoin(source_url, href)
+            parsed = urlparse(detail_url)
+            path_parts = [part for part in parsed.path.split("/") if part]
+            if not self._is_allowed_schedule_url(detail_url) or len(path_parts) < 5 or "seferler" not in path_parts:
+                continue
+            if detail_url in seen:
+                continue
+            seen.add(detail_url)
+            routes.append(
+                {
+                    "route_label": label,
+                    "detail_url": detail_url,
+                    "source_url": source_url,
+                }
+            )
+        if not routes:
+            raise SehirHatlariPayloadError("Sehir Hatlari schedule index markup is unrecognized")
+        return routes
+
+    async def schedule_for_route(
+        self,
+        detail_url: str,
+        *,
+        route_label: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Parse published timetable rows from one canonical route detail page."""
+        html, source_url = await self._get_schedule_html(detail_url)
+        parser = _ScheduleDetailParser()
+        parser.feed(html)
+        parser.close()
+        if not parser.tables:
+            raise SehirHatlariPayloadError("Sehir Hatlari schedule detail markup is unrecognized")
+        label = self._route_label_from_heading(parser.page_title) or route_label
+        if not label:
+            raise SehirHatlariPayloadError("Sehir Hatlari schedule detail has no route label")
+        endpoints = [part.strip() for part in re.split(r"\s+-\s+", label) if part.strip()]
+        rows: list[dict[str, Any]] = []
+        for table in parser.tables:
+            stop_name = table["stop_name"]
+            direction = None
+            if len(endpoints) == 2 and _normalized_route(stop_name) == _normalized_route(endpoints[0]):
+                direction = endpoints[1]
+            elif len(endpoints) == 2 and _normalized_route(stop_name) == _normalized_route(endpoints[1]):
+                direction = endpoints[0]
+            day_type = _day_type(table.get("info") or "")
+            for item in table["times"]:
+                row = {
+                    "operator": "sehir_hatlari",
+                    "mode": "ferry",
+                    "route_label": label,
+                    "stop_name": stop_name,
+                    "direction": direction,
+                    "day_type": day_type,
+                    "planned_departure_time": item["time"],
+                    "stop_sequence": 1,
+                    "source_url": source_url,
+                    "source_updated_at": None,
+                }
+                if item.get("note"):
+                    row["schedule_note"] = item["note"]
+                rows.append(row)
+        if not rows:
+            raise SehirHatlariPayloadError("Sehir Hatlari schedule detail contains no departure times")
+        return rows
+
+    @staticmethod
+    def _route_label_from_heading(heading: str | None) -> str | None:
+        if not heading:
+            return None
+        match = re.search(r"(.+?)\s+Sefer(?:i|leri)\b", heading, flags=re.IGNORECASE)
+        if match:
+            return _clean_text(match.group(1))
+        return None
 
     async def _request(self, url: str, headers: dict[str, str]) -> httpx.Response:
         if self._client is None:

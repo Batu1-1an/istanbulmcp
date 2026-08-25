@@ -110,6 +110,67 @@ async def test_metro_service_statuses_keeps_duplicate_source_rows_for_service_de
 
 
 @pytest.mark.asyncio
+async def test_metro_service_statuses_maps_production_fields_and_active_flag():
+    async with client_for(
+        fixture_text("metro/service_statuses_production.json"),
+        url="https://example.test/metro/GetServiceStatuses",
+    ) as http_client:
+        rows = await MetroClient(base_url="https://example.test/metro", http_client=http_client).service_statuses()
+
+    assert rows == [
+        {
+            "operator": "metro_istanbul",
+            "mode": "metro",
+            "line_code": "M7",
+            "route_label": "Yıldız-Mahmutbey",
+            "event_type": "service_status",
+            "message": "Mecidiyeköy istasyonunda planlı çalışma nedeniyle sefer düzenlemesi.",
+            "updated_at": "2026-08-26T10:00:00+03:00",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_metro_announcements_preserve_open_ended_m7_notice():
+    notice_url = "https://example.test/metro/V3/GetAnnouncementsWithoutHtml/tr"
+    async with client_for(fixture_text("metro/announcements_m7.json"), url=notice_url) as http_client:
+        rows = await MetroClient(
+            base_url="https://example.test/metro",
+            announcements_url=notice_url,
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        ).announcements()
+
+    assert rows[0]["line_code"] == "M7"
+    assert rows[0]["route_label"] == "Yıldız-Mahmutbey"
+    assert rows[0]["event_type"] == "service_change"
+    assert "tamamlanıncaya kadar" in rows[0]["message"]
+    assert rows[0]["updated_at"] == "2026-07-27T00:01:00.000"
+
+
+@pytest.mark.asyncio
+async def test_metro_announcements_accept_empty_and_reject_malformed_payloads():
+    empty_url = "https://example.test/metro/V3/empty"
+    async with client_for(fixture_text("metro/announcements_empty.json"), url=empty_url) as http_client:
+        rows = await MetroClient(
+            announcements_url=empty_url,
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        ).announcements()
+    assert rows == []
+
+    malformed_url = "https://example.test/metro/V3/malformed"
+    async with client_for(fixture_text("metro/announcements_malformed.json"), url=malformed_url) as http_client:
+        client = MetroClient(
+            announcements_url=malformed_url,
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+        with pytest.raises(MetroPayloadError, match="list"):
+            await client.announcements()
+
+
+@pytest.mark.asyncio
 async def test_sehir_hatlari_client_parses_active_notice_without_fabricating_fields():
     async with client_for(
         fixture_text("sehir_hatlari/cancellations.html"),
@@ -222,6 +283,80 @@ async def test_sehir_hatlari_client_preserves_current_official_global_notice_fie
 
 
 @pytest.mark.asyncio
+async def test_sehir_hatlari_client_resolves_and_parses_published_schedule():
+    index_url = "https://example.test/seferler"
+    detail_url = "https://example.test/tr/seferler/ic-hatlar/istanbul-ici-hatlar/kadikoy-besiktas-165"
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == index_url:
+            return httpx.Response(200, text=fixture_text("sehir_hatlari/schedules_index.html"), request=request)
+        assert str(request.url) == detail_url
+        return httpx.Response(200, text=fixture_text("sehir_hatlari/schedule_detail_kadikoy_besiktas.html"), request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        client = SehirHatlariClient(
+            schedule_index_url=index_url,
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+        catalog = await client.schedule_catalog()
+        route = next(item for item in catalog if item["route_label"] == "KADIKÖY - BEŞİKTAŞ")
+        rows = await client.schedule_for_route(route["detail_url"], route_label=route["route_label"])
+
+    assert len(rows) == 5
+    assert rows[0]["route_label"] == "Kadıköy - Beşiktaş"
+    assert rows[0]["stop_name"] == "Kadıköy"
+    assert rows[0]["direction"] == "Beşiktaş"
+    assert rows[0]["day_type"] == "all_days"
+    assert rows[0]["planned_departure_time"] == "06:45"
+    assert rows[0]["schedule_note"] == "*"
+    assert rows[0]["source_url"] == detail_url
+
+
+@pytest.mark.asyncio
+async def test_sehir_hatlari_client_rejects_malformed_schedule_detail():
+    detail_url = "https://example.test/detail"
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text=fixture_text("sehir_hatlari/schedule_detail_malformed.html"), request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        client = SehirHatlariClient(
+            schedule_index_url="https://example.test/seferler",
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+        with pytest.raises(SehirHatlariPayloadError, match="detail markup"):
+            await client.schedule_for_route(detail_url, route_label="Kadıköy - Beşiktaş")
+
+
+@pytest.mark.asyncio
+async def test_sehir_hatlari_schedule_catalog_ignores_external_route_links():
+    index_url = "https://example.test/seferler"
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert str(request.url) == index_url
+        return httpx.Response(
+            200,
+            text=(
+                '<a href="/tr/seferler/ic-hatlar/istanbul-ici-hatlar/kadikoy-besiktas-165">'
+                "KADIKÖY - BEŞİKTAŞ</a>"
+                '<a href="https://evil.example/seferler/route">Kötü Rota</a>'
+            ),
+            request=request,
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        catalog = await SehirHatlariClient(
+            schedule_index_url=index_url,
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        ).schedule_catalog()
+
+    assert [item["route_label"] for item in catalog] == ["KADIKÖY - BEŞİKTAŞ"]
+
+
+@pytest.mark.asyncio
 async def test_sehir_hatlari_client_falls_back_to_official_page_after_relay_failure():
     relay_url = "https://relay.example/transport/sehir-hatlari"
     official_url = "https://example.test/sehir/iptal-seferler"
@@ -250,6 +385,35 @@ async def test_sehir_hatlari_client_falls_back_to_official_page_after_relay_fail
     assert rows == []
     assert calls[:3] == [(relay_url, "Bearer relay-token")] * 3
     assert calls[3:] == [(official_url, None)]
+
+
+@pytest.mark.asyncio
+async def test_sehir_hatlari_client_tries_official_canonical_candidates_after_403():
+    configured_url = "https://sehirhatlari.istanbul/tr/iptal-seferler"
+    candidates = [
+        "https://www.sehirhatlari.istanbul/tr/iptal-seferler",
+        configured_url,
+        "https://sehirhatlari.istanbul/tr/duyurular/iptal-seferler-905",
+    ]
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url) in candidates[:2]:
+            return httpx.Response(403, request=request)
+        return httpx.Response(
+            200,
+            text=fixture_text("sehir_hatlari/cancellations_official_active.html"),
+            request=request,
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        rows = await SehirHatlariClient(
+            url=configured_url,
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        ).cancellations()
+
+    assert rows[0]["event_type"] == "cancellation"
+    assert rows[0]["line_code"] is None
 
 
 @pytest.mark.asyncio

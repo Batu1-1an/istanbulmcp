@@ -149,7 +149,7 @@ Tüm araç sonuçları standart bir cevap modeliyle döner: `summary`, `data`, `
 
 ## MCP Araçları
 
-Sunucu 27 salt okunur MCP aracı sağlar:
+Sunucu 29 salt okunur MCP aracı sağlar:
 
 ```text
 istanbul_health
@@ -179,6 +179,7 @@ istanbul_transit_line_info
 istanbul_stops_for_line
 istanbul_transit_disruptions
 istanbul_transport_disruptions
+istanbul_ferry_schedules
 istanbul_planned_departures
 ```
 
@@ -211,9 +212,10 @@ istanbul_planned_departures
 | `istanbul_stops_for_line` | İETT hattının duraklarını yönlerine göre sıralı ve harita linkleriyle döndürür. | "500T hattı hangi duraklardan geçiyor?" |
 | `istanbul_transit_disruptions` | Güncel İETT duyurularını listeler; isteğe bağlı tam hat kodu filtresi ve limit destekler. | "34A için güncel bir duyuru var mı?" |
 | `istanbul_transport_disruptions` | İETT, Metro İstanbul, Şehir Hatları ve Marmaray'ın doğrulanmış resmî arıza/sefer duyurularını tek sonuçta birleştirir; ulaşım türü, işletme, hat etiketi ve limit filtresi destekler. | "Metro ve vapurlarda güncel aksaklık var mı?" |
+| `istanbul_ferry_schedules` | Şehir Hatları'nın resmî rota detaylarından yayımlanmış normal vapur tarife/saatlerini listeler. Statik plandır; canlı kalkış, gecikme veya ETA değildir. | "Kadıköy-Beşiktaş vapur saatleri nedir?" |
 | `istanbul_planned_departures` | Bir hattın planlanan ana durak kalkışlarını gün ve yön bilgisiyle listeler. Bu veri ara durak ETA'sı değildir. | "34A'nın bugün planlanan kalkışları neler?" |
 
-`istanbul_transport_disruptions` yalnızca dört doğrulanmış resmî kapsamı kontrol eder: İETT ve Metro İstanbul canlı hizmet durumları; Şehir Hatları iptal seferleri; Marmaray resmî son dakika duyuruları. `mode`, `operator`, `line` ve `limit` isteğe bağlıdır. `line`, `line_code` veya `route_label` üzerinde büyük/küçük harften bağımsız tam eşleşir. Kaynaklar 120 saniye önbelleklenir; kısmi kaynak hataları `sources[].coverage_status=unavailable`, `freshness=unknown` ve `warnings` ile görünür. Şehir Hatları sayfası genel ve tarihli bir duyuru verirse sistem hat kodu uydurmaz; relay veya doğrudan resmi sayfa erişimi `403` ile engellenirse bunu açıkça `unavailable` bildirir. Marmaray Angular kabuğu döndürdüğünde, yapılandırılmış `MARMARAY_API_BASIC_TOKEN` ile resmi frontend API’si kullanılır; API boş liste döndürürse bu checked empty sonucudur. İDO, Turyol, Dentur, minibüs ve taksi-dolmuş canlı kapsama dahil değildir ve cevap `limits[]` içinde belirtilir. Metro ekipman arızası, rota motoru, ETA ve GTFS `stop_times` arşivi bu aracın kapsamı değildir.
+`istanbul_transport_disruptions` yalnızca dört doğrulanmış resmî aksaklık kapsamını kontrol eder: İETT ve Metro İstanbul canlı durumları ile Metro resmî planlı duyuruları; Şehir Hatları iptal/sefer düzenlemesi duyuruları; Marmaray resmî son dakika duyuruları. Metro canlı durum ve planlı duyurular ayrı `sources[]` coverage kayıtlarıdır; biri okunamazsa genel “aksaklık yok” özeti verilmez. `istanbul_ferry_schedules` normal tarife için ayrı çalışır: önce resmî tarife indeksinden tam rota eşleşmesi yapar, sonra canonical rota HTML tablosunu parse eder. Bu sonuç `coverage_kind=published_timetable` ve statik tarife uyarısı taşır; canlı kalkış, gecikme veya ETA değildir. `mode`, `operator`, `line` ve `limit` isteğe bağlıdır. `line`, `line_code` veya `route_label` üzerinde büyük/küçük harften bağımsız tam eşleşir. Kaynaklar 120 saniye önbelleklenir; kısmi kaynak hataları `sources[].coverage_status=unavailable`, `freshness=unknown` ve `warnings` ile görünür. Şehir Hatları sayfası genel ve tarihli bir duyuru verirse sistem hat kodu uydurmaz; relay veya doğrudan resmi sayfa erişimi `403` ile engellenirse bunu açıkça `unavailable` bildirir. Marmaray Angular kabuğu döndürdüğünde, yapılandırılmış `MARMARAY_API_BASIC_TOKEN` ile resmi frontend API’si kullanılır; API boş liste döndürürse bu checked empty sonucudur. İDO, Turyol, Dentur, minibüs ve taksi-dolmuş canlı kapsama dahil değildir ve cevap `limits[]` içinde belirtilir. Metro ekipman arızası, rota motoru, ETA ve GTFS `stop_times` arşivi bu araçların kapsamı değildir.
 
 Parametreler, davranışlar ve sınırlar için [docs/tool-reference.md](docs/tool-reference.md) dosyasına bakın.
 

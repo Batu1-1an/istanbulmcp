@@ -76,6 +76,17 @@ The remaining source-access implementation is deployed:
 
 Şehir Hatları is still an external access blocker: the official canonical page returns HTTP `403` through the relay and through the EU Railway direct fallback. The service therefore correctly returns `coverage_status=unavailable` and never invents an empty ferry result. Completing this last production item requires an approved upstream allowlist or authorized Turkish egress path (tracked as T063); no third-party proxy or fabricated data was added.
 
+## Local transit-source implementation follow-up — 2026-08-26
+
+The local implementation now includes Metro İstanbul's separate planned-notice source and the
+additive `istanbul_ferry_schedules(route, limit?)` tool. The ferry schedule connector reads only
+the official Şehir Hatları `/tr/seferler` index and the selected canonical route-detail HTML;
+its `published_timetable` coverage is static and does not represent live departures, delays, or
+ETA. The local inventory is now 29 tools after this registration.
+
+This follow-up was validated offline and with read-only source smoke only. Docker and Railway
+deploy/apply were intentionally skipped; production remains on the previously deployed build.
+
 Set environment variables from `.env.example` as needed. At minimum, Railway should provide `PORT`; the app defaults to `.data/istanbul_mcp.sqlite3` for SQLite. Do not add a volume or backup solely to support this feature.
 
 ## ISKI Relay

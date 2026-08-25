@@ -12,6 +12,7 @@ from app.services.pharmacy import PharmacyService
 from app.services.istanbulkart import IstanbulkartService
 from app.services.social_facilities import SocialFacilitiesService
 from app.services.disruptions import TransportDisruptionService
+from app.services.ferry import FerryScheduleService
 from app.services.transit import TransitService
 from app.storage.db import public_readiness, readiness
 
@@ -378,6 +379,12 @@ async def istanbul_transport_disruptions(
         line=line,
         limit=limit,
     )
+
+
+@mcp.tool()
+async def istanbul_ferry_schedules(route: str, limit: int | None = None) -> dict:
+    """Return published Şehir Hatları ferry timetable rows, not live departure or ETA."""
+    return await FerryScheduleService(settings=get_settings()).schedules(route=route, limit=limit)
 
 
 @mcp.tool()

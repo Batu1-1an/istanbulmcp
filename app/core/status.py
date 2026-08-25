@@ -37,6 +37,7 @@ TOOL_SOURCES = {
     "istanbul_transit_disruptions": "iett",
     "istanbul_transport_disruptions": "mixed_transport_official",
     "istanbul_planned_departures": "iett",
+    "istanbul_ferry_schedules": "sehir_hatlari",
 }
 
 
@@ -78,6 +79,7 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
                 "iett_line": settings.iett_line_cache_ttl_seconds,
                 "iett_stops": settings.iett_stops_cache_ttl_seconds,
                 "transport_disruptions": settings.transport_disruptions_cache_ttl_seconds,
+                "ferry_schedules": settings.ferry_schedule_cache_ttl_seconds,
                 "ispark": settings.ispark_cache_ttl_seconds,
                 "metro": settings.metro_cache_ttl_seconds,
                 "air_quality_station": settings.air_quality_station_cache_ttl_seconds,

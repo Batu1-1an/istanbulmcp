@@ -142,7 +142,7 @@ class TransportDisruptionService:
         return selected
 
     def _source_specs(self) -> list[_SourceSpec]:
-        return [
+        specs = [
             _SourceSpec(
                 key="iett",
                 operator="iett",
@@ -184,6 +184,28 @@ class TransportDisruptionService:
                 fetch=self.marmaray.urgent_notices,
             ),
         ]
+        # Keep lightweight legacy fakes compatible while production MetroClient
+        # always exposes the official planned-notice method.
+        announcements = getattr(self.metro, "announcements", None)
+        if announcements is not None:
+            specs.insert(
+                2,
+                _SourceSpec(
+                    key="metro_official_notices",
+                    operator="metro_istanbul",
+                    name="Metro İstanbul Official Notices",
+                    publisher="Metro İstanbul",
+                    modes=("metro", "tram", "funicular", "cable_car"),
+                    coverage_kind="official_announcements",
+                    url=getattr(
+                        self.metro,
+                        "announcements_url",
+                        "https://api.ibb.gov.tr/MetroIstanbul/api/MetroMobile/V3/GetAnnouncementsWithoutHtml/tr",
+                    ),
+                    fetch=announcements,
+                ),
+            )
+        return specs
 
     async def _read_source(
         self,

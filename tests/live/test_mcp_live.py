@@ -50,6 +50,33 @@ def test_live_mcp_validation_envelope():
     assert payload["data"][0]["allowed_max"] == 5000
 
 
+def test_live_mcp_ferry_schedule_scope_is_explicit():
+    payload, error, _elapsed = rpc_call(
+        os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
+        9030,
+        "istanbul_ferry_schedules",
+        {"route": "Kadıköy - Beşiktaş", "limit": 3},
+    )
+
+    assert error is None
+    assert payload["freshness"]["status"] in {"fresh", "unknown", "broken"}
+    if payload["sources"]:
+        assert all(source.get("coverage_kind") == "published_timetable" for source in payload["sources"])
+    assert any("ETA" in text or "canlı" in text for text in payload.get("warnings", []) + payload.get("limits", []))
+
+
+def test_live_mcp_metro_planned_notice_scope_is_reported():
+    payload, error, _elapsed = rpc_call(
+        os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
+        9031,
+        "istanbul_transport_disruptions",
+        {"operator": "metro_istanbul", "line": "M7", "limit": 5},
+    )
+
+    assert error is None
+    assert any(source.get("coverage_kind") == "official_announcements" for source in payload["sources"])
+
+
 def test_live_mcp_mobility_nearby_tool():
     payload, error, _elapsed = rpc_call(
         os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),

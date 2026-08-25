@@ -30,7 +30,13 @@ class FakeIett:
 
 
 class FakeMetro:
-    def __init__(self, rows=None, error: Exception | None = None):
+    def __init__(
+        self,
+        rows=None,
+        error: Exception | None = None,
+        announcement_rows=None,
+        announcement_error: Exception | None = None,
+    ):
         self.rows = rows if rows is not None else [
             {
                 "operator": "metro_istanbul",
@@ -52,6 +58,8 @@ class FakeMetro:
             },
         ]
         self.error = error
+        self.announcement_rows = announcement_rows if announcement_rows is not None else []
+        self.announcement_error = announcement_error
         self.calls = 0
 
     async def service_statuses(self):
@@ -59,6 +67,11 @@ class FakeMetro:
         if self.error:
             raise self.error
         return list(self.rows)
+
+    async def announcements(self):
+        if self.announcement_error or self.error:
+            raise self.announcement_error or self.error
+        return list(self.announcement_rows)
 
 
 class FakeSehirHatlari:
@@ -154,6 +167,43 @@ async def test_mode_operator_and_line_filters_are_exact_and_preserve_fields(tmp_
 
 
 @pytest.mark.asyncio
+async def test_metro_live_empty_plus_planned_notice_is_not_reported_as_empty(tmp_path):
+    notice = {
+        "operator": "metro_istanbul",
+        "mode": "metro",
+        "line_code": "M7",
+        "route_label": "Yıldız-Mahmutbey",
+        "event_type": "service_change",
+        "message": "M7 Gece Metrosu hizmeti verilmeyecektir.",
+        "updated_at": "2026-07-27T00:01:00.000",
+    }
+    result = await service(
+        tmp_path,
+        metro=FakeMetro(rows=[], announcement_rows=[notice]),
+    ).disruptions(operator="metro_istanbul", line="M7")
+
+    assert result["ok"] is True
+    assert result["data"] == [notice]
+    assert {source["coverage_kind"] for source in result["sources"]} == {
+        "live_status",
+        "official_announcements",
+    }
+
+
+@pytest.mark.asyncio
+async def test_metro_notice_source_unavailable_prevents_generic_empty_summary(tmp_path):
+    result = await service(
+        tmp_path,
+        metro=FakeMetro(rows=[], announcement_error=TimeoutError("notice source down")),
+    ).disruptions(operator="metro_istanbul")
+
+    assert result["ok"] is True
+    assert result["data"] == []
+    assert result["freshness"]["status"] == "unknown"
+    assert any(source["coverage_kind"] == "official_announcements" and source["coverage_status"] == "unavailable" for source in result["sources"])
+
+
+@pytest.mark.asyncio
 async def test_invalid_and_incompatible_filters_return_structured_validation(tmp_path):
     svc = service(tmp_path)
 
@@ -229,7 +279,7 @@ async def test_all_source_failure_is_broken(tmp_path):
     assert result["ok"] is False
     assert result["freshness"]["status"] == "broken"
     assert result["data"] == []
-    assert len(result["warnings"]) == 4
+    assert len(result["warnings"]) == 5
 
 
 @pytest.mark.asyncio

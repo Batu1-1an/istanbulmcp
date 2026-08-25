@@ -1,0 +1,12 @@
+{
+  "Success": true,
+  "Data": [
+    {
+      "LineName": "M7",
+      "LineLongDescription": "Yıldız-Mahmutbey",
+      "Description": "Mecidiyeköy istasyonunda planlı çalışma nedeniyle sefer düzenlemesi.",
+      "IsActive": true,
+      "UpdateDate": "2026-08-26T10:00:00+03:00"
+    }
+  ]
+}
