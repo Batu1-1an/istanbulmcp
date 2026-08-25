@@ -9,6 +9,7 @@ from app.services.catalog import CatalogService
 from app.services.iski import IskiService
 from app.services.neighborhood import NeighborhoodService
 from app.services.pharmacy import PharmacyService
+from app.services.istanbulkart import IstanbulkartService
 from app.services.disruptions import TransportDisruptionService
 from app.services.transit import TransitService
 from app.storage.db import public_readiness, readiness
@@ -172,6 +173,22 @@ async def istanbul_nobetci_eczane_by_district(
     """List current İstanbul on-duty pharmacies in a district, not general pharmacy hours or a catalog."""
     return await PharmacyService(settings=get_settings()).by_district(
         district=district,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+async def istanbul_istanbulkart_centers_nearby(
+    lat: float,
+    lon: float,
+    radius_m: int = 2000,
+    limit: int | None = None,
+) -> dict:
+    """Find official İstanbulkart filling centers; annual/static locations, not live terminal status."""
+    return await IstanbulkartService(settings=get_settings()).nearby(
+        lat=lat,
+        lon=lon,
+        radius_m=radius_m,
         limit=limit,
     )
 

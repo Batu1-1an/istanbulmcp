@@ -1,0 +1,14 @@
+{
+  "success": true,
+  "result": {
+    "total": 4,
+    "fields": [
+      {"id": "terminal_id", "type": "text"},
+      {"id": "terminal_subtype_definition_desc_cd", "type": "text"},
+      {"id": "town_id", "type": "text"},
+      {"id": "longitude", "type": "text"},
+      {"id": "latitude", "type": "text"}
+    ],
+    "records": []
+  }
+}

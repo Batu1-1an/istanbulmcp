@@ -1,0 +1,9 @@
+[
+  {"terminal_id": "valid-1", "terminal_subtype_definition_desc_cd": "BILETMATIK", "town_id": "BEYOGLU", "longitude": "28.961898", "latitude": "41.038878", "insert_dt": "2025-01-15T08:00:00"},
+  {"terminal_id": "valid-1", "terminal_subtype_definition_desc_cd": "BILETMATIK", "town_id": "BEYOGLU", "longitude": "28.961898", "latitude": "41.038878", "insert_dt": "2025-01-15T08:00:00"},
+  {"terminal_id": "missing-type", "town_id": "FATIH", "longitude": "28.93314", "latitude": "41.015354"},
+  {"terminal_id": "missing-coordinate", "terminal_subtype_definition_desc_cd": "BILETMATIK", "town_id": "KADIKOY", "longitude": null, "latitude": "40.9906"},
+  {"terminal_id": "invalid-coordinate", "terminal_subtype_definition_desc_cd": "BILETMATIK", "town_id": "KADIKOY", "longitude": "not-a-number", "latitude": "41.0"},
+  {"terminal_id": "out-of-scope", "terminal_subtype_definition_desc_cd": "BILETMATIK", "town_id": "OTHER", "longitude": "32.0", "latitude": "41.0"},
+  {"terminal_subtype_definition_desc_cd": "BILETMATIK", "town_id": "FATIH", "longitude": "28.9", "latitude": "41.0"}
+]

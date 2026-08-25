@@ -55,6 +55,11 @@ class Settings:
     air_quality_station_cache_ttl_seconds: int = 3600
     air_quality_reading_cache_ttl_seconds: int = 900
     traffic_cache_ttl_seconds: int = 60
+    istanbulkart_dataset_id: str = "istanbulkart-dolum-merkezi-bilgileri"
+    istanbulkart_resource_id: str | None = None
+    istanbulkart_datastore_page_size: int = 100
+    istanbulkart_cache_ttl_seconds: int = 86400
+    istanbulkart_stale_if_error_seconds: int = 604800
     ieo_base_url: str = "https://www.istanbuleczaciodasi.org.tr/nobetci-eczane/index.php"
     ieo_request_timeout_seconds: float = 15.0
     ieo_request_attempts: int = 2
@@ -176,6 +181,15 @@ def get_settings() -> Settings:
         air_quality_station_cache_ttl_seconds=_int_env("AIR_QUALITY_STATION_CACHE_TTL_SECONDS", 3600),
         air_quality_reading_cache_ttl_seconds=_int_env("AIR_QUALITY_READING_CACHE_TTL_SECONDS", 900),
         traffic_cache_ttl_seconds=_int_env("TRAFFIC_CACHE_TTL_SECONDS", 60),
+        istanbulkart_dataset_id=os.getenv(
+            "ISTANBULKART_DATASET_ID", "istanbulkart-dolum-merkezi-bilgileri"
+        ),
+        istanbulkart_resource_id=_str_env("ISTANBULKART_RESOURCE_ID"),
+        istanbulkart_datastore_page_size=_int_env("ISTANBULKART_DATASTORE_PAGE_SIZE", 100),
+        istanbulkart_cache_ttl_seconds=_int_env("ISTANBULKART_CACHE_TTL_SECONDS", 86400),
+        istanbulkart_stale_if_error_seconds=_int_env(
+            "ISTANBULKART_STALE_IF_ERROR_SECONDS", 604800
+        ),
         ieo_base_url=os.getenv(
             "IEO_BASE_URL",
             "https://www.istanbuleczaciodasi.org.tr/nobetci-eczane/index.php",

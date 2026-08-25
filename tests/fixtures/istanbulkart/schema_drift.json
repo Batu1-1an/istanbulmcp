@@ -1,0 +1,15 @@
+{
+  "success": true,
+  "result": {
+    "total": 1,
+    "fields": [
+      {"id": "terminal_id", "type": "text"},
+      {"id": "name", "type": "text"},
+      {"id": "lat", "type": "numeric"},
+      {"id": "lon", "type": "numeric"}
+    ],
+    "records": [
+      {"terminal_id": "legacy-1", "name": "Legacy", "lat": "41.0", "lon": "29.0"}
+    ]
+  }
+}

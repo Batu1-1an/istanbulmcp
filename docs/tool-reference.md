@@ -34,6 +34,7 @@ Catalog search results include `relevance`, `datastore_active_count`, and `prefe
 - `istanbul_parking_by_district(district, limit?)`
 - `istanbul_nobetci_eczane_nearby(lat, lon, radius_m?, limit?)`
 - `istanbul_nobetci_eczane_by_district(district, limit?)`
+- `istanbul_istanbulkart_centers_nearby(lat, lon, radius_m?, limit?)`
 - `istanbul_metro_stations_nearby(lat, lon, radius_m?, limit?)`
 - `istanbul_air_quality_nearby(lat, lon, radius_m?, limit?)`
 - `istanbul_traffic_status()`
@@ -56,6 +57,12 @@ Both tools share a 5-minute fresh cache and may serve the last successful roster
 `istanbul_mobility_nearby` is for practical questions such as nearby parking, metro, public transport stops, air quality, and the citywide traffic index. It accepts explicit `lat`/`lon` or curated reference points such as `Kadıköy Rıhtım`, `Taksim`, or `Levent`. If a district name is supplied instead, it returns district-wide parking records without distances and asks for an exact place only when distance matters.
 
 `istanbul_city_services_nearby` returns nearby WiFi points and district-level library address/hour records where available. Library records do not have coordinates, so those results are marked as district-level rather than radius-precise, but include `maps_search_url` when name/address data is available.
+
+## İstanbulkart Dolum Merkezleri
+
+`istanbul_istanbulkart_centers_nearby` resmi [İBB İstanbulkart Dolum Merkezi Bilgileri](https://data.ibb.gov.tr/en/dataset/istanbulkart-dolum-merkezi-bilgileri) paketinin en yeni etkin DataStore kaynağını seçer ve `radius_m` (varsayılan 2.000, üst sınır 5.000) içinde Haversine mesafesine göre sıralar. `limit` varsayılanı 20, üst sınırı 100'dür. Yanıt kayıtları `source_id`, kaynakta varsa `terminal_type` ve `district`, `latitude`, `longitude`, `source_inserted_at`, `distance_m` ve `maps_url` alanlarını içerir.
+
+Bu kaynak yıllık/statik konum listesidir; anlık açık/kapalı durumu, bakiye yükleme başarısı, kart stoğu, kuyruk veya çalışma saati üretilmez. Cevap `sources[]` içinde dataset/resource kimliklerini, CKAN toplam ve kabul/atlanan kayıt sayılarını, kaynak yayınlanma zamanını ve önbellek yenileme zamanını taşır. Normal başarılı yenileme 24 saat önbelleklenir; kaynak hatasında son başarılı snapshot en fazla 7 gün `freshness.status=stale` olarak kullanılabilir. Bu pencere de aşılırsa `ok=false`, `freshness.status=broken` ve yapılandırılmış kaynak hatası döner. Geçersiz koordinat/yarıçap/limit girdileri kaynağa istek atmadan reddedilir.
 
 ## Neighborhood Profiles
 

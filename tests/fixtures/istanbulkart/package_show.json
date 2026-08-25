@@ -1,0 +1,47 @@
+{
+  "success": true,
+  "result": {
+    "id": "771e2c48-e814-4caa-b910-947f49a74378",
+    "name": "istanbulkart-dolum-merkezi-bilgileri",
+    "title": "Istanbulkart Filling Center Information",
+    "metadata_modified": "2026-03-02T12:43:09.044222",
+    "resources": [
+      {
+        "id": "f1f1f1f1-1111-4111-8111-111111111111",
+        "name": "2020 Yılı İstanbulkart Dolum Merkezi Bilgileri",
+        "format": "XLSX",
+        "datastore_active": true,
+        "last_modified": "2021-01-10T10:00:00"
+      },
+      {
+        "id": "f2f2f2f2-2222-4222-8222-222222222222",
+        "name": "2021 Yılı İstanbulkart Dolum Merkezi Bilgileri",
+        "format": "CSV",
+        "datastore_active": true,
+        "last_modified": "2022-01-10T10:00:00"
+      },
+      {
+        "id": "f3f3f3f3-3333-4333-8333-333333333333",
+        "name": "2023 Yılı İstanbulkart Dolum Merkezi Bilgileri",
+        "format": "XLSX",
+        "datastore_active": true,
+        "last_modified": "2024-01-10T10:00:00"
+      },
+      {
+        "id": "f4f4f4f4-4444-4444-8444-444444444444",
+        "name": "2024 Yılı İstanbulkart Dolum Merkezi Bilgileri",
+        "format": "XLSX",
+        "datastore_active": true,
+        "last_modified": "2025-01-10T10:00:00"
+      },
+      {
+        "id": "a40d07e1-5464-4c0d-b4fd-ff37c40ba162",
+        "name": " 2025 Yılı İstanbulkart Dolum Merkezi Bilgileri",
+        "format": "XLSX",
+        "datastore_active": true,
+        "last_modified": "2026-03-02T12:40:44.994009",
+        "url": "https://data.ibb.gov.tr/dataset/istanbulkart-dolum-merkezi-bilgileri"
+      }
+    ]
+  }
+}

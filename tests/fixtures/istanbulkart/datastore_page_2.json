@@ -1,0 +1,22 @@
+{
+  "success": true,
+  "result": {
+    "include_total": true,
+    "limit": 2,
+    "offset": 2,
+    "total": 4,
+    "fields": [
+      {"id": "_id", "type": "int4"},
+      {"id": "insert_dt", "type": "timestamp"},
+      {"id": "terminal_id", "type": "text"},
+      {"id": "terminal_subtype_definition_desc_cd", "type": "text"},
+      {"id": "town_id", "type": "text"},
+      {"id": "longitude", "type": "text"},
+      {"id": "latitude", "type": "text"}
+    ],
+    "records": [
+      {"_id": 3, "insert_dt": "2025-01-15T08:00:00", "terminal_id": "301686", "terminal_subtype_definition_desc_cd": "BILETMATIK", "town_id": "EYUPSULTAN", "longitude": "28.950406", "latitude": "41.078704"},
+      {"_id": 4, "insert_dt": "2025-01-15T08:00:00", "terminal_id": "301687", "terminal_subtype_definition_desc_cd": "BILETMATIK", "town_id": "KADIKOY", "longitude": "29.022000", "latitude": "40.990600"}
+    ]
+  }
+}

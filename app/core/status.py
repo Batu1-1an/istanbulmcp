@@ -20,6 +20,7 @@ TOOL_SOURCES = {
     "istanbul_parking_by_district": "ispark",
     "istanbul_nobetci_eczane_nearby": "ieo",
     "istanbul_nobetci_eczane_by_district": "ieo",
+    "istanbul_istanbulkart_centers_nearby": "istanbulkart",
     "istanbul_metro_stations_nearby": "metro",
     "istanbul_air_quality_nearby": "air_quality",
     "istanbul_traffic_status": "traffic",
@@ -82,6 +83,7 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
                 "air_quality_reading": settings.air_quality_reading_cache_ttl_seconds,
                 "traffic": settings.traffic_cache_ttl_seconds,
                 "ieo": settings.ieo_cache_ttl_seconds,
+                "istanbulkart": settings.istanbulkart_cache_ttl_seconds,
                 "iski_faults": settings.iski_faults_cache_ttl_seconds,
                 "iski_dams": settings.iski_dams_cache_ttl_seconds,
             },
@@ -89,6 +91,16 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
                 "iski_faults": settings.iski_faults_stale_if_error_seconds,
                 "iski_dams": settings.iski_dams_stale_if_error_seconds,
                 "ieo": settings.ieo_stale_if_error_seconds,
+                "istanbulkart": settings.istanbulkart_stale_if_error_seconds,
+            },
+            "istanbulkart": {
+                "dataset_id": settings.istanbulkart_dataset_id,
+                "resource_override_configured": bool(settings.istanbulkart_resource_id),
+                "datastore_page_size": settings.istanbulkart_datastore_page_size,
+                "total_cache_age_cap_seconds": (
+                    settings.istanbulkart_cache_ttl_seconds
+                    + settings.istanbulkart_stale_if_error_seconds
+                ),
             },
             "source_cache_max_entries": settings.source_cache_max_entries,
             "source_rate_limits": {

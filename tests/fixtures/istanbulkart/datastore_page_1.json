@@ -1,0 +1,22 @@
+{
+  "success": true,
+  "result": {
+    "include_total": true,
+    "limit": 2,
+    "offset": 0,
+    "total": 4,
+    "fields": [
+      {"id": "_id", "type": "int4"},
+      {"id": "insert_dt", "type": "timestamp"},
+      {"id": "terminal_id", "type": "text"},
+      {"id": "terminal_subtype_definition_desc_cd", "type": "text"},
+      {"id": "town_id", "type": "text"},
+      {"id": "longitude", "type": "text"},
+      {"id": "latitude", "type": "text"}
+    ],
+    "records": [
+      {"_id": 1, "insert_dt": "2025-01-15T08:00:00", "terminal_id": "301684", "terminal_subtype_definition_desc_cd": "BILETMATIK", "town_id": "BEYOGLU", "longitude": "28.961898", "latitude": "41.038878"},
+      {"_id": 2, "insert_dt": "2025-01-15T08:00:00", "terminal_id": "301685", "terminal_subtype_definition_desc_cd": "BILETMATIK 4", "town_id": "FATIH", "longitude": "28,93314", "latitude": "41,015354"}
+    ]
+  }
+}

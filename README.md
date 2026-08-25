@@ -142,13 +142,14 @@ Istanbul MCP şu kaynaklardan gelen verileri kullanır:
 - İETT SOAP servisleri
 - İSKİ harita ve baraj kaynakları
 - İstanbul Eczacı Odası (İEO) nöbetçi eczane marker servisi
+- İBB Açık Veri Portalı İstanbulkart dolum merkezi DataStore kaynağı (yıllık konum verisi)
 - İBB WiFi, kütüphane, hava kalitesi ve mahalle profili kaynakları
 
 Tüm araç sonuçları standart bir cevap modeliyle döner: `summary`, `data`, `freshness`, `sources`, `limits`, `warnings` ve gerektiğinde `next_queries`.
 
 ## MCP Araçları
 
-Sunucu 26 salt okunur MCP aracı sağlar:
+Sunucu 27 salt okunur MCP aracı sağlar:
 
 ```text
 istanbul_health
@@ -162,6 +163,7 @@ istanbul_parking_nearby
 istanbul_parking_by_district
 istanbul_nobetci_eczane_nearby
 istanbul_nobetci_eczane_by_district
+istanbul_istanbulkart_centers_nearby
 istanbul_metro_stations_nearby
 istanbul_air_quality_nearby
 istanbul_traffic_status
@@ -192,6 +194,7 @@ istanbul_planned_departures
 | `istanbul_parking_by_district` | İlçedeki İSPARK otoparklarını mesafe uydurmadan listeler. | "Başakşehir'de hangi otoparklar var?" |
 | `istanbul_nobetci_eczane_nearby` | İEO'nun güncel İstanbul nöbetçi eczane listesinden koordinata yakın eczaneleri mesafeye göre listeler. Bu genel eczane kataloğu veya kesin nöbet bitiş garantisi değildir. | "Kadıköy'de konumuma yakın nöbetçi eczaneler hangileri?" |
 | `istanbul_nobetci_eczane_by_district` | İEO'nun güncel İstanbul nöbetçi eczane listesini ilçe bazında listeler; çalışma saatleri veya genel katalog sunmaz. | "Kadıköy'de bugün hangi eczaneler nöbetçi?" |
+| `istanbul_istanbulkart_centers_nearby` | Resmi İBB İstanbulkart dolum merkezi konumlarını yarıçap içinde mesafeye göre listeler. Veri yıllık/statiktir; terminalin anlık açık, yükleme kabul ediyor, bakiyesi veya stoğu olduğu garantisini vermez. | "Taksim'e yakın İstanbulkart dolum merkezleri hangileri?" |
 | `istanbul_metro_stations_nearby` | Koordinata yakın Metro İstanbul istasyonlarını hat bilgisiyle getirir. | "Levent yakınındaki metro istasyonları hangileri?" |
 | `istanbul_air_quality_nearby` | Koordinata yakın hava kalitesi istasyonlarını ve varsa son okumaları döndürür. | "Kadıköy çevresindeki hava kalitesi istasyonları nerede?" |
 | `istanbul_traffic_status` | İstanbul geneli trafik yoğunluğu indeksini döndürür. | "İstanbul trafik yoğunluğu şu an hangi seviyede?" |
