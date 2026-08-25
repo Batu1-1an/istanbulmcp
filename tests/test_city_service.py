@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from app.core.settings import Settings
@@ -191,6 +193,12 @@ class IncompleteGtfsCkan(PagedGtfsCkan):
     async def datastore_search(self, *, resource_id, limit, filters=None, offset=0):
         self.datastore_calls.append({"resource_id": resource_id, "limit": limit, "offset": offset})
         return {"records": self.records[offset : offset + limit] if offset == 0 else [], "total": len(self.records)}
+
+
+class HangingGtfsCkan(FakeCkan):
+    async def package_show(self, dataset_id):
+        await asyncio.sleep(1)
+        return await super().package_show(dataset_id)
 
 
 class AmbiguousGtfsCkan(PagedGtfsCkan):
@@ -438,6 +446,28 @@ async def test_mobility_nearby_aggregates_sections_for_place(tmp_path):
     assert payload["public_transport_stops"][0]["name"] == "Kadikoy Rihtim"
     assert payload["public_transport_stops"][0]["maps_url"].startswith("https://www.google.com/maps/search/")
     assert payload["traffic"]["traffic_index"] == 63
+
+
+@pytest.mark.asyncio
+async def test_mobility_nearby_returns_partial_result_when_gtfs_times_out(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.services.city.MOBILITY_COMPONENT_TIMEOUT_SECONDS", 0.01)
+    clear_source_cache()
+    settings = Settings(database_path=tmp_path / "city.sqlite3")
+    svc = CityService(
+        settings=settings,
+        geo_repository=GeoRepository(settings.database_path),
+        ispark_client=FakeIspark(),
+        metro_client=FakeMetro(),
+        air_quality_client=FakeAir(),
+        traffic_client=FakeTraffic(),
+        ckan_client=HangingGtfsCkan(),
+    )
+
+    result = await svc.mobility_nearby(place="Kadıköy Rıhtım", radius_m=1500, limit=3)
+
+    assert result["ok"] is True
+    assert result["data"][0]["public_transport_stops"] == []
+    assert any("GTFS stops timed out" in warning for warning in result["warnings"])
 
 
 @pytest.mark.asyncio

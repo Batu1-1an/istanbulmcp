@@ -170,7 +170,7 @@ def test_live_mcp_transit_disruptions_tool():
 
     assert error is None
     assert payload["ok"] is True
-    assert "iett" in {source["source"] for source in payload["sources"]}
+    assert any("IETT" in source["name"] for source in payload["sources"])
 
 
 def test_live_mcp_transit_disruptions_line_filter_preserves_line_code():
@@ -235,5 +235,5 @@ def test_live_mcp_planned_departures_tool():
 
     assert error is None
     assert payload["ok"] is True
-    assert "main-terminal" in payload["limits"]
+    assert "main-terminal planned departures" in payload["limits"]
     assert "not intermediate-stop ETA" in payload["limits"]

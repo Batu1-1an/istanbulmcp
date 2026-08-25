@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import math
 import re
 from typing import Any
@@ -36,6 +37,7 @@ GTFS_SOURCE_NAME = "IBB Open Data Portal - Public GTFS stops"
 WIFI_LOCATIONS_RESOURCE_ID = "5d0a0b1e-9e56-4038-b966-7d3e7b46f882"
 LIBRARY_LOCATIONS_RESOURCE_ID = "2ee4476c-9984-43de-96de-7aeda4da9aee"
 CKAN_POINT_PREFETCH_LIMIT = 100
+MOBILITY_COMPONENT_TIMEOUT_SECONDS = 5.0
 # Deliberately broad province envelope: it rejects clearly foreign coordinates while
 # retaining Istanbul's outlying districts and islands without a polygon dependency.
 ISTANBUL_GTFS_BOUNDS = (40.70, 41.50, 27.80, 30.20)
@@ -235,22 +237,36 @@ class CityService:
         public_stops: list[dict[str, Any]] = []
         air_quality_stations: list[dict[str, Any]] = []
         try:
-            public_stops, gtfs_source = await self._public_transport_stops_nearby(
-                lat=resolved.lat,
-                lon=resolved.lon,
-                radius_m=radius_m,
-                limit=safe_limit,
+            public_stops, gtfs_source = await asyncio.wait_for(
+                self._public_transport_stops_nearby(
+                    lat=resolved.lat,
+                    lon=resolved.lon,
+                    radius_m=radius_m,
+                    limit=safe_limit,
+                ),
+                timeout=MOBILITY_COMPONENT_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            warnings.append(
+                f"Public transport GTFS stops timed out after {MOBILITY_COMPONENT_TIMEOUT_SECONDS:g} seconds."
             )
         except Exception as exc:
             warnings.append(f"Public transport GTFS stops unavailable: {type(exc).__name__}.")
         try:
-            air_quality_stations = await self._air_quality_stations_nearby_summary(
-                lat=resolved.lat,
-                lon=resolved.lon,
-                radius_m=min(radius_m, self.settings.max_radius_m),
-                limit=min(safe_limit, 3),
+            air_quality_stations = await asyncio.wait_for(
+                self._air_quality_stations_nearby_summary(
+                    lat=resolved.lat,
+                    lon=resolved.lon,
+                    radius_m=min(radius_m, self.settings.max_radius_m),
+                    limit=min(safe_limit, 3),
+                ),
+                timeout=MOBILITY_COMPONENT_TIMEOUT_SECONDS,
             )
             warnings.append("Air quality in mobility summaries includes station locations only; use istanbul_air_quality_nearby for latest readings.")
+        except asyncio.TimeoutError:
+            warnings.append(
+                f"Air quality station source timed out after {MOBILITY_COMPONENT_TIMEOUT_SECONDS:g} seconds."
+            )
         except Exception as exc:
             warnings.append(f"Air quality station source unavailable: {type(exc).__name__}.")
 
