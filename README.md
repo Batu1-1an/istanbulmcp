@@ -164,6 +164,7 @@ istanbul_parking_by_district
 istanbul_nobetci_eczane_nearby
 istanbul_nobetci_eczane_by_district
 istanbul_istanbulkart_centers_nearby
+istanbul_sosyal_tesis_nearby
 istanbul_metro_stations_nearby
 istanbul_air_quality_nearby
 istanbul_traffic_status
@@ -195,6 +196,7 @@ istanbul_planned_departures
 | `istanbul_nobetci_eczane_nearby` | İEO'nun güncel İstanbul nöbetçi eczane listesinden koordinata yakın eczaneleri mesafeye göre listeler. Bu genel eczane kataloğu veya kesin nöbet bitiş garantisi değildir. | "Kadıköy'de konumuma yakın nöbetçi eczaneler hangileri?" |
 | `istanbul_nobetci_eczane_by_district` | İEO'nun güncel İstanbul nöbetçi eczane listesini ilçe bazında listeler; çalışma saatleri veya genel katalog sunmaz. | "Kadıköy'de bugün hangi eczaneler nöbetçi?" |
 | `istanbul_istanbulkart_centers_nearby` | Resmi İBB İstanbulkart dolum merkezi konumlarını yarıçap içinde mesafeye göre listeler. Veri yıllık/statiktir; terminalin anlık açık, yükleme kabul ediyor, bakiyesi veya stoğu olduğu garantisini vermez. | "Taksim'e yakın İstanbulkart dolum merkezleri hangileri?" |
+| `istanbul_sosyal_tesis_nearby` | Resmi İBB sosyal tesis konumlarını yarıçap içinde mesafeye göre listeler; detay ve güvenilir eşleşme varsa rezervasyon bağlantısı verir. Yalnızca konum rehberidir, canlı işletim durumu sunmaz. | "Beşiktaş'a yakın sosyal tesisler hangileri?" |
 | `istanbul_metro_stations_nearby` | Koordinata yakın Metro İstanbul istasyonlarını hat bilgisiyle getirir. | "Levent yakınındaki metro istasyonları hangileri?" |
 | `istanbul_air_quality_nearby` | Koordinata yakın hava kalitesi istasyonlarını ve varsa son okumaları döndürür. | "Kadıköy çevresindeki hava kalitesi istasyonları nerede?" |
 | `istanbul_traffic_status` | İstanbul geneli trafik yoğunluğu indeksini döndürür. | "İstanbul trafik yoğunluğu şu an hangi seviyede?" |

@@ -12,3 +12,4 @@ docs/research/
 node_modules/
 .wrangler/
 .dev.vars
+my-video/

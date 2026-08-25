@@ -87,6 +87,16 @@ def ieo_rate_limiter() -> AsyncTokenBucket:
 
 
 @lru_cache
+def social_facilities_rate_limiter() -> AsyncTokenBucket:
+    settings = get_settings()
+    return AsyncTokenBucket(
+        capacity=settings.social_facilities_rate_capacity,
+        refill_per_second=settings.social_facilities_rate_refill_per_second,
+        max_wait_seconds=settings.social_facilities_rate_max_wait_seconds,
+    )
+
+
+@lru_cache
 def iski_rate_limiter() -> AsyncTokenBucket:
     settings = get_settings()
     return AsyncTokenBucket(

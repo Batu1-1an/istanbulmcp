@@ -21,6 +21,7 @@ TOOL_SOURCES = {
     "istanbul_nobetci_eczane_nearby": "ieo",
     "istanbul_nobetci_eczane_by_district": "ieo",
     "istanbul_istanbulkart_centers_nearby": "istanbulkart",
+    "istanbul_sosyal_tesis_nearby": "social_facilities",
     "istanbul_metro_stations_nearby": "metro",
     "istanbul_air_quality_nearby": "air_quality",
     "istanbul_traffic_status": "traffic",
@@ -84,6 +85,7 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
                 "traffic": settings.traffic_cache_ttl_seconds,
                 "ieo": settings.ieo_cache_ttl_seconds,
                 "istanbulkart": settings.istanbulkart_cache_ttl_seconds,
+                "social_facilities": settings.social_facilities_cache_ttl_seconds,
                 "iski_faults": settings.iski_faults_cache_ttl_seconds,
                 "iski_dams": settings.iski_dams_cache_ttl_seconds,
             },
@@ -92,6 +94,7 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
                 "iski_dams": settings.iski_dams_stale_if_error_seconds,
                 "ieo": settings.ieo_stale_if_error_seconds,
                 "istanbulkart": settings.istanbulkart_stale_if_error_seconds,
+                "social_facilities": settings.social_facilities_stale_if_error_seconds,
             },
             "istanbulkart": {
                 "dataset_id": settings.istanbulkart_dataset_id,
@@ -100,6 +103,17 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
                 "total_cache_age_cap_seconds": (
                     settings.istanbulkart_cache_ttl_seconds
                     + settings.istanbulkart_stale_if_error_seconds
+                ),
+            },
+            "social_facilities": {
+                "catalog_url": settings.social_facilities_catalog_url,
+                "reservation_url": settings.social_facilities_reservation_url,
+                "fallback_configured": bool(settings.social_facilities_ckan_download_url),
+                "max_catalog_pages": settings.social_facilities_max_catalog_pages,
+                "max_detail_pages": settings.social_facilities_max_detail_pages,
+                "total_cache_age_cap_seconds": (
+                    settings.social_facilities_cache_ttl_seconds
+                    + min(settings.social_facilities_stale_if_error_seconds, 604800)
                 ),
             },
             "source_cache_max_entries": settings.source_cache_max_entries,
@@ -133,6 +147,11 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
                     "capacity": settings.ieo_rate_capacity,
                     "refill_per_second": settings.ieo_rate_refill_per_second,
                     "max_wait_seconds": settings.ieo_rate_max_wait_seconds,
+                },
+                "social_facilities": {
+                    "capacity": settings.social_facilities_rate_capacity,
+                    "refill_per_second": settings.social_facilities_rate_refill_per_second,
+                    "max_wait_seconds": settings.social_facilities_rate_max_wait_seconds,
                 },
             },
             "mcp_request_guard": {

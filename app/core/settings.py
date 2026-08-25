@@ -60,6 +60,19 @@ class Settings:
     istanbulkart_datastore_page_size: int = 100
     istanbulkart_cache_ttl_seconds: int = 86400
     istanbulkart_stale_if_error_seconds: int = 604800
+    social_facilities_base_url: str = "https://tesislerimiz.ibb.istanbul"
+    social_facilities_catalog_url: str = "https://tesislerimiz.ibb.istanbul/tesisler"
+    social_facilities_reservation_url: str = "https://tesislerrezervasyon.ibb.istanbul/"
+    social_facilities_ckan_download_url: str = "https://data.ibb.gov.tr/dataset/6e9b0cf3-d756-4301-8c5e-a6e3a223ed6d/resource/87517b4e-28b5-478f-a0ba-27291cf17b69/download/ibb-sosyal-tesis-konumlar.xlsx"
+    social_facilities_request_timeout_seconds: float = 15.0
+    social_facilities_request_attempts: int = 2
+    social_facilities_cache_ttl_seconds: int = 86400
+    social_facilities_stale_if_error_seconds: int = 604800
+    social_facilities_rate_capacity: int = 4
+    social_facilities_rate_refill_per_second: float = 0.5
+    social_facilities_rate_max_wait_seconds: float = 0.5
+    social_facilities_max_catalog_pages: int = 10
+    social_facilities_max_detail_pages: int = 100
     ieo_base_url: str = "https://www.istanbuleczaciodasi.org.tr/nobetci-eczane/index.php"
     ieo_request_timeout_seconds: float = 15.0
     ieo_request_attempts: int = 2
@@ -190,6 +203,36 @@ def get_settings() -> Settings:
         istanbulkart_stale_if_error_seconds=_int_env(
             "ISTANBULKART_STALE_IF_ERROR_SECONDS", 604800
         ),
+        social_facilities_base_url=os.getenv(
+            "SOCIAL_FACILITIES_BASE_URL", "https://tesislerimiz.ibb.istanbul"
+        ),
+        social_facilities_catalog_url=os.getenv(
+            "SOCIAL_FACILITIES_CATALOG_URL", "https://tesislerimiz.ibb.istanbul/tesisler"
+        ),
+        social_facilities_reservation_url=os.getenv(
+            "SOCIAL_FACILITIES_RESERVATION_URL", "https://tesislerrezervasyon.ibb.istanbul/"
+        ),
+        social_facilities_ckan_download_url=os.getenv(
+            "SOCIAL_FACILITIES_CKAN_DOWNLOAD_URL",
+            "https://data.ibb.gov.tr/dataset/6e9b0cf3-d756-4301-8c5e-a6e3a223ed6d/resource/87517b4e-28b5-478f-a0ba-27291cf17b69/download/ibb-sosyal-tesis-konumlar.xlsx",
+        ),
+        social_facilities_request_timeout_seconds=_float_env(
+            "SOCIAL_FACILITIES_REQUEST_TIMEOUT_SECONDS", 15.0
+        ),
+        social_facilities_request_attempts=_int_env("SOCIAL_FACILITIES_REQUEST_ATTEMPTS", 2),
+        social_facilities_cache_ttl_seconds=_int_env("SOCIAL_FACILITIES_CACHE_TTL_SECONDS", 86400),
+        social_facilities_stale_if_error_seconds=_int_env(
+            "SOCIAL_FACILITIES_STALE_IF_ERROR_SECONDS", 604800
+        ),
+        social_facilities_rate_capacity=_int_env("SOCIAL_FACILITIES_RATE_CAPACITY", 4),
+        social_facilities_rate_refill_per_second=_float_env(
+            "SOCIAL_FACILITIES_RATE_REFILL_PER_SECOND", 0.5
+        ),
+        social_facilities_rate_max_wait_seconds=_float_env(
+            "SOCIAL_FACILITIES_RATE_MAX_WAIT_SECONDS", 0.5
+        ),
+        social_facilities_max_catalog_pages=_int_env("SOCIAL_FACILITIES_MAX_CATALOG_PAGES", 10),
+        social_facilities_max_detail_pages=_int_env("SOCIAL_FACILITIES_MAX_DETAIL_PAGES", 100),
         ieo_base_url=os.getenv(
             "IEO_BASE_URL",
             "https://www.istanbuleczaciodasi.org.tr/nobetci-eczane/index.php",

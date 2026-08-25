@@ -10,6 +10,7 @@ from app.services.iski import IskiService
 from app.services.neighborhood import NeighborhoodService
 from app.services.pharmacy import PharmacyService
 from app.services.istanbulkart import IstanbulkartService
+from app.services.social_facilities import SocialFacilitiesService
 from app.services.disruptions import TransportDisruptionService
 from app.services.transit import TransitService
 from app.storage.db import public_readiness, readiness
@@ -186,6 +187,22 @@ async def istanbul_istanbulkart_centers_nearby(
 ) -> dict:
     """Find official İstanbulkart filling centers; annual/static locations, not live terminal status."""
     return await IstanbulkartService(settings=get_settings()).nearby(
+        lat=lat,
+        lon=lon,
+        radius_m=radius_m,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+async def istanbul_sosyal_tesis_nearby(
+    lat: float,
+    lon: float,
+    radius_m: int = 2000,
+    limit: int | None = None,
+) -> dict:
+    """Find official İstanbul social-facility locations; read-only location links, not live operating status."""
+    return await SocialFacilitiesService(settings=get_settings()).nearby(
         lat=lat,
         lon=lon,
         radius_m=radius_m,

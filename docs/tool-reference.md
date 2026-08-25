@@ -35,6 +35,7 @@ Catalog search results include `relevance`, `datastore_active_count`, and `prefe
 - `istanbul_nobetci_eczane_nearby(lat, lon, radius_m?, limit?)`
 - `istanbul_nobetci_eczane_by_district(district, limit?)`
 - `istanbul_istanbulkart_centers_nearby(lat, lon, radius_m?, limit?)`
+- `istanbul_sosyal_tesis_nearby(lat, lon, radius_m?, limit?)`
 - `istanbul_metro_stations_nearby(lat, lon, radius_m?, limit?)`
 - `istanbul_air_quality_nearby(lat, lon, radius_m?, limit?)`
 - `istanbul_traffic_status()`
@@ -63,6 +64,12 @@ Both tools share a 5-minute fresh cache and may serve the last successful roster
 `istanbul_istanbulkart_centers_nearby` resmi [İBB İstanbulkart Dolum Merkezi Bilgileri](https://data.ibb.gov.tr/en/dataset/istanbulkart-dolum-merkezi-bilgileri) paketinin en yeni etkin DataStore kaynağını seçer ve `radius_m` (varsayılan 2.000, üst sınır 5.000) içinde Haversine mesafesine göre sıralar. `limit` varsayılanı 20, üst sınırı 100'dür. Yanıt kayıtları `source_id`, kaynakta varsa `terminal_type` ve `district`, `latitude`, `longitude`, `source_inserted_at`, `distance_m` ve `maps_url` alanlarını içerir.
 
 Bu kaynak yıllık/statik konum listesidir; anlık açık/kapalı durumu, bakiye yükleme başarısı, kart stoğu, kuyruk veya çalışma saati üretilmez. Cevap `sources[]` içinde dataset/resource kimliklerini, CKAN toplam ve kabul/atlanan kayıt sayılarını, kaynak yayınlanma zamanını ve önbellek yenileme zamanını taşır. Normal başarılı yenileme 24 saat önbelleklenir; kaynak hatasında son başarılı snapshot en fazla 7 gün `freshness.status=stale` olarak kullanılabilir. Bu pencere de aşılırsa `ok=false`, `freshness.status=broken` ve yapılandırılmış kaynak hatası döner. Geçersiz koordinat/yarıçap/limit girdileri kaynağa istek atmadan reddedilir.
+
+## Sosyal Tesis Konumları
+
+`istanbul_sosyal_tesis_nearby` resmi İBB sosyal tesis kataloğundaki konumları Haversine mesafesine göre listeler (varsayılan yarıçap 2.000 m, üst sınır 5.000 m; limit 20/100). Her kayıtta ad, koordinat, mesafe, `maps_url` ve kaynakta bulunuyorsa ayrı `source_id`, `detail_url`, `reservation_url`, ilçe ve adres alanları bulunur; eksik isteğe bağlı alanlar `null` kalır. Rezervasyon bağlantısı yalnızca güvenilir ad/adres eşleşmesiyle eklenir ve yazma/rezervasyon işlemi başlatılmaz.
+
+Canlı katalog 24 saat önbelleklenir; hata durumunda son başarılı snapshot en fazla 7 gün `stale` olarak sunulabilir. Canlı kayıt eksikse resmi `sosyal-tesis-konumlari` XLSX kaynağı yalnızca eksik alanları dolduran fallback'tir; canlı kaynak tamamen yoksa cevap `fallback_only` uyarısı ve fallback metadata'sı taşır. Bu araç yalnızca konum rehberidir ve işletim durumu alanı üretmez.
 
 ## Neighborhood Profiles
 

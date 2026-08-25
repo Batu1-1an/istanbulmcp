@@ -47,23 +47,26 @@ def test_status_returns_tool_inventory(monkeypatch, tmp_path):
     assert "iski" in body["limits"]["source_rate_limits"]
     assert "transport_notice" in body["limits"]["source_rate_limits"]
     assert "ieo" in body["limits"]["source_rate_limits"]
+    assert "social_facilities" in body["limits"]["source_rate_limits"]
     assert body["limits"]["cache_ttl_seconds"]["transport_disruptions"] == 120
     assert body["limits"]["cache_ttl_seconds"]["ieo"] == 300
     assert body["limits"]["stale_if_error_seconds"]["ieo"] == 1800
     assert body["limits"]["cache_ttl_seconds"]["istanbulkart"] == 86400
     assert body["limits"]["stale_if_error_seconds"]["istanbulkart"] == 604800
+    assert body["limits"]["cache_ttl_seconds"]["social_facilities"] == 86400
     assert body["limits"]["istanbulkart"]["dataset_id"] == "istanbulkart-dolum-merkezi-bilgileri"
     assert body["abuse_guard"]["rate_limit"]["capacity"] > 0
     assert body["abuse_guard"]["concurrency"]["max_concurrent"] > 0
     assert "database_path" not in body["database"]
     tool_names = {tool["name"] for tool in body["tools"]}
-    assert body["tool_count"] == 27
+    assert body["tool_count"] == 28
     assert "istanbul_search_datasets" in tool_names
     assert "istanbul_neighborhood_profile" in tool_names
     assert "istanbul_parking_by_district" in tool_names
     assert "istanbul_nobetci_eczane_nearby" in tool_names
     assert "istanbul_nobetci_eczane_by_district" in tool_names
     assert "istanbul_istanbulkart_centers_nearby" in tool_names
+    assert "istanbul_sosyal_tesis_nearby" in tool_names
     assert "istanbul_iski_active_faults" in tool_names
     assert "istanbul_iski_dam_occupancy" in tool_names
     assert "istanbul_transit_disruptions" in tool_names
@@ -106,12 +109,6 @@ def test_settings_load_iski_relay_and_snapshot_age_limits(monkeypatch):
     get_settings.cache_clear()
 
 
-def test_settings_load_ieo_source_controls(monkeypatch):
-    from app.core.settings import get_settings
-
-    get_settings.cache_clear()
-
-
 def test_settings_load_istanbulkart_source_controls(monkeypatch):
     from app.core.settings import get_settings
 
@@ -129,6 +126,30 @@ def test_settings_load_istanbulkart_source_controls(monkeypatch):
     assert settings.istanbulkart_datastore_page_size == 25
     assert settings.istanbulkart_cache_ttl_seconds == 60
     assert settings.istanbulkart_stale_if_error_seconds == 120
+    get_settings.cache_clear()
+
+
+def test_settings_load_social_facility_source_controls(monkeypatch):
+    from app.core.settings import get_settings
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("SOCIAL_FACILITIES_CATALOG_URL", "https://fixture.example/catalog")
+    monkeypatch.setenv("SOCIAL_FACILITIES_REQUEST_ATTEMPTS", "3")
+    monkeypatch.setenv("SOCIAL_FACILITIES_CACHE_TTL_SECONDS", "60")
+    monkeypatch.setenv("SOCIAL_FACILITIES_STALE_IF_ERROR_SECONDS", "120")
+    monkeypatch.setenv("SOCIAL_FACILITIES_MAX_DETAIL_PAGES", "12")
+    settings = get_settings()
+    assert settings.social_facilities_catalog_url == "https://fixture.example/catalog"
+    assert settings.social_facilities_request_attempts == 3
+    assert settings.social_facilities_cache_ttl_seconds == 60
+    assert settings.social_facilities_stale_if_error_seconds == 120
+    assert settings.social_facilities_max_detail_pages == 12
+    get_settings.cache_clear()
+
+
+def test_settings_load_ieo_source_controls(monkeypatch):
+    from app.core.settings import get_settings
+
     get_settings.cache_clear()
     monkeypatch.setenv("IEO_BASE_URL", "https://fixture.example/ieo")
     monkeypatch.setenv("IEO_REQUEST_TIMEOUT_SECONDS", "7.5")
@@ -207,6 +228,7 @@ def test_mcp_initialize_endpoint():
         "istanbul_nobetci_eczane_nearby": ["lat", "lon"],
         "istanbul_nobetci_eczane_by_district": ["district"],
         "istanbul_istanbulkart_centers_nearby": ["lat", "lon"],
+        "istanbul_sosyal_tesis_nearby": ["lat", "lon"],
         "istanbul_metro_stations_nearby": ["lat", "lon"],
         "istanbul_air_quality_nearby": ["lat", "lon"],
         "istanbul_traffic_status": [],
@@ -253,7 +275,7 @@ def test_mcp_initialize_endpoint():
     assert listed.status_code == 200
     listed_tools = listed.json()["result"]["tools"]
     schemas = {tool["name"]: tool["inputSchema"] for tool in listed_tools}
-    assert len(listed_tools) == 27
+    assert len(listed_tools) == 28
     assert set(schemas) == set(expected_required)
     for name, required in expected_required.items():
         assert schemas[name].get("required", []) == required

@@ -150,6 +150,29 @@ def test_live_mcp_istanbulkart_centers_nearby_tool():
         assert payload["freshness"]["status"] in {"broken", "stale"}
 
 
+def test_live_mcp_social_facilities_nearby_tool():
+    payload, error, _elapsed = rpc_call(
+        os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
+        9023,
+        "istanbul_sosyal_tesis_nearby",
+        {"lat": 41.038878, "lon": 28.961898, "radius_m": 5000, "limit": 20},
+    )
+
+    assert error is None
+    assert "freshness" in payload
+    if payload["ok"]:
+        assert payload["sources"]
+        assert all(row["distance_m"] <= 5000 for row in payload["data"])
+        assert all(
+            payload["data"][index]["distance_m"] <= payload["data"][index + 1]["distance_m"]
+            for index in range(len(payload["data"]) - 1)
+        )
+        forbidden = {"capacity", "occupancy", "availability", "queue", "open", "closed"}
+        assert all(not forbidden.intersection(row) for row in payload["data"])
+    else:
+        assert payload["freshness"]["status"] in {"broken", "stale"}
+
+
 def test_live_mcp_city_services_nearby_tool():
     payload, error, _elapsed = rpc_call(
         os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
