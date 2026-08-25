@@ -94,6 +94,44 @@ def test_live_mcp_parking_by_district_tool():
     assert "distance_m" not in payload["data"][0]
 
 
+def test_live_mcp_nobetci_eczane_by_district_tool():
+    payload, error, _elapsed = rpc_call(
+        os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
+        9020,
+        "istanbul_nobetci_eczane_by_district",
+        {"district": "Kadıköy", "limit": 20},
+    )
+
+    assert error is None
+    assert "freshness" in payload
+    if payload["ok"]:
+        assert all(row["province"] == "İstanbul" for row in payload["data"])
+        assert all("distance_m" not in row for row in payload["data"])
+    else:
+        assert payload["freshness"]["status"] in {"broken", "stale"}
+
+
+def test_live_mcp_nobetci_eczane_nearby_tool():
+    payload, error, _elapsed = rpc_call(
+        os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
+        9021,
+        "istanbul_nobetci_eczane_nearby",
+        {"lat": 40.9909, "lon": 29.0303, "radius_m": 5000, "limit": 20},
+    )
+
+    assert error is None
+    assert "freshness" in payload
+    if payload["ok"]:
+        assert all(row["province"] == "İstanbul" for row in payload["data"])
+        assert all(row["distance_m"] <= 5000 for row in payload["data"])
+        assert all(
+            payload["data"][index]["distance_m"] <= payload["data"][index + 1]["distance_m"]
+            for index in range(len(payload["data"]) - 1)
+        )
+    else:
+        assert payload["freshness"]["status"] in {"broken", "stale"}
+
+
 def test_live_mcp_city_services_nearby_tool():
     payload, error, _elapsed = rpc_call(
         os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),

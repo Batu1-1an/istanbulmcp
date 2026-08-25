@@ -46,15 +46,20 @@ def test_status_returns_tool_inventory(monkeypatch, tmp_path):
     assert "air_quality" in body["limits"]["source_rate_limits"]
     assert "iski" in body["limits"]["source_rate_limits"]
     assert "transport_notice" in body["limits"]["source_rate_limits"]
+    assert "ieo" in body["limits"]["source_rate_limits"]
     assert body["limits"]["cache_ttl_seconds"]["transport_disruptions"] == 120
+    assert body["limits"]["cache_ttl_seconds"]["ieo"] == 300
+    assert body["limits"]["stale_if_error_seconds"]["ieo"] == 1800
     assert body["abuse_guard"]["rate_limit"]["capacity"] > 0
     assert body["abuse_guard"]["concurrency"]["max_concurrent"] > 0
     assert "database_path" not in body["database"]
     tool_names = {tool["name"] for tool in body["tools"]}
-    assert body["tool_count"] == 24
+    assert body["tool_count"] == 26
     assert "istanbul_search_datasets" in tool_names
     assert "istanbul_neighborhood_profile" in tool_names
     assert "istanbul_parking_by_district" in tool_names
+    assert "istanbul_nobetci_eczane_nearby" in tool_names
+    assert "istanbul_nobetci_eczane_by_district" in tool_names
     assert "istanbul_iski_active_faults" in tool_names
     assert "istanbul_iski_dam_occupancy" in tool_names
     assert "istanbul_transit_disruptions" in tool_names
@@ -94,6 +99,32 @@ def test_settings_load_iski_relay_and_snapshot_age_limits(monkeypatch):
     assert settings.iski_dams_snapshot_captured_at == "2026-07-23T09:00:00Z"
     assert settings.iski_faults_snapshot_max_age_seconds == 21_600
     assert settings.iski_dams_snapshot_max_age_seconds == 86_400
+    get_settings.cache_clear()
+
+
+def test_settings_load_ieo_source_controls(monkeypatch):
+    from app.core.settings import get_settings
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("IEO_BASE_URL", "https://fixture.example/ieo")
+    monkeypatch.setenv("IEO_REQUEST_TIMEOUT_SECONDS", "7.5")
+    monkeypatch.setenv("IEO_REQUEST_ATTEMPTS", "3")
+    monkeypatch.setenv("IEO_CACHE_TTL_SECONDS", "120")
+    monkeypatch.setenv("IEO_STALE_IF_ERROR_SECONDS", "600")
+    monkeypatch.setenv("IEO_RATE_CAPACITY", "5")
+    monkeypatch.setenv("IEO_RATE_REFILL_PER_SECOND", "1.5")
+    monkeypatch.setenv("IEO_RATE_MAX_WAIT_SECONDS", "0.25")
+
+    settings = get_settings()
+
+    assert settings.ieo_base_url == "https://fixture.example/ieo"
+    assert settings.ieo_request_timeout_seconds == 7.5
+    assert settings.ieo_request_attempts == 3
+    assert settings.ieo_cache_ttl_seconds == 120
+    assert settings.ieo_stale_if_error_seconds == 600
+    assert settings.ieo_rate_capacity == 5
+    assert settings.ieo_rate_refill_per_second == 1.5
+    assert settings.ieo_rate_max_wait_seconds == 0.25
     get_settings.cache_clear()
 
 
@@ -149,6 +180,8 @@ def test_mcp_initialize_endpoint():
         "istanbul_bbox_search": ["bbox"],
         "istanbul_parking_nearby": ["lat", "lon"],
         "istanbul_parking_by_district": ["district"],
+        "istanbul_nobetci_eczane_nearby": ["lat", "lon"],
+        "istanbul_nobetci_eczane_by_district": ["district"],
         "istanbul_metro_stations_nearby": ["lat", "lon"],
         "istanbul_air_quality_nearby": ["lat", "lon"],
         "istanbul_traffic_status": [],
@@ -195,7 +228,7 @@ def test_mcp_initialize_endpoint():
     assert listed.status_code == 200
     listed_tools = listed.json()["result"]["tools"]
     schemas = {tool["name"]: tool["inputSchema"] for tool in listed_tools}
-    assert len(listed_tools) == 24
+    assert len(listed_tools) == 26
     assert set(schemas) == set(expected_required)
     for name, required in expected_required.items():
         assert schemas[name].get("required", []) == required

@@ -5,7 +5,7 @@ All tools are read-only and return a standard envelope with `summary`, `data`, `
 When local source back-pressure is active, affected tools return `ok=false` with `retry_after_seconds` in `data[0]`.
 Expected validation and source failures return `ok=false` envelopes with `error_code`, field/source context, and actionable limits where available.
 
-Repeated CKAN catalog/resource, IETT line/stop, and air-quality requests use local back-pressure or TTL caches to reduce pressure on source systems. `/status` exposes TTL settings and redacted cache metadata with source labels and short key hashes, not raw user query/filter values.
+Repeated CKAN catalog/resource, IETT line/stop, air-quality and IEO pharmacy requests use local back-pressure or TTL caches to reduce pressure on source systems. `/status` exposes TTL settings and redacted cache metadata with source labels and short key hashes, not raw user query/filter values.
 
 ## Core
 
@@ -32,6 +32,8 @@ Catalog search results include `relevance`, `datastore_active_count`, and `prefe
 - `istanbul_bbox_search(bbox, types?, limit?)`
 - `istanbul_parking_nearby(lat, lon, radius_m?, limit?)`
 - `istanbul_parking_by_district(district, limit?)`
+- `istanbul_nobetci_eczane_nearby(lat, lon, radius_m?, limit?)`
+- `istanbul_nobetci_eczane_by_district(district, limit?)`
 - `istanbul_metro_stations_nearby(lat, lon, radius_m?, limit?)`
 - `istanbul_air_quality_nearby(lat, lon, radius_m?, limit?)`
 - `istanbul_traffic_status()`
@@ -43,6 +45,13 @@ Air quality results include `latest_reading_quality` because the upstream source
 Coordinate-bearing location results include `maps_url`, a Google Maps search URL built from the source `lat`/`lon`. Address-only records can include `maps_search_url` and `location_precision=address_search`; this is a map search link, not a claimed exact coordinate.
 
 `istanbul_parking_by_district` lists ISPark records by the source `district` field and does not calculate or return synthetic distances. It is the right tool for questions such as "Başakşehir'de hangi otoparklar var, doluluk oranı nedir?"
+
+## On-duty Pharmacies
+
+- `istanbul_nobetci_eczane_nearby(lat, lon, radius_m?, limit?)` returns İstanbul-only records from the official İEO marker roster, sorted by straight-line distance. The default radius is 1,000 meters, the maximum is 5,000 meters, and the default/max limits are 20/100.
+- `istanbul_nobetci_eczane_by_district(district, limit?)` applies Turkish-character-tolerant exact district matching over the same complete roster. Unknown districts return an empty successful result.
+
+Both tools share a 5-minute fresh cache and may serve the last successful roster for up to 30 minutes as `freshness.status=stale` after a source failure. Responses expose source totals, İstanbul accepted/skipped counts, freshness, limits and warnings. The roster is a current on-duty source list only; it is not a general pharmacy catalog, working-hours directory or guarantee of a duty end time. Missing `nobet_bitis` values remain null.
 
 `istanbul_mobility_nearby` is for practical questions such as nearby parking, metro, public transport stops, air quality, and the citywide traffic index. It accepts explicit `lat`/`lon` or curated reference points such as `Kadıköy Rıhtım`, `Taksim`, or `Levent`. If a district name is supplied instead, it returns district-wide parking records without distances and asks for an exact place only when distance matters.
 

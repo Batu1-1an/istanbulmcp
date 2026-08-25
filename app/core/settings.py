@@ -55,6 +55,14 @@ class Settings:
     air_quality_station_cache_ttl_seconds: int = 3600
     air_quality_reading_cache_ttl_seconds: int = 900
     traffic_cache_ttl_seconds: int = 60
+    ieo_base_url: str = "https://www.istanbuleczaciodasi.org.tr/nobetci-eczane/index.php"
+    ieo_request_timeout_seconds: float = 15.0
+    ieo_request_attempts: int = 2
+    ieo_cache_ttl_seconds: int = 300
+    ieo_stale_if_error_seconds: int = 1800
+    ieo_rate_capacity: int = 2
+    ieo_rate_refill_per_second: float = 0.5
+    ieo_rate_max_wait_seconds: float = 0.5
     iski_faults_cache_ttl_seconds: int = 30
     iski_dams_cache_ttl_seconds: int = 60
     iski_faults_stale_if_error_seconds: int = 900
@@ -168,6 +176,17 @@ def get_settings() -> Settings:
         air_quality_station_cache_ttl_seconds=_int_env("AIR_QUALITY_STATION_CACHE_TTL_SECONDS", 3600),
         air_quality_reading_cache_ttl_seconds=_int_env("AIR_QUALITY_READING_CACHE_TTL_SECONDS", 900),
         traffic_cache_ttl_seconds=_int_env("TRAFFIC_CACHE_TTL_SECONDS", 60),
+        ieo_base_url=os.getenv(
+            "IEO_BASE_URL",
+            "https://www.istanbuleczaciodasi.org.tr/nobetci-eczane/index.php",
+        ),
+        ieo_request_timeout_seconds=_float_env("IEO_REQUEST_TIMEOUT_SECONDS", 15.0),
+        ieo_request_attempts=_int_env("IEO_REQUEST_ATTEMPTS", 2),
+        ieo_cache_ttl_seconds=_int_env("IEO_CACHE_TTL_SECONDS", 300),
+        ieo_stale_if_error_seconds=_int_env("IEO_STALE_IF_ERROR_SECONDS", 1800),
+        ieo_rate_capacity=_int_env("IEO_RATE_CAPACITY", 2),
+        ieo_rate_refill_per_second=_float_env("IEO_RATE_REFILL_PER_SECOND", 0.5),
+        ieo_rate_max_wait_seconds=_float_env("IEO_RATE_MAX_WAIT_SECONDS", 0.5),
         iski_faults_cache_ttl_seconds=_int_env("ISKI_FAULTS_CACHE_TTL_SECONDS", 30),
         iski_dams_cache_ttl_seconds=_int_env("ISKI_DAMS_CACHE_TTL_SECONDS", 60),
         iski_faults_stale_if_error_seconds=_int_env("ISKI_FAULTS_STALE_IF_ERROR_SECONDS", 900),

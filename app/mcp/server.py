@@ -8,6 +8,7 @@ from app.services.city import CityService
 from app.services.catalog import CatalogService
 from app.services.iski import IskiService
 from app.services.neighborhood import NeighborhoodService
+from app.services.pharmacy import PharmacyService
 from app.services.disruptions import TransportDisruptionService
 from app.services.transit import TransitService
 from app.storage.db import public_readiness, readiness
@@ -142,6 +143,34 @@ async def istanbul_parking_by_district(
 ) -> dict:
     """List ISPark parking lots by source district without synthetic distance calculations."""
     return await CityService(settings=get_settings()).parking_by_district(
+        district=district,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+async def istanbul_nobetci_eczane_nearby(
+    lat: float,
+    lon: float,
+    radius_m: int = 1000,
+    limit: int | None = None,
+) -> dict:
+    """Find current İstanbul on-duty pharmacies near coordinates; this is not a general catalog or duty guarantee."""
+    return await PharmacyService(settings=get_settings()).nearby(
+        lat=lat,
+        lon=lon,
+        radius_m=radius_m,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+async def istanbul_nobetci_eczane_by_district(
+    district: str,
+    limit: int | None = None,
+) -> dict:
+    """List current İstanbul on-duty pharmacies in a district, not general pharmacy hours or a catalog."""
+    return await PharmacyService(settings=get_settings()).by_district(
         district=district,
         limit=limit,
     )

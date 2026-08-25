@@ -34,6 +34,8 @@ CRITICAL_FLOWS = [
     Flow("Başakşehir merkez sorusu ilçe otoparkı olarak mesafesiz dönüyor mu?", "istanbul_mobility_nearby", {"place": "Başakşehir merkez", "radius_m": 1500, "limit": 5}, min_data=1),
     Flow("Taksim yakın şehir hizmetleri dönüyor mu?", "istanbul_city_services_nearby", {"place": "Taksim", "radius_m": 1500, "limit": 3}, min_data=1),
     Flow("Başakşehir ilçe otoparkları mesafesiz dönüyor mu?", "istanbul_parking_by_district", {"district": "Başakşehir", "limit": 5}, min_data=1),
+    Flow("Kadıköy nöbetçi eczaneleri ilçe bazında dönüyor mu?", "istanbul_nobetci_eczane_by_district", {"district": "Kadıköy", "limit": 20}),
+    Flow("Kadıköy yakınındaki nöbetçi eczaneler dönüyor mu?", "istanbul_nobetci_eczane_nearby", {"lat": 40.9909, "lon": 29.0303, "radius_m": 5000, "limit": 20}),
     Flow("Kadıköy Caferağa mahalle profili dönüyor mu?", "istanbul_neighborhood_profile", {"district": "Kadıköy", "neighborhood": "Caferağa"}, min_data=1),
     Flow("Kadıköy mahalle profil adayları listeleniyor mu?", "istanbul_neighborhood_profile", {"district": "Kadıköy", "limit": 3}, min_data=1),
     Flow("34A hat bilgisi dönüyor mu?", "istanbul_transit_line_info", {"line_code": "34A"}, min_data=1),
