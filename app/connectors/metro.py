@@ -188,12 +188,21 @@ class MetroClient:
         body = await self._get_json_url(self.equipment_summary_url)
         if not isinstance(body, dict):
             raise MetroPayloadError("Metro equipment summary payload must be an object")
-        success = body.get("Success", True)
+        # A missing success marker is NOT treated as success by default; schema drift
+        # surfaces as a source parsing failure rather than a fabricated empty result.
+        success = body.get("Success", body.get("success"))
+        if success is None:
+            raise MetroPayloadError("Metro equipment summary response missing Success marker")
         if success is False or str(success).lower() == "false":
             raise MetroPayloadError("Metro equipment summary response was unsuccessful")
+        if success is not True and str(success).lower() != "true":
+            raise MetroPayloadError("Metro equipment summary Success marker must be a boolean")
         data = body.get("Data") or body.get("data")
         if not isinstance(data, dict):
             raise MetroPayloadError("Metro equipment summary Data payload must be an object")
+        if not data:
+            # An explicit empty Data object is a legitimate checked-empty summary.
+            return []
 
         rows: list[dict[str, Any]] = []
         for group_key, raw_rows in (("EquipmentServiceStatus", data.get("EquipmentServiceStatus")), ("StationServiceStatus", data.get("StationServiceStatus"))):
@@ -225,7 +234,29 @@ class MetroClient:
             row = self._parse_fault_row(attrs, body)
             if row is not None:
                 rows.append(row)
+            else:
+                # A row carrying a fault id but an unusable cell layout is skipped
+                # and counted later by the service as a malformed detail.
+                continue
+        if not rows and not self._looks_like_intentional_fault_page(html):
+            # No recognizable fault rows and no table body signalling a checked-empty
+            # page means the markup changed or the page is missing the table.
+            raise MetroPayloadError("Metro equipment fault page markup is unrecognized")
         return rows
+
+    @staticmethod
+    def _looks_like_intentional_fault_page(html: str) -> bool:
+        import re
+
+        # A checked-empty page still carries the official table structure (a <tbody>
+        # with zero data rows) plus at least one expected header. We only treat an
+        # actual table body as a legitimate checked-empty result when no rows matched.
+        has_table = re.search(r"<table\b", html, re.IGNORECASE) is not None
+        has_table_body = re.search(r"<tbody\b[^>]*>\s*(?:</tbody>|<tr\b)?", html, re.IGNORECASE | re.DOTALL) is not None
+        has_expected_header = bool(
+            re.search(r"\b(?:Ekipman|İstasyon|İstasyon|Arıza\s+Nedeni|Konum)\b", html, re.IGNORECASE)
+        )
+        return has_table and has_expected_header
 
     def _parse_fault_row(self, attrs: str, body: str) -> dict[str, Any] | None:
         import re
@@ -244,9 +275,15 @@ class MetroClient:
             # A row without the expected number of source cells is treated as unusable.
             return None
         cells = cells[:7]
-        line_code = self._text(cells[0]) if len(cells) > 0 else None
+        raw_line = self._text(cells[0]) if len(cells) > 0 else None
+        line_code = raw_line
         if line_code is not None and not self._looks_like_line_code(line_code):
             line_code = self._infer_line_code(line_code, None)
+        # Preserve the official line label verbatim when it is a full route label
+        # rather than a short M/T/F/TF code, so both representations can match.
+        line_label = None
+        if raw_line is not None and not self._looks_like_line_code(raw_line):
+            line_label = raw_line
         station_name = self._text(cells[1]) if len(cells) > 1 else None
         equipment_label = self._text(cells[2]) if len(cells) > 2 else None
         location = self._text(cells[3]) if len(cells) > 3 else None
@@ -260,6 +297,7 @@ class MetroClient:
             "source_station_id": station_id,
             "source_equipment_code": equipment_code,
             "line_code": line_code,
+            "line_label": line_label,
             "station_name": station_name,
             "equipment_type": equipment_label,
             "location_description": location,
@@ -303,12 +341,16 @@ class MetroClient:
         name = cls._text(row.get("Name") or row.get("name"))
         group = cls._text(row.get("GroupName") or row.get("Group") or row.get("group"))
         category_name = cls._text(row.get("CategoryName") or row.get("categoryName")) or name
-        active = cls._int(row.get("ActiveCount") or row.get("Active"))
-        inactive = cls._int(row.get("InactiveCount") or row.get("Inactive") or row.get("FaultCount"))
+        active = cls._non_negative_int(cls._first_present(row, "ActiveCount", "Active"))
+        inactive = cls._non_negative_int(cls._first_present(row, "InactiveCount", "Inactive", "FaultCount"))
         visible = row.get("IsVisible")
-        source_order = cls._int(row.get("Order") or row.get("SourceOrder") or row.get("sourceOrder"))
+        source_order = cls._int(cls._first_present(row, "Order", "SourceOrder", "sourceOrder"))
         if category_name is None:
             raise MetroPayloadError("Metro equipment summary row must have a displayed name")
+        if active is None or inactive is None:
+            # A category row must carry count values; a missing/negative count is
+            # treated as a schema-drift parsing failure, not silently as zero.
+            raise MetroPayloadError("Metro equipment summary row requires non-negative counts")
         return cls._summary_row(category_name, name, group, active, inactive, visible, source_order, group_key)
 
     @classmethod
@@ -327,11 +369,27 @@ class MetroClient:
             "category_key": cls._category_key(category_name, group_key),
             "category_name": category_name,
             "group_name": group or name,
-            "active_count": active or 0,
-            "inactive_count": inactive or 0,
+            "active_count": active if active is not None else 0,
+            "inactive_count": inactive if inactive is not None else 0,
             "is_visible": visible,
             "source_order": source_order,
         }
+
+    @staticmethod
+    def _first_present(row: dict[str, Any], *keys: str) -> Any | None:
+        for key in keys:
+            if key in row and row[key] is not None:
+                return row[key]
+        return None
+
+    @staticmethod
+    def _non_negative_int(value: Any) -> int | None:
+        number = MetroClient._int(value)
+        if number is None:
+            return None
+        if number < 0:
+            return None
+        return number
 
     @staticmethod
     def _category_key(category_name: str, group_key: str) -> str:

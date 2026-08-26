@@ -112,6 +112,41 @@ async def test_metro_equipment_summary_rejects_malformed_payload():
 
 
 @pytest.mark.asyncio
+async def test_metro_equipment_summary_rejects_missing_success_marker():
+    body = '{"Data": {"EquipmentServiceStatus": []}}'
+    async with json_client(
+        body,
+        url="https://example.test/metro/GetFaultyEquipments",
+    ) as http_client:
+        client = MetroClient(
+            equipment_summary_url="https://example.test/metro/GetFaultyEquipments",
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+        with pytest.raises(MetroPayloadError, match="Success"):
+            await client.equipment_summary()
+
+
+@pytest.mark.asyncio
+async def test_metro_equipment_summary_rejects_negative_count():
+    body = (
+        '{"Success": true, "Data": {"EquipmentServiceStatus": ['
+        '{"Name": "Asansörler", "ActiveCount": 10, "InactiveCount": -5}]}}'
+    )
+    async with json_client(
+        body,
+        url="https://example.test/metro/GetFaultyEquipments",
+    ) as http_client:
+        client = MetroClient(
+            equipment_summary_url="https://example.test/metro/GetFaultyEquipments",
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+        with pytest.raises(MetroPayloadError, match="counts"):
+            await client.equipment_summary()
+
+
+@pytest.mark.asyncio
 async def test_metro_equipment_summary_uses_only_get_method():
     async def handler(request: httpx.Request) -> httpx.Response:
         if request.method != "GET":
@@ -207,9 +242,22 @@ async def test_metro_equipment_faults_rejects_changed_markup_as_malformed():
             http_client=http_client,
             rate_limiter=RecordingLimiter(),
         )
-        rows = await client.equipment_faults()
-    # No recognizable rows supplied; parser yields an empty list, which the service
-    # surfaces as a checked-empty or partial result rather than fabricating data.
+        with pytest.raises(MetroPayloadError, match="markup"):
+            await client.equipment_faults()
+
+
+@pytest.mark.asyncio
+async def test_metro_equipment_faults_distinguishes_checked_empty_from_changed_markup():
+    # An empty table body with the official header is a legitimate checked-empty page.
+    async with json_client(
+        fixture_text("metro/equipment_faults_empty.html"),
+        url="https://example.test/metro/ariza",
+    ) as http_client:
+        rows = await MetroClient(
+            equipment_faults_url="https://example.test/metro/ariza",
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        ).equipment_faults()
     assert rows == []
 
 

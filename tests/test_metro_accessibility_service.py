@@ -252,6 +252,124 @@ async def test_service_reports_accepted_skipped_duplicate_and_received_totals():
 
 
 @pytest.mark.asyncio
+async def test_service_maps_known_equipment_labels_to_canonical_keys():
+    rows = fault_rows()
+    service = make_service(FakeMetroClient(summary_rows=summary_rows(), fault_rows=rows))
+    result = await service.status()
+    faults = result["data"][0]["faults"]
+    equipment = {f["station_name"]: f["equipment_type"] for f in faults}
+    assert equipment["Levent"] == "elevator"
+    assert equipment["Fulya"] == "escalator"
+    assert equipment["Yenikapı"] == "elevator"
+
+    # Filtering by the canonical key or its Turkish label both match the same rows.
+    by_key = await service.status(equipment_type="elevator")
+    by_label = await service.status(equipment_type="asansör")
+    assert {f["station_name"] for f in by_key["data"][0]["faults"]} == \
+        {f["station_name"] for f in by_label["data"][0]["faults"]}
+
+
+@pytest.mark.asyncio
+async def test_service_preserves_unknown_equipment_label():
+    rows = fault_rows()
+    rows.append({"source_fault_id": "777", "line_code": "M2", "station_name": "Yeni", "equipment_type": "Yeni Cihaz", "location_description": "z", "reason": "Arıza"})
+    service = make_service(FakeMetroClient(summary_rows=summary_rows(), fault_rows=rows))
+    result = await service.status()
+    faults = result["data"][0]["faults"]
+    assert any(f["equipment_type"] == "Yeni Cihaz" for f in faults)
+
+
+@pytest.mark.asyncio
+async def test_service_broken_response_includes_source_unavailable_record():
+    service = make_service(FakeMetroClient(summary_error=RuntimeError("a"), detail_error=RuntimeError("b")))
+    result = await service.status()
+    assert result["ok"] is False
+    assert result["data"][0]["error_code"] == "source_unavailable"
+    assert result["data"][0]["summary_source_status"] == "unavailable"
+    assert result["data"][0]["detail_source_status"] == "unavailable"
+    for source in result["sources"]:
+        assert source["coverage_status"] == "unavailable"
+
+
+@pytest.mark.asyncio
+async def test_service_emits_discrepancy_in_both_directions():
+    # inactive > accepted: summary larger than detail scope.
+    rows_over = summary_rows()
+    rows_over[0]["inactive_count"] = 1000
+    svc = make_service(FakeMetroClient(summary_rows=rows_over, fault_rows=fault_rows()))
+    result = await svc.status()
+    assert "inactive_total_exceeds_detail_scope" in " ".join(result["warnings"])
+
+    clear_source_cache()
+    # inactive < accepted: reported inactive scope is smaller than the accepted
+    # detail scope, so the under-direction warning fires.
+    rows_under = summary_rows()
+    for row in rows_under:
+        row["inactive_count"] = 0
+    svc = make_service(FakeMetroClient(summary_rows=rows_under, fault_rows=list(fault_rows())))
+    result = await svc.status()
+    assert "inactive_total_under_detail_scope" in " ".join(result["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_service_result_metadata_includes_scope_limit_warnings():
+    service = make_service(FakeMetroClient(summary_rows=summary_rows(), fault_rows=fault_rows()))
+    result = await service.status(line="M2", limit=5)
+    assert result["freshness"]["status"] == "fresh"
+    for source in result["sources"]:
+        assert source["scope"] in {"equipment_summary", "fault_details"}
+        assert source["coverage_status"] == "checked"
+    limits = " ".join(result["limits"])
+    assert "requested_limit=5" in limits
+    assert "checked_scope=summary_and_details" in limits
+    assert "line=M2" in limits
+    assert "scope=Metro İstanbul equipment status" in limits
+
+
+@pytest.mark.asyncio
+async def test_service_matches_line_by_code_or_official_label():
+    rows = fault_rows()
+    rows.append({"source_fault_id": "888", "line_code": "M2", "line_label": "Yenikapı-Hacıosman", "station_name": "Hacıosman", "equipment_type": "Asansör", "location_description": "giriş", "reason": "Arıza", "expected_return": None})
+    service = make_service(FakeMetroClient(summary_rows=summary_rows(), fault_rows=rows))
+
+    by_code = await service.status(line="M2")
+    by_label = await service.status(line="Yenikapı-Hacıosman")
+
+    for result in (by_code, by_label):
+        stations = {f["station_name"] for f in result["data"][0]["faults"]}
+        assert "Hacıosman" in stations
+
+
+@pytest.mark.asyncio
+async def test_service_wires_900_second_total_age_cap_for_both_sources():
+    # Both source readers must cap total stale age to the configured stale-if-error
+    # value (default 900) via max_cache_age_seconds, so no source can remain stale
+    # for TTL + 900 seconds.
+    service = make_service(FakeMetroClient(summary_rows=summary_rows(), fault_rows=fault_rows()))
+    assert service.settings.metro_accessibility_stale_if_error_seconds == 900
+    assert service.settings.metro_accessibility_cache_ttl_seconds == 120
+
+
+@pytest.mark.asyncio
+async def test_service_malformed_detail_page_propagates_as_partial_not_checked_empty():
+    # A changed/malformed detail page must NOT be surfaced as a checked-empty success
+    # when the summary source is usable; it must appear as a partial/unavailable
+    # detail result instead.
+    service = make_service(
+        FakeMetroClient(summary_rows=summary_rows(), fault_rows=None, detail_error=RuntimeError("Metro equipment fault page markup is unrecognized"))
+    )
+    result = await service.status()
+    assert result["ok"] is True
+    assert result["freshness"]["status"] == "unknown"
+    assert "partial_source" in " ".join(result["warnings"])
+    detail_source = next(s for s in result["sources"] if s["scope"] == "fault_details")
+    assert detail_source["coverage_status"] == "unavailable"
+    summary_source = next(s for s in result["sources"] if s["scope"] == "equipment_summary")
+    assert summary_source["coverage_status"] == "checked"
+    assert result["data"][0]["detail_source_status"] == "unavailable"
+
+
+@pytest.mark.asyncio
 async def test_service_checked_empty_distinction_vs_positive_overview():
     # A positive inactive total with no accepted detail rows must produce a scope
     # warning, while the summary value is preserved and the response stays ok.

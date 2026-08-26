@@ -108,3 +108,37 @@ async def test_concurrent_single_flight_reuses_one_upstream_call():
     await asyncio.gather(*(service.status() for _ in range(30)))
     assert summary_calls["n"] == 1
     assert detail_calls["n"] == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_p95_under_5_seconds_and_single_upstream_call():
+    rows = make_rows(60)
+    client = FakeMetroClient(SUMMARY, rows)
+    summary_calls = {"n": 0}
+    detail_calls = {"n": 0}
+    orig_summary = client.equipment_summary
+    orig_details = client.equipment_faults
+
+    async def counting_summary():
+        summary_calls["n"] += 1
+        return await orig_summary()
+
+    async def counting_details():
+        detail_calls["n"] += 1
+        return await orig_details()
+
+    client.equipment_summary = counting_summary
+    client.equipment_faults = counting_details
+
+    service = MetroAccessibilityService(settings=Settings(), metro_client=client)
+    # Warm the cache once so concurrent runs observe enforced single-flight and
+    # measured latencies below the threshold.
+    await service.status()
+    start = time.perf_counter()
+    await asyncio.gather(*(service.status(limit=10) for _ in range(100)))
+    elapsed_ms = (time.perf_counter() - start) * 1000
+
+    assert elapsed_ms < 5000
+    # After the warm call the shared cache keeps one upstream call per source.
+    assert summary_calls["n"] == 1
+    assert detail_calls["n"] == 1

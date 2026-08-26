@@ -153,11 +153,22 @@ class MetroAccessibilityService:
         detail_status = _source_status(detail_result)
 
         if not summary_available and not detail_available:
-            return source_error_envelope(
+            warning = "İki kaynak da kullanılamadı; güncel ekipman durumu alınamadı."
+            for src in (summary_source, detail_source):
+                pass  # sources already carry coverage_status=unavailable below
+            response = source_error_envelope(
                 summary="Her iki resmî Metro İstanbul kaynağı da kullanılamıyor.",
-                warning="İki kaynak da kullanılamadı; güncel ekipman durumu alınamadı.",
+                warning=warning,
                 sources=[summary_source, detail_source],
             )
+            response["data"] = [
+                {
+                    "error_code": "source_unavailable",
+                    "summary_source_status": summary_status,
+                    "detail_source_status": detail_status,
+                }
+            ]
+            return response
 
         partial = not summary_available or not detail_available
 
@@ -194,20 +205,20 @@ class MetroAccessibilityService:
         )
 
         # Non-destructive discrepancy warning: compare source inactive totals with
-        # the untruncated accepted detail scope BEFORE limiting.
+        # the untruncated accepted detail scope BEFORE limiting. Emitted in both
+        # mismatch directions while preserving both source values.
         if detail_available and summary_available:
-            inactive_total = sum(
-                row.get("inactive_count") or 0 for row in summary_rows
-            )
+            inactive_total = sum(row.get("inactive_count") or 0 for row in summary_rows)
             if inactive_total > 0 and detail_result.accepted_total == 0:
                 warnings.append(
                     "positive_inactive_total_with_empty_details: Kavramsal toplamlar mevcut; "
                     "uzun/geçerli ayrıntı satırı yok."
                 )
-            elif inactive_total > detail_result.accepted_total:
+            elif inactive_total != detail_result.accepted_total:
                 warnings.append(
-                    "inactive_total_exceeds_detail_scope: Bu arızaların tamamı mekanik olmayabilir; "
-                    "detay kapsamı kırpılmadan önce karşılaştırıldı."
+                    "inactive_total_exceeds_detail_scope"
+                    if inactive_total > detail_result.accepted_total
+                    else "inactive_total_under_detail_scope",
                 )
 
         if not summary_available and detail_available:
@@ -238,6 +249,8 @@ class MetroAccessibilityService:
             f"station={query.station}" if query.station else "station=none",
             f"equipment_type={query.equipment_type}" if query.equipment_type else "equipment_type=none",
             scoped,
+            f"requested_limit={query.limit}",
+            f"checked_scope=summary_and_details" if not partial else "checked_scope=partial",
             "scope=Metro İstanbul equipment status",
             ACCESSIBILITY_LIMIT,
             NO_ALTERNATIVE_ROUTE,
@@ -277,10 +290,16 @@ class MetroAccessibilityService:
         return response
 
     async def _load_summary(self) -> "_SourceResult":
-        async def load() -> list[dict[str, Any]]:
+        async def load() -> SourceLoadResult:
             raw = await self.metro.equipment_summary()
             accepted = self._accepted_summary_rows(raw)
-            return accepted
+            return SourceLoadResult(
+                value=accepted,
+                metadata={"received_total": len(raw)},
+                max_cache_age_seconds=float(
+                    self.settings.metro_accessibility_stale_if_error_seconds
+                ),
+            )
 
         try:
             cached = await cached_source_data_with_status(
@@ -390,7 +409,10 @@ class MetroAccessibilityService:
             return None
         normalized = dict(row)
         normalized["station_name"] = station_name
-        normalized["equipment_type"] = equipment_label
+        # Map a known detail equipment label to its canonical output key while
+        # preserving an unknown source label verbatim. The raw source label is kept
+        # in equipment_type so an unknown label is not silently renamed.
+        normalized["equipment_type"] = _canonical_equipment(equipment_label)
         return normalized
 
     @staticmethod
@@ -419,8 +441,11 @@ class MetroAccessibilityService:
 
         filtered: list[dict[str, Any]] = []
         for row in rows:
-            if line_key is not None and _normalize_token(row.get("line_code") or "") != line_key:
-                continue
+            if line_key is not None:
+                row_code = _normalize_token(row.get("line_code") or "")
+                row_label = _normalize_token(row.get("line_label") or "")
+                if line_key not in (row_code, row_label):
+                    continue
             if station_key is not None and _normalize_token(row.get("station_name") or "") != station_key:
                 continue
             if equipment_key is not None:
@@ -467,6 +492,7 @@ class MetroAccessibilityService:
             coverage_status=coverage_status,
             last_checked_at=last_checked_at,
             last_successful_refresh_at=last_success,
+            scope=scope,
             url=url,
             reported_total=reported_total,
         )
@@ -505,6 +531,21 @@ def _token_or_none(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _canonical_equipment(value: str | None) -> str | None:
+    """Map a known detail equipment label to its canonical output key.
+
+    Unknown source labels are preserved verbatim; only recognized labels are mapped.
+    """
+    if value is None:
+        return None
+    norm = _normalize_token(value)
+    if norm in KNOWN_EQUIPMENT_TYPES:
+        return KNOWN_EQUIPMENT_TYPES[norm]
+    if norm in EQUIPMENT_LABEL_MAP:
+        return EQUIPMENT_LABEL_MAP[norm]
+    return value
 
 
 def _normalize_type_token(value: str) -> str:
