@@ -84,8 +84,24 @@ the official Şehir Hatları `/tr/seferler` index and the selected canonical rou
 its `published_timetable` coverage is static and does not represent live departures, delays, or
 ETA. The local inventory is now 29 tools after this registration.
 
-This follow-up was validated offline and with read-only source smoke only. Docker and Railway
-deploy/apply were intentionally skipped; production remains on the previously deployed build.
+This follow-up was initially validated offline and with read-only source smoke only; Docker and
+Railway deploy/apply were intentionally skipped at that stage. The production deployment is
+recorded below.
+
+## Production deploy — 2026-08-26
+
+The ferry timetable and Metro planned-notice implementation was deployed with:
+
+```bash
+railway up --detach --yes --message "Deploy ferry schedules and Metro planned notices"
+```
+
+- Deployment: `3dac1bf0-26db-40f7-a0f1-0e51582d0ac1`
+- Status: `SUCCESS`, one running production instance
+- `/healthz`: `ok=true`
+- `/readyz`: `ready=true`
+- `/status`: `tool_count=29`, `istanbul_ferry_schedules` registered
+- MCP smoke: Metro `operator=metro_istanbul,line=M7` returned live status plus official planned notice (`2` records); ferry schedule and ferry disruption calls reached the official source but received HTTP `403`, so both remain explicitly `unavailable` with source-scoped warnings.
 
 Set environment variables from `.env.example` as needed. At minimum, Railway should provide `PORT`; the app defaults to `.data/istanbul_mcp.sqlite3` for SQLite. Do not add a volume or backup solely to support this feature.
 
