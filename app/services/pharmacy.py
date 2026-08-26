@@ -6,7 +6,11 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from app.connectors.ibb_pharmacy import IbbPharmacyClient, IbbPharmacyPayloadError
+from app.connectors.ibb_pharmacy import (
+    IBB_PHARMACY_SOURCE_URL,
+    IbbPharmacyClient,
+    IbbPharmacyPayloadError,
+)
 from app.core.envelope import Freshness, Source, error_envelope, success_envelope, utc_now_iso
 from app.core.error_responses import source_error_envelope, validation_error_envelope
 from app.core.geo import google_maps_url, haversine_m
@@ -34,7 +38,7 @@ IBB_SOURCE = Source(
     coverage_kind="live_status",
     coverage_status="checked",
     scope="İstanbul on-duty roster",
-    url="https://cbsproxy.ibb.gov.tr/?eczanews&ilceID=all",
+    url=IBB_PHARMACY_SOURCE_URL,
 )
 
 

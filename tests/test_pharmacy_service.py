@@ -101,6 +101,12 @@ async def test_dedup_is_deterministic_and_same_name_different_district_id_is_ret
     assert {row["district_id"] for row in cached.value.rows} == {"1421", "9999"}
     assert cached.metadata["duplicate_total"] == 1
     assert all(row["source_id"].startswith("ibb:") for row in cached.value.rows)
+    clear_source_cache()
+    svc_again, _ = service(list(reversed(fixture_rows("roster_duplicates.json"))))
+    cached_again = await svc_again._roster()
+    assert {row["source_id"] for row in cached.value.rows} == {
+        row["source_id"] for row in cached_again.value.rows
+    }
 
 
 @pytest.mark.asyncio

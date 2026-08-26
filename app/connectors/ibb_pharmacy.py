@@ -11,7 +11,8 @@ from app.core.rate_limit import RateLimiter
 from app.core.source_limits import ibb_pharmacy_rate_limiter
 
 
-IBB_PHARMACY_SOURCE_URL = "https://cbsproxy.ibb.gov.tr/?eczanews"
+IBB_PHARMACY_BASE_URL = "https://cbsproxy.ibb.gov.tr/?eczanews"
+IBB_PHARMACY_SOURCE_URL = "https://cbsproxy.ibb.gov.tr/?eczanews&ilceID=all"
 
 
 class IbbPharmacyError(RuntimeError):
@@ -31,7 +32,7 @@ class IbbPharmacyClient:
 
     def __init__(
         self,
-        base_url: str = IBB_PHARMACY_SOURCE_URL,
+        base_url: str = IBB_PHARMACY_BASE_URL,
         *,
         timeout: float = 15.0,
         attempts: int = 2,
