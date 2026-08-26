@@ -14,8 +14,8 @@ def _normalize_token(value: str) -> str:
     """Lowercase, strip Turkish diacritics and collapse whitespace for matching."""
     text = value.strip().casefold()
     replacements = {
-        "ı": "i", "i": "i", "ö": "o", "ü": "u", "ç": "c", "ş": "s", "ğ": "g",
-        "â": "a", "î": "i", "û": "u",
+        "ı": "i", "i": "i", "i\u0307": "i", "ö": "o", "ü": "u", "ç": "c", "ş": "s",
+        "ğ": "g", "â": "a", "î": "i", "û": "u",
     }
     for src, dst in replacements.items():
         text = text.replace(src, dst)
@@ -199,6 +199,9 @@ class MetroClient:
         if success is not True and str(success).lower() != "true":
             raise MetroPayloadError("Metro equipment summary Success marker must be a boolean")
         data = body.get("Data") or body.get("data")
+        # The live endpoint returns Data as either an object or a single-element list.
+        if isinstance(data, list):
+            data = next((item for item in data if isinstance(item, dict)), None)
         if not isinstance(data, dict):
             raise MetroPayloadError("Metro equipment summary Data payload must be an object")
         if not data:
@@ -284,30 +287,38 @@ class MetroClient:
             return m.group(1).strip() or None if m else None
 
         fault_id = attr("data-arizaid")
-        line_id = attr("data-hatid")
+        line_id = attr("data-hatid") or attr("data-hatkodu")
         station_id = attr("data-istasyonid")
-        equipment_code = attr("data-refekipman")
+        equipment_code = attr("data-refekipman") or attr("data-ekipman")
+        attr_reason = attr("data-arizaneden")
 
         cells = [self._strip_html(c) for c in re.findall(r"<td\b[^>]*>(.*?)</td>", body, re.IGNORECASE | re.DOTALL)]
-        if len(cells) < 6:
-            # A row without the expected number of source cells is treated as unusable.
+        if not cells:
+            # A row with no cells cannot be normalized into a fault record.
             return None
-        cells = cells[:7]
-        raw_line = self._text(cells[0]) if len(cells) > 0 else None
-        line_code = raw_line
+        cells = cells[:4]
+
+        # Live official layout: [0]=station, [1]=equipment+location, [2]=reason,
+        # [3]=expected return. Line/station/equipment ids live in data-* attributes.
+        station_name = self._text(cells[0]) if len(cells) > 0 else None
+        equipment_location = self._text(cells[1]) if len(cells) > 1 else None
+        reason = self._text(cells[2]) if len(cells) > 2 else attr_reason
+        expected_return = self._text(cells[3]) if len(cells) > 3 else None
+        status = None
+
+        line_code = self._text(line_id)
         if line_code is not None and not self._looks_like_line_code(line_code):
             line_code = self._infer_line_code(line_code, None)
-        # Preserve the official line label verbatim when it is a full route label
-        # rather than a short M/T/F/TF code, so both representations can match.
         line_label = None
-        if raw_line is not None and not self._looks_like_line_code(raw_line):
-            line_label = raw_line
-        station_name = self._text(cells[1]) if len(cells) > 1 else None
-        equipment_label = self._text(cells[2]) if len(cells) > 2 else None
-        location = self._text(cells[3]) if len(cells) > 3 else None
-        reason = self._text(cells[4]) if len(cells) > 4 else None
-        expected_return = self._text(cells[5]) if len(cells) > 5 else None
-        status = self._text(cells[6]) if len(cells) > 6 else None
+        if line_id and not self._looks_like_line_code(self._text(line_id) or ""):
+            line_label = self._text(line_id)
+
+        # Equipment type is derived from the machine code (data-refekipman) or, if
+        # absent, from the equipment+location cell text; the source code is preserved.
+        equipment_label = self._equipment_label_from(equipment_code, equipment_location)
+
+        if station_name is None and not equipment_location:
+            return None
 
         return {
             "source_fault_id": fault_id,
@@ -318,11 +329,41 @@ class MetroClient:
             "line_label": line_label,
             "station_name": station_name,
             "equipment_type": equipment_label,
-            "location_description": location,
+            "location_description": equipment_location,
             "reason": reason,
             "expected_return": expected_return,
             "status": status,
         }
+
+    @classmethod
+    def _equipment_label_from(cls, equipment_code: str | None, location_text: str | None) -> str | None:
+        """Derive a normalized equipment label from the machine code or location text."""
+        if equipment_code:
+            mapping = {
+                "AS": "Asansör",
+                "YM": "Yürüyen Merdiven",
+                "YURMERDVEN": "Yürüyen Merdiven",
+                "YUYUBANT": "Yürüyen Bant",
+                "YB": "Yürüyen Bant",
+                "ENGPLAT": "Engelli Platformu",
+                "EP": "Engelli Platformu",
+            }
+            code = equipment_code.strip().upper()
+            for key, label in mapping.items():
+                if code.startswith(key):
+                    return label
+            return None
+        if location_text:
+            for key, label in (
+                ("asansor", "Asansör"),
+                ("yuruyen merdiven", "Yürüyen Merdiven"),
+                ("yuruyen bant", "Yürüyen Bant"),
+                ("engelli platform", "Engelli Platformu"),
+                ("platform", "Engelli Platformu"),
+            ):
+                if key in location_text.casefold():
+                    return label
+        return None
 
     @staticmethod
     def _strip_html(value: str) -> str:
@@ -361,7 +402,7 @@ class MetroClient:
         category_name = cls._text(row.get("CategoryName") or row.get("categoryName")) or name
         active = cls._non_negative_int(cls._first_present(row, "ActiveCount", "Active"))
         inactive = cls._non_negative_int(cls._first_present(row, "InactiveCount", "Inactive", "FaultCount"))
-        visible = row.get("IsVisible")
+        visible = cls._bool(cls._first_present(row, "IsVisible", "IsShow", "isShow"))
         source_order = cls._int(cls._first_present(row, "Order", "SourceOrder", "sourceOrder"))
         if category_name is None:
             raise MetroPayloadError("Metro equipment summary row must have a displayed name")
@@ -427,8 +468,14 @@ class MetroClient:
 
     @staticmethod
     def _category_key(category_name: str, group_key: str) -> str:
-        normalized = _normalize_token(category_name)
+        import re
+
+        normalized = re.sub(r"[^a-z0-9]+\s*", " ", _normalize_token(category_name)).strip()
         mapping = {
+            "hat": "line",
+            "hatlar": "line",
+            "istasyon": "station",
+            "istasyonlar": "station",
             "asansor": "elevator",
             "asansorler": "elevator",
             "yuruyen merdiven": "escalator",
@@ -441,6 +488,7 @@ class MetroClient:
             "tuvalet": "restroom",
             "tuvaletler": "restroom",
             "mescit": "prayer_room",
+            "mescitler": "prayer_room",
             "bebek bakim odasi": "baby_care_room",
             "engelli platformu": "accessible_platform",
             "platform": "accessible_platform",
@@ -510,7 +558,7 @@ class MetroClient:
 
     @staticmethod
     def _looks_like_line_code(value: str | None) -> bool:
-        return bool(value and re.fullmatch(r"(?:M|T|F|TF)\d+", value.strip(), flags=re.IGNORECASE))
+        return bool(value and re.fullmatch(r"(?:M|T|F|TF)\d+[A-Z]?", value.strip(), flags=re.IGNORECASE))
 
     @classmethod
     def _infer_line_code(cls, title: str | None, content: str | None) -> str | None:

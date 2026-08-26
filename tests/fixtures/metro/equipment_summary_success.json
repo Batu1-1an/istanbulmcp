@@ -1,16 +1,47 @@
 {
   "Success": true,
-  "Data": {
-    "EquipmentServiceStatus": [
-      {"Name": "Asansörler", "GroupName": "Asansör", "ActiveCount": 668, "InactiveCount": 12, "IsVisible": true, "Order": 4},
-      {"Name": "Yürüyen Merdivenler", "GroupName": "Yürüyen Merdiven", "ActiveCount": 120, "InactiveCount": 3, "IsVisible": true, "Order": 1},
-      {"Name": "Yürüyen Bantlar", "GroupName": "Yürüyen Bant", "ActiveCount": 30, "InactiveCount": 1, "IsVisible": true, "Order": 2},
-      {"Name": "Giriş-Çıkış", "GroupName": "Giriş-Çıkış", "ActiveCount": 90, "InactiveCount": 2, "IsVisible": false, "Order": 3}
-    ],
-    "StationServiceStatus": [
-      {"Name": "Tuvaletler", "GroupName": "Tuvalet", "ActiveCount": 75, "InactiveCount": 4, "IsVisible": true, "Order": 5},
-      {"Name": "Mescit", "GroupName": "Mescit", "ActiveCount": 40, "InactiveCount": 1, "IsVisible": true, "Order": 6},
-      {"Name": "Bebek Bakım Odası", "GroupName": "Bebek Bakım Odası", "ActiveCount": 20, "InactiveCount": 0, "IsVisible": true, "Order": 7}
-    ]
-  }
+  "Data": [
+    {
+      "EquipmentServiceStatus": [
+        {
+          "Name": "Hatlar",
+          "Active": 18,
+          "Inactive": 1,
+          "Icon": "https://www.metro.istanbul/Content/assets/img/service-information/icon-1.png",
+          "GroupName": "Hat",
+          "IsShow": true,
+          "Order": 1
+        },
+        {
+          "Name": "Yürüyen Merdiven",
+          "Active": 1963,
+          "Inactive": 20,
+          "Icon": "https://www.metro.istanbul/Content/assets/img/service-information/icon-2.png",
+          "GroupName": "Yürüyen Merdiven",
+          "IsShow": true,
+          "Order": 2
+        }
+      ],
+      "StationServiceStatus": [
+        {
+          "Name": "İstasyonlar",
+          "Active": 248,
+          "Inactive": 1,
+          "Icon": "https://www.metro.istanbul/Content/assets/img/service-information/icon-5.png",
+          "GroupName": "İstasyon",
+          "IsShow": true,
+          "Order": 1
+        },
+        {
+          "Name": "Giriş / Çıkış",
+          "Active": 619,
+          "Inactive": 5,
+          "Icon": "https://www.metro.istanbul/Content/assets/img/service-information/icon-6.png",
+          "GroupName": "Giriş / Çıkış",
+          "IsShow": true,
+          "Order": 2
+        }
+      ]
+    }
+  ]
 }

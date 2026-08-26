@@ -51,16 +51,20 @@ async def test_metro_equipment_summary_maps_categories_and_preserves_source_orde
         )
         rows = await client.equipment_summary()
 
-    # Rows follow the source order from the JSON payload.
-    assert rows[0]["category_key"] == "elevator"
-    assert rows[0]["active_count"] == 668
-    assert rows[0]["inactive_count"] == 12
+    # Rows follow the source order from the JSON payload; the live-shaped fixture is
+    # a single-element Data list with Active/Inactive/IsShow fields.
+    assert rows[0]["category_key"] == "line"
+    assert rows[0]["category_name"] == "Hatlar"
+    assert rows[0]["active_count"] == 18
+    assert rows[0]["inactive_count"] == 1
     assert rows[0]["is_visible"] is True
-    assert rows[0]["source_order"] == 4
+    # Fixture: EquipmentServiceStatus (Hatlar, Yürüyen Merdiven) then
+    # StationServiceStatus (İstasyonlar, Giriş / Çıkış).
     assert rows[1]["category_key"] == "escalator"
-    assert rows[1]["source_order"] == 1
-    assert rows[4]["category_key"] == "restroom"
-    assert rows[6]["category_key"] == "baby_care_room"
+    assert rows[1]["active_count"] == 1963
+    assert rows[2]["category_key"] == "station"
+    assert rows[2]["category_name"] == "İstasyonlar"
+    assert rows[3]["category_key"] == "entrance_exit"
     assert limiter.acquired == ["metro"]
 
 
@@ -232,13 +236,15 @@ async def test_metro_equipment_faults_parses_html_rows_and_preserves_source_fiel
         )
         rows = await client.equipment_faults()
 
-    assert len(rows) == 3
-    assert rows[0]["source_fault_id"] == "1001"
-    assert rows[0]["source_line_id"] == "2"
-    assert rows[0]["station_name"] == "Levent"
-    assert rows[0]["equipment_type"] == "Asansör"
+    assert len(rows) == 2
+    assert rows[0]["source_fault_id"] == "001003618886"
+    assert rows[0]["source_line_id"] == "M1A"
+    assert rows[0]["station_name"] == "Aksaray"
+    assert rows[0]["equipment_type"] == "Yürüyen Merdiven"
     assert rows[0]["expected_return"] == "İnceleniyor"
     assert rows[0]["status"] is None
+    # Same physical fault under a different line context is preserved.
+    assert rows[1]["source_line_id"] == "M1B"
 
 
 @pytest.mark.asyncio
@@ -283,6 +289,7 @@ async def test_metro_equipment_faults_keeps_missing_expected_return_as_none():
         ).equipment_faults()
     assert rows[0]["expected_return"] is None
     assert rows[0]["station_name"] == "Sanayi"
+    assert rows[0]["equipment_type"] == "Yürüyen Bant"
 
 
 @pytest.mark.asyncio
@@ -318,13 +325,13 @@ async def test_metro_equipment_faults_distinguishes_checked_empty_from_changed_m
 @pytest.mark.asyncio
 async def test_metro_equipment_faults_counts_malformed_rows_beside_valid_ones():
     html = (
-        "<html><body><table><thead><tr><th>Hat</th><th>İstasyon</th><th>Ekipman</th>"
-        "<th>Konum</th><th>Arıza Nedeni</th><th>Planlanan Dönüş</th></tr></thead><tbody>"
+        "<html><body><table><thead><tr><th>İstasyon</th><th>Ekipman</th>"
+        "<th>Arıza Nedeni</th><th>Planlanan Dönüş</th></tr></thead><tbody>"
         # Valid row
-        '<tr data-arizaid="1" data-hatid="2"><td>M2</td><td>Levent</td><td>Asansör</td>'
-        '<td>konum</td><td>Arıza</td><td>İnceleniyor</td></tr>'
-        # Malformed row: too few cells
-        '<tr data-arizaid="2"><td>M2</td><td>Bozuk</td></tr>'
+        '<tr data-arizaid="1" data-hatid="M2" data-refekipman="AS"><td>Levent</td>'
+        '<td>Turnike katındaki asansör</td><td>Arıza</td><td>İnceleniyor</td></tr>'
+        # Malformed row: no cell content (empty station + no location)
+        '<tr data-arizaid="2" data-hatid="M2"><td></td></tr>'
         "</tbody></table></body></html>"
     )
     client = MetroClient()
@@ -336,9 +343,12 @@ async def test_metro_equipment_faults_counts_malformed_rows_beside_valid_ones():
 
 @pytest.mark.asyncio
 async def test_metro_equipment_faults_all_malformed_structured_page_is_source_failure():
+    # A structured page where every data row carries a fault id but no usable cells
+    # is a schema-drift source failure, not a checked-empty result.
     html = (
-        "<html><body><table><thead><tr><th>Hat</th><th>İstasyon</th></tr></thead><tbody>"
-        '<tr data-arizaid="9"><td>M2</td></tr>'
+        "<html><body><table><thead><tr><th>İstasyon</th><th>Ekipman</th>"
+        "<th>Arıza Nedeni</th><th>Planlanan Dönüş</th></tr></thead><tbody>"
+        '<tr data-arizaid="9" data-hatid="M2"></tr>'
         "</tbody></table></body></html>"
     )
     client = MetroClient()
