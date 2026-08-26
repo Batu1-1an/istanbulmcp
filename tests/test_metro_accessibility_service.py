@@ -392,9 +392,18 @@ async def test_service_summary_and_detail_stale_cap_boundary(monkeypatch):
     assert result["data"][0]["detail_source_status"] == "stale"
     assert result["freshness"]["status"] == "stale"
 
-    # Advance beyond TTL + 900s (total-age boundary): both entries must be dropped
-    # and the service must report unavailable/broken rather than serving stale.
-    clock["t"] = 1050.0
+    # Prove the exact 900s total-age boundary: at t=900 (== cap) the retained value
+    # is still served as stale, but at t=901 (> cap) it must be dropped as
+    # unavailable/broken. Using t=1050 would also pass an erroneous TTL+900=1020
+    # implementation, so we probe right at the boundary.
+    clock["t"] = 900.0
+    result = await service.status()
+    assert result["ok"] is True
+    assert result["freshness"]["status"] == "stale"
+    assert result["data"][0]["summary_source_status"] == "stale"
+    assert result["data"][0]["detail_source_status"] == "stale"
+
+    clock["t"] = 901.0
     result = await service.status()
     assert result["ok"] is False
     assert result["freshness"]["status"] == "broken"
@@ -506,6 +515,10 @@ async def test_service_metadata_state_matrix(
     assert "requested_limit=7" in limits
     if expect_ok and expect_freshness == "fresh":
         assert "checked_scope=summary_and_details" in limits
+    elif expect_ok and expect_freshness == "stale":
+        for source in result["sources"]:
+            assert source["coverage_status"] == "checked"
+            assert source["last_successful_refresh_at"]
     else:
         assert "checked_scope=partial" in limits or "checked_scope=none" in limits
     assert "warnings" in result
@@ -554,6 +567,16 @@ async def test_service_stale_source_retains_last_success_and_time(monkeypatch):
     assert result["freshness"]["status"] == "stale"
     for source in result["sources"]:
         assert source["coverage_status"] == "checked"
+        assert source["last_successful_refresh_at"]
+
+    # Advance past the 900s total-age boundary: the result becomes broken, but the
+    # last successful refresh time must still be retained for provenance.
+    clock["t"] = 901.0
+    result = await service.status()
+    assert result["ok"] is False
+    assert result["freshness"]["status"] == "broken"
+    for source in result["sources"]:
+        assert source["coverage_status"] == "unavailable"
         assert source["last_successful_refresh_at"]
 
 

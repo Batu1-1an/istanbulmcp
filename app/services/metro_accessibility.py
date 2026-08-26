@@ -8,7 +8,7 @@ from app.connectors.metro import MetroClient, _normalize_token
 from app.core.envelope import Freshness, Source, success_envelope, utc_now_iso
 from app.core.error_responses import source_error_envelope
 from app.core.settings import Settings
-from app.core.source_cache import SourceLoadResult, cached_source_data_with_status
+from app.core.source_cache import SourceLoadResult, cached_source_data_with_status, source_cache_snapshot
 from app.core.validation import InputValidationError, validate_text
 
 MAX_LIMIT = 100
@@ -356,7 +356,12 @@ class MetroAccessibilityService:
             )
             return self._source_result_from_cached(cached)
         except Exception as exc:
-            return _SourceResult.unavailable(exception=exc)
+            # Even when the total-age cap forces an unavailable/broken response, the
+            # last successful refresh time must be retained for provenance.
+            return _SourceResult.unavailable(
+                exception=exc,
+                last_successful_refresh_at=_last_refresh_for("metro_accessibility.summary"),
+            )
 
     async def _load_details(self) -> "_SourceResult":
         async def load() -> SourceLoadResult:
@@ -385,7 +390,11 @@ class MetroAccessibilityService:
             )
             return self._detail_source_result_from_cached(cached)
         except Exception as exc:
-            return _SourceResult.unavailable(exception=exc)
+            # Retain the last successful refresh time for provenance on broken results.
+            return _SourceResult.unavailable(
+                exception=exc,
+                last_successful_refresh_at=_last_refresh_for("metro_accessibility.details"),
+            )
 
     def _source_result_from_cached(self, cached: Any) -> "_SourceResult":
         value = list(cached.value)
@@ -640,11 +649,35 @@ class _SourceResult:
     warnings: list[str] = field(default_factory=list)
 
     @classmethod
-    def unavailable(cls, *, exception: Exception | None = None) -> "_SourceResult":
-        return cls(coverage_status="unavailable", message=_exc_label(exception))
+    def unavailable(
+        cls,
+        *,
+        exception: Exception | None = None,
+        last_successful_refresh_at: str | None = None,
+    ) -> "_SourceResult":
+        return cls(
+            coverage_status="unavailable",
+            message=_exc_label(exception),
+            last_successful_refresh_at=last_successful_refresh_at,
+        )
 
 
 def _exc_label(exception: Exception | None) -> str | None:
     if exception is None:
         return None
     return f"{type(exception).__name__}: {exception}"
+
+
+def _last_refresh_for(cache_key: str) -> str | None:
+    """Read the retained latest refresh time for a cache key from the cache snapshot.
+
+    Used so a broken/unavailable result still carries the last successful refresh
+    time for provenance, even after the total-age cap is exceeded.
+    """
+    # Mirror source_cache's label derivation (first two dot-separated segments).
+    parts = cache_key.split(".")
+    label = ".".join(parts[:2]) if len(parts) >= 2 else cache_key
+    for row in source_cache_snapshot():
+        if row.get("source") == label:
+            return row.get("refreshed_at")
+    return None
