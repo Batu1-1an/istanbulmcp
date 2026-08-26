@@ -147,6 +147,60 @@ async def test_metro_equipment_summary_rejects_negative_count():
 
 
 @pytest.mark.asyncio
+async def test_metro_equipment_summary_rejects_boolean_count():
+    body = (
+        '{"Success": true, "Data": {"EquipmentServiceStatus": ['
+        '{"Name": "Asansörler", "ActiveCount": true, "InactiveCount": 0}]}}'
+    )
+    async with json_client(
+        body,
+        url="https://example.test/metro/GetFaultyEquipments",
+    ) as http_client:
+        client = MetroClient(
+            equipment_summary_url="https://example.test/metro/GetFaultyEquipments",
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+        with pytest.raises(MetroPayloadError, match="counts"):
+            await client.equipment_summary()
+
+
+@pytest.mark.asyncio
+async def test_metro_equipment_summary_rejects_non_integral_count():
+    body = (
+        '{"Success": true, "Data": {"EquipmentServiceStatus": ['
+        '{"Name": "Asansörler", "ActiveCount": 3.5, "InactiveCount": 0}]}}'
+    )
+    async with json_client(
+        body,
+        url="https://example.test/metro/GetFaultyEquipments",
+    ) as http_client:
+        client = MetroClient(
+            equipment_summary_url="https://example.test/metro/GetFaultyEquipments",
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+        with pytest.raises(MetroPayloadError, match="counts"):
+            await client.equipment_summary()
+
+
+@pytest.mark.asyncio
+async def test_metro_equipment_summary_rejects_data_without_status_groups():
+    body = '{"Success": true, "Data": {"Other": []}}'
+    async with json_client(
+        body,
+        url="https://example.test/metro/GetFaultyEquipments",
+    ) as http_client:
+        client = MetroClient(
+            equipment_summary_url="https://example.test/metro/GetFaultyEquipments",
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+        with pytest.raises(MetroPayloadError, match="status groups"):
+            await client.equipment_summary()
+
+
+@pytest.mark.asyncio
 async def test_metro_equipment_summary_uses_only_get_method():
     async def handler(request: httpx.Request) -> httpx.Response:
         if request.method != "GET":
@@ -259,6 +313,37 @@ async def test_metro_equipment_faults_distinguishes_checked_empty_from_changed_m
             rate_limiter=RecordingLimiter(),
         ).equipment_faults()
     assert rows == []
+
+
+@pytest.mark.asyncio
+async def test_metro_equipment_faults_counts_malformed_rows_beside_valid_ones():
+    html = (
+        "<html><body><table><thead><tr><th>Hat</th><th>İstasyon</th><th>Ekipman</th>"
+        "<th>Konum</th><th>Arıza Nedeni</th><th>Planlanan Dönüş</th></tr></thead><tbody>"
+        # Valid row
+        '<tr data-arizaid="1" data-hatid="2"><td>M2</td><td>Levent</td><td>Asansör</td>'
+        '<td>konum</td><td>Arıza</td><td>İnceleniyor</td></tr>'
+        # Malformed row: too few cells
+        '<tr data-arizaid="2"><td>M2</td><td>Bozuk</td></tr>'
+        "</tbody></table></body></html>"
+    )
+    client = MetroClient()
+    rows = client._parse_equipment_faults(html)
+    assert len(rows) == 1
+    assert rows[0]["source_fault_id"] == "1"
+    assert client._last_malformed_detail_count == 1
+
+
+@pytest.mark.asyncio
+async def test_metro_equipment_faults_all_malformed_structured_page_is_source_failure():
+    html = (
+        "<html><body><table><thead><tr><th>Hat</th><th>İstasyon</th></tr></thead><tbody>"
+        '<tr data-arizaid="9"><td>M2</td></tr>'
+        "</tbody></table></body></html>"
+    )
+    client = MetroClient()
+    with pytest.raises(MetroPayloadError, match="malformed"):
+        client._parse_equipment_faults(html)
 
 
 @pytest.mark.asyncio

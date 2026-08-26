@@ -52,6 +52,30 @@ ACCESSIBILITY_LIMIT = "not_an_end_to_end_accessibility_guarantee"
 NO_ALTERNATIVE_ROUTE = "no_alternative_route_inferred"
 NO_REPAIR_GUARANTEE = "no_repair_guarantee"
 
+# Deterministic official line-code -> normalized label alias mapping so a code-only
+# record (e.g. M2) also matches its normalized official route label (e.g. Yenikapı-
+# Hacıosman). Unknown labels are preserved and never coerced to a code.
+LINE_ALIASES: dict[str, tuple[str, ...]] = {
+    "m1": ("yenikapi-haciosman", "yenikapi-otogar", "yenikapi-otogar-ataturk havalimani"),
+    "m1a": ("otogar-ataturk havalimani", "yenikapi-otogar-ataturk havalimani"),
+    "m2": ("yenikapi-haciosman",),
+    "m3": ("kirazli-basaksehir",),
+    "m4": ("kadikoy-sabiha gokcen", "kadikoy-istanbul havalimani"),
+    "m5": ("uskudar-sancaktepe", "uskudar-samandira"),
+    "m6": ("levent-bogazici universitesi",),
+    "m7": ("yildiz-mahmutbey",),
+    "m8": ("bostanci-parsel mahallesi",),
+    "m9": ("atakoy-iktelli",),
+}
+
+
+def _line_alias_key(value: str) -> set[str]:
+    """Return the normalized aliases for a line code or label (exact, no substring)."""
+    norm = _normalize_token(value)
+    result = {norm}
+    result.update(_normalize_token(a) for a in LINE_ALIASES.get(norm, ()))
+    return result
+
 
 @dataclass(frozen=True)
 class MetroAccessibilityQuery:
@@ -166,8 +190,29 @@ class MetroAccessibilityService:
                     "error_code": "source_unavailable",
                     "summary_source_status": summary_status,
                     "detail_source_status": detail_status,
+                    "line": query.line,
+                    "station": query.station,
+                    "equipment_type": query.equipment_type,
+                    "limit": query.limit,
+                    "checked_scope": "none",
+                    "summary_observed_at": summary_result.observed_at,
+                    "details_observed_at": detail_result.observed_at,
+                    "summary_last_successful_refresh_at": summary_result.last_successful_refresh_at,
+                    "details_last_successful_refresh_at": detail_result.last_successful_refresh_at,
                 }
             ]
+            response["limits"] = [
+                f"line={query.line}" if query.line else "line=none",
+                f"station={query.station}" if query.station else "station=none",
+                f"equipment_type={query.equipment_type}" if query.equipment_type else "equipment_type=none",
+                f"requested_limit={query.limit}",
+                "checked_scope=none",
+                "scope=Metro İstanbul equipment status",
+                ACCESSIBILITY_LIMIT,
+                NO_ALTERNATIVE_ROUTE,
+                NO_REPAIR_GUARANTEE,
+            ]
+            response["warnings"] = [warning]
             return response
 
         partial = not summary_available or not detail_available
@@ -199,6 +244,7 @@ class MetroAccessibilityService:
                 "details_accepted_total": detail_result.accepted_total,
                 "details_skipped_total": detail_result.skipped_total,
                 "details_duplicate_total": detail_result.duplicate_total,
+                "details_malformed_total": detail_result.malformed_detail_count,
                 "details_matched_total": len(filtered_faults),
                 "details_returned_total": len(faults),
             }
@@ -315,13 +361,15 @@ class MetroAccessibilityService:
     async def _load_details(self) -> "_SourceResult":
         async def load() -> SourceLoadResult:
             raw = await self.metro.equipment_faults()
+            malformed_detail_count = getattr(self.metro, "_last_malformed_detail_count", 0) or 0
             accepted, skipped, duplicate_total = self._accepted_fault_rows(raw)
             return SourceLoadResult(
                 value=accepted,
                 metadata={
                     "received_total": len(raw),
-                    "skipped_total": skipped,
+                    "skipped_total": skipped + malformed_detail_count,
                     "duplicate_total": duplicate_total,
+                    "malformed_detail_count": malformed_detail_count,
                 },
                 max_cache_age_seconds=float(
                     self.settings.metro_accessibility_stale_if_error_seconds
@@ -360,6 +408,12 @@ class MetroAccessibilityService:
         received_total = cached.metadata.get("received_total") if cached.metadata else None
         skipped_total = cached.metadata.get("skipped_total", 0) if cached.metadata else 0
         duplicate_total = cached.metadata.get("duplicate_total", 0) if cached.metadata else 0
+        malformed_detail_count = cached.metadata.get("malformed_detail_count", 0) if cached.metadata else 0
+        warnings: list[str] = []
+        if malformed_detail_count:
+            warnings.append(
+                f"schema_drift: {malformed_detail_count} ayrıntı satırı beklendik yapıyı taşımıyor."
+            )
         return _SourceResult(
             value=value,
             coverage_status="checked" if value is not None else "unavailable",
@@ -370,9 +424,10 @@ class MetroAccessibilityService:
             accepted_total=len(value),
             skipped_total=skipped_total,
             duplicate_total=duplicate_total,
+            malformed_detail_count=malformed_detail_count,
             message=None,
             stale=cached.is_stale,
-            warnings=[],
+            warnings=warnings,
         )
 
     @staticmethod
@@ -435,16 +490,21 @@ class MetroAccessibilityService:
         station: str | None,
         equipment_type: str | None,
     ) -> list[dict[str, Any]]:
-        line_key = _normalize_token(line) if line else None
+        line_keys = _line_alias_key(line) if line else None
         station_key = _normalize_token(station) if station else None
         equipment_key = _normalize_type_token(equipment_type) if equipment_type else None
 
         filtered: list[dict[str, Any]] = []
         for row in rows:
-            if line_key is not None:
+            if line_keys is not None:
                 row_code = _normalize_token(row.get("line_code") or "")
                 row_label = _normalize_token(row.get("line_label") or "")
-                if line_key not in (row_code, row_label):
+                # Match if either the record code/label or any resolved alias intersects
+                # the requested alias set (exact, deterministic, no substring match).
+                row_keys = _line_alias_key(row_code) if row_code else set()
+                if row_label:
+                    row_keys.update(_line_alias_key(row_label))
+                if not (row_keys & line_keys):
                     continue
             if station_key is not None and _normalize_token(row.get("station_name") or "") != station_key:
                 continue
@@ -574,6 +634,7 @@ class _SourceResult:
     accepted_total: int = 0
     skipped_total: int = 0
     duplicate_total: int = 0
+    malformed_detail_count: int = 0
     message: str | None = None
     stale: bool = False
     warnings: list[str] = field(default_factory=list)

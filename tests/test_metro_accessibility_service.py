@@ -347,6 +347,59 @@ async def test_service_wires_900_second_total_age_cap_for_both_sources():
     # for TTL + 900 seconds.
     service = make_service(FakeMetroClient(summary_rows=summary_rows(), fault_rows=fault_rows()))
     assert service.settings.metro_accessibility_stale_if_error_seconds == 900
+
+
+@pytest.mark.asyncio
+async def test_service_summary_and_detail_stale_cap_boundary(monkeypatch):
+    # Prove, at the service level, that both cache entries (summary + details) go
+    # fresh -> stale (up to 900s from first success) -> unavailable once the total
+    # age cap is exceeded. We patch the shared monotonic clock used by the cache.
+    import app.core.source_cache as source_cache_mod
+
+    clock = {"t": 0.0}
+    fake_now = lambda: clock["t"]
+    monkeypatch.setattr(source_cache_mod.time, "monotonic", fake_now)
+
+    class UpDownMetro(FakeMetroClient):
+        def __init__(self, summary_rows, fault_rows):
+            super().__init__(summary_rows, fault_rows)
+            self.up = True
+
+        async def equipment_summary(self):
+            if not self.up:
+                raise RuntimeError("summary down")
+            return list(self.summary_rows or [])
+
+        async def equipment_faults(self):
+            if not self.up:
+                raise RuntimeError("details down")
+            return list(self.fault_rows or [])
+
+    client = UpDownMetro(summary_rows(), fault_rows())
+    service = make_service(client)
+
+    # t=0: fresh load of both sources.
+    result = await service.status()
+    assert result["data"][0]["summary_source_status"] == "fresh"
+    assert result["data"][0]["detail_source_status"] == "fresh"
+
+    # Advance past TTL (120) but within the 900s cap; switch the client to fail so
+    # the cache must serve the retained value as stale (not fresh).
+    clock["t"] = 200.0
+    client.up = False
+    result = await service.status()
+    assert result["data"][0]["summary_source_status"] == "stale"
+    assert result["data"][0]["detail_source_status"] == "stale"
+    assert result["freshness"]["status"] == "stale"
+
+    # Advance beyond TTL + 900s (total-age boundary): both entries must be dropped
+    # and the service must report unavailable/broken rather than serving stale.
+    clock["t"] = 1050.0
+    result = await service.status()
+    assert result["ok"] is False
+    assert result["freshness"]["status"] == "broken"
+    assert result["data"][0]["summary_source_status"] == "unavailable"
+    assert result["data"][0]["detail_source_status"] == "unavailable"
     assert service.settings.metro_accessibility_cache_ttl_seconds == 120
 
 
@@ -367,6 +420,141 @@ async def test_service_malformed_detail_page_propagates_as_partial_not_checked_e
     summary_source = next(s for s in result["sources"] if s["scope"] == "equipment_summary")
     assert summary_source["coverage_status"] == "checked"
     assert result["data"][0]["detail_source_status"] == "unavailable"
+
+
+@pytest.mark.asyncio
+async def test_service_report_schema_drift_for_malformed_detail_rows():
+    # The connector tracks malformed data-arizaid rows; the service surfaces them as
+    # skipped counters and a schema-drift warning rather than silently dropping them.
+    from app.connectors.metro import MetroClient
+
+    class DriftMetro(FakeMetroClient):
+        def __init__(self, summary_rows, fault_rows):
+            super().__init__(summary_rows, fault_rows)
+            self._last_malformed_detail_count = 2
+
+    svc = make_service(DriftMetro(summary_rows=summary_rows(), fault_rows=fault_rows()))
+    result = await svc.status()
+    assert "schema_drift" in " ".join(result["warnings"])
+    assert result["data"][0]["details_malformed_total"] >= 2
+
+
+@pytest.mark.asyncio
+async def test_service_broken_envelope_includes_filters_and_metadata():
+    service = make_service(FakeMetroClient(summary_error=RuntimeError("a"), detail_error=RuntimeError("b")))
+    result = await service.status(line="M2", station="Levent", equipment_type="elevator", limit=10)
+    assert result["ok"] is False
+    assert result["data"][0]["error_code"] == "source_unavailable"
+    assert result["data"][0]["line"] == "M2"
+    assert result["data"][0]["station"] == "Levent"
+    assert result["data"][0]["equipment_type"] == "elevator"
+    assert result["data"][0]["limit"] == 10
+    assert result["data"][0]["checked_scope"] == "none"
+    limits = " ".join(result["limits"])
+    assert "requested_limit=10" in limits
+    assert "checked_scope=none" in limits
+    assert "line=M2" in limits
+
+
+@pytest.mark.asyncio
+async def test_service_matches_line_by_code_via_official_alias():
+    rows = fault_rows()
+    rows.append({"source_fault_id": "999", "line_code": "M2", "station_name": "Hacıosman", "equipment_type": "Asansör", "location_description": "giriş", "reason": "Arıza", "expected_return": None})
+    service = make_service(FakeMetroClient(summary_rows=summary_rows(), fault_rows=rows))
+
+    # A code-only M2 record must also match when the user supplies the official label.
+    by_code = await service.status(line="M2")
+    assert "Hacıosman" in {f["station_name"] for f in by_code["data"][0]["faults"]}
+
+    by_label = await service.status(line="Yenikapı-Hacıosman")
+    assert "Hacıosman" in {f["station_name"] for f in by_label["data"][0]["faults"]}
+
+    # Unknown label does not broaden matching into an arbitrary substring.
+    by_unknown = await service.status(line="Yenikapı-Hacıosman-EXTRA")
+    assert "Hacıosman" not in {f["station_name"] for f in by_unknown["data"][0]["faults"]}
+    assert by_unknown["data"][0]["faults"] == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "summary_rows,fault_rows,summary_err,detail_err,expect_ok,expect_freshness",
+    [
+        (summary_rows(), fault_rows(), None, None, True, "fresh"),
+        ([], [], None, None, True, "fresh"),  # checked-empty
+        (summary_rows(), None, None, RuntimeError("d"), True, "unknown"),  # partial detail
+        (None, fault_rows(), RuntimeError("s"), None, True, "unknown"),  # partial summary
+        (None, None, RuntimeError("s"), RuntimeError("d"), False, "broken"),  # both down
+    ],
+)
+async def test_service_metadata_state_matrix(
+    summary_rows, fault_rows, summary_err, detail_err, expect_ok, expect_freshness,
+):
+    client = FakeMetroClient(
+        summary_rows=summary_rows, fault_rows=fault_rows,
+        summary_error=summary_err, detail_error=detail_err,
+    )
+    service = make_service(client)
+    result = await service.status(line="M2", limit=7)
+    assert result["ok"] is expect_ok
+    assert result["freshness"]["status"] == expect_freshness
+    assert result["sources"]
+    for source in result["sources"]:
+        assert source["coverage_status"] in {"checked", "unavailable"}
+        assert source["scope"] in {"equipment_summary", "fault_details"}
+    limits = " ".join(result["limits"])
+    assert "line=M2" in limits
+    assert "requested_limit=7" in limits
+    if expect_ok and expect_freshness == "fresh":
+        assert "checked_scope=summary_and_details" in limits
+    else:
+        assert "checked_scope=partial" in limits or "checked_scope=none" in limits
+    assert "warnings" in result
+
+
+@pytest.mark.asyncio
+async def test_service_stale_source_retains_last_success_and_time(monkeypatch):
+    # A source that first succeeds and later fails must serve the retained value as
+    # stale and still report its last successful refresh timestamp.
+    import app.core.source_cache as source_cache_mod
+
+    clock = {"t": 0.0}
+    monkeypatch.setattr(source_cache_mod.time, "monotonic", lambda: clock["t"])
+    from app.core.source_cache import clear_source_cache
+
+    clear_source_cache()
+
+    class FailAfterFirst(FakeMetroClient):
+        def __init__(self, summary_rows, fault_rows):
+            super().__init__(summary_rows, fault_rows)
+            self.up = True
+
+        async def equipment_summary(self):
+            if not self.up:
+                raise RuntimeError("down")
+            return list(self.summary_rows or [])
+
+        async def equipment_faults(self):
+            if not self.up:
+                raise RuntimeError("down")
+            return list(self.fault_rows or [])
+
+    service = make_service(FailAfterFirst(summary_rows(), fault_rows()))
+    # First call populates the cache fresh.
+    result = await service.status()
+    assert result["freshness"]["status"] == "fresh"
+    assert result["data"][0]["summary_source_status"] == "fresh"
+    assert result["data"][0]["detail_source_status"] == "fresh"
+
+    # Advance past TTL so the next refresh fails and the cache serves the retained
+    # value as stale with its last-success time and coverage_status checked.
+    client = service.metro
+    client.up = False
+    clock["t"] = 200.0
+    result = await service.status()
+    assert result["freshness"]["status"] == "stale"
+    for source in result["sources"]:
+        assert source["coverage_status"] == "checked"
+        assert source["last_successful_refresh_at"]
 
 
 @pytest.mark.asyncio

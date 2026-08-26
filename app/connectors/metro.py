@@ -44,6 +44,7 @@ class MetroClient:
         self.timeout = timeout
         self._client = http_client
         self._rate_limiter = rate_limiter or metro_rate_limiter()
+        self._last_malformed_detail_count = 0
 
     async def stations(self) -> list[dict]:
         await self._rate_limiter.acquire("metro")
@@ -204,8 +205,14 @@ class MetroClient:
             # An explicit empty Data object is a legitimate checked-empty summary.
             return []
 
+        group_keys = ("EquipmentServiceStatus", "StationServiceStatus")
+        if not any(data.get(key) is not None for key in group_keys):
+            # A non-empty Data object that carries neither official status group is a
+            # schema drift, not a success; reject it rather than pretending it is empty.
+            raise MetroPayloadError("Metro equipment summary Data has no status groups")
+
         rows: list[dict[str, Any]] = []
-        for group_key, raw_rows in (("EquipmentServiceStatus", data.get("EquipmentServiceStatus")), ("StationServiceStatus", data.get("StationServiceStatus"))):
+        for group_key, raw_rows in ((group_keys[0], data.get(group_keys[0])), (group_keys[1], data.get(group_keys[1]))):
             if raw_rows is None:
                 continue
             if not isinstance(raw_rows, list):
@@ -218,6 +225,7 @@ class MetroClient:
 
     async def equipment_faults(self) -> list[dict[str, Any]]:
         """Return official equipment fault detail rows from the Metro İstanbul fault page."""
+        self._last_malformed_detail_count = 0
         html = await self._get_text_url(self.equipment_faults_url)
         return self._parse_equipment_faults(html)
 
@@ -229,34 +237,44 @@ class MetroClient:
             r"<tr\b([^>]*\bdata-arizaid\b[^>]*)>(.*?)</tr>",
             re.IGNORECASE | re.DOTALL,
         )
+        malformed_rows = 0
         for match in row_pattern.finditer(html):
             attrs, body = match.group(1), match.group(2)
             row = self._parse_fault_row(attrs, body)
             if row is not None:
                 rows.append(row)
             else:
-                # A row carrying a fault id but an unusable cell layout is skipped
-                # and counted later by the service as a malformed detail.
-                continue
-        if not rows and not self._looks_like_intentional_fault_page(html):
-            # No recognizable fault rows and no table body signalling a checked-empty
-            # page means the markup changed or the page is missing the table.
+                # A row carrying a fault id but an unusable cell layout is tracked
+                # as a malformed row rather than silently dropped.
+                malformed_rows += 1
+        structured = self._is_structured_fault_page(html)
+        if not rows and not structured:
+            # No recognizable rows and no table body/header structure -> markup changed
+            # or the page is missing the table -> source failure.
             raise MetroPayloadError("Metro equipment fault page markup is unrecognized")
+        if not rows and structured and malformed_rows:
+            # A structured page where every data row is malformed is not a checked-empty
+            # result; it is a schema-drift source failure, not a fabricated empty success.
+            raise MetroPayloadError("Metro equipment fault page rows are malformed")
+        if malformed_rows and rows:
+            # Mixed valid + malformed rows signal schema drift; surface via a flag so
+            # the service can report skipped counters and a schema-drift warning.
+            self._last_malformed_detail_count = malformed_rows
         return rows
 
     @staticmethod
-    def _looks_like_intentional_fault_page(html: str) -> bool:
+    def _is_structured_fault_page(html: str) -> bool:
         import re
 
-        # A checked-empty page still carries the official table structure (a <tbody>
-        # with zero data rows) plus at least one expected header. We only treat an
-        # actual table body as a legitimate checked-empty result when no rows matched.
+        # A checked-empty page still carries the official table structure (a <table>
+        # and a <tbody>) plus at least one expected header. Without these, the page
+        # cannot be treated as a legitimate checked-empty fault page.
         has_table = re.search(r"<table\b", html, re.IGNORECASE) is not None
-        has_table_body = re.search(r"<tbody\b[^>]*>\s*(?:</tbody>|<tr\b)?", html, re.IGNORECASE | re.DOTALL) is not None
+        has_body = re.search(r"<tbody\b", html, re.IGNORECASE) is not None
         has_expected_header = bool(
             re.search(r"\b(?:Ekipman|İstasyon|İstasyon|Arıza\s+Nedeni|Konum)\b", html, re.IGNORECASE)
         )
-        return has_table and has_expected_header
+        return has_table and has_body and has_expected_header
 
     def _parse_fault_row(self, attrs: str, body: str) -> dict[str, Any] | None:
         import re
@@ -384,12 +402,28 @@ class MetroClient:
 
     @staticmethod
     def _non_negative_int(value: Any) -> int | None:
-        number = MetroClient._int(value)
-        if number is None:
+        # Reject booleans and non-integral values rather than coercing them.
+        if value is None:
             return None
-        if number < 0:
+        if isinstance(value, bool):
             return None
-        return number
+        if isinstance(value, int):
+            return value if value >= 0 else None
+        if isinstance(value, float):
+            if value.is_integer():
+                number = int(value)
+                return number if number >= 0 else None
+            return None
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return None
+            try:
+                number = int(text)
+            except ValueError:
+                return None
+            return number if number >= 0 else None
+        return None
 
     @staticmethod
     def _category_key(category_name: str, group_key: str) -> str:
