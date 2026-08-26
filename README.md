@@ -141,7 +141,7 @@ Istanbul MCP şu kaynaklardan gelen verileri kullanır:
 - Metro İstanbul istasyon verileri
 - İETT SOAP servisleri
 - İSKİ harita ve baraj kaynakları
-- İstanbul Eczacı Odası (İEO) nöbetçi eczane marker servisi
+- İBB Şehir Haritası nöbetçi eczane servisi (`cbsproxy.ibb.gov.tr/?eczanews&ilceID=all`)
 - İBB Açık Veri Portalı İstanbulkart dolum merkezi DataStore kaynağı (yıllık konum verisi)
 - İBB WiFi, kütüphane, hava kalitesi ve mahalle profili kaynakları
 
@@ -149,7 +149,7 @@ Tüm araç sonuçları standart bir cevap modeliyle döner: `summary`, `data`, `
 
 ## MCP Araçları
 
-Sunucu 29 salt okunur MCP aracı sağlar:
+Sunucu 30 salt okunur MCP aracı sağlar:
 
 ```text
 istanbul_health
@@ -195,8 +195,8 @@ istanbul_metro_accessibility_status
 | `istanbul_bbox_search` | Verilen harita kutusu içinde kalan şehir noktalarını arar. | "Kadıköy çevresindeki WiFi noktalarını bul." |
 | `istanbul_parking_nearby` | Koordinata yakın İSPARK otoparklarını kapasite, boş yer ve harita linkiyle listeler. | "Taksim yakınındaki otoparkları göster." |
 | `istanbul_parking_by_district` | İlçedeki İSPARK otoparklarını mesafe uydurmadan listeler. | "Başakşehir'de hangi otoparklar var?" |
-| `istanbul_nobetci_eczane_nearby` | İEO'nun güncel İstanbul nöbetçi eczane listesinden koordinata yakın eczaneleri mesafeye göre listeler. Bu genel eczane kataloğu veya kesin nöbet bitiş garantisi değildir. | "Kadıköy'de konumuma yakın nöbetçi eczaneler hangileri?" |
-| `istanbul_nobetci_eczane_by_district` | İEO'nun güncel İstanbul nöbetçi eczane listesini ilçe bazında listeler; çalışma saatleri veya genel katalog sunmaz. | "Kadıköy'de bugün hangi eczaneler nöbetçi?" |
+| `istanbul_nobetci_eczane_nearby` | İBB Şehir Haritası'nın güncel İstanbul nöbetçi eczane listesinden koordinata yakın eczaneleri mesafeye göre listeler. Bu genel eczane kataloğu veya kesin nöbet bitiş garantisi değildir. | "Kadıköy'de konumuma yakın nöbetçi eczaneler hangileri?" |
+| `istanbul_nobetci_eczane_by_district` | İBB Şehir Haritası'nın güncel İstanbul nöbetçi eczane listesini ilçe bazında listeler; çalışma saatleri veya genel katalog sunmaz. | "Kadıköy'de bugün hangi eczaneler nöbetçi?" |
 | `istanbul_istanbulkart_centers_nearby` | Resmi İBB İstanbulkart dolum merkezi konumlarını yarıçap içinde mesafeye göre listeler. Veri yıllık/statiktir; terminalin anlık açık, yükleme kabul ediyor, bakiyesi veya stoğu olduğu garantisini vermez. | "Taksim'e yakın İstanbulkart dolum merkezleri hangileri?" |
 | `istanbul_sosyal_tesis_nearby` | Resmi İBB sosyal tesis konumlarını yarıçap içinde mesafeye göre listeler; detay ve güvenilir eşleşme varsa rezervasyon bağlantısı verir. Yalnızca konum rehberidir, canlı işletim durumu sunmaz. | "Beşiktaş'a yakın sosyal tesisler hangileri?" |
 | `istanbul_metro_stations_nearby` | Koordinata yakın Metro İstanbul istasyonlarını hat bilgisiyle getirir. | "Levent yakınındaki metro istasyonları hangileri?" |
@@ -469,6 +469,10 @@ python scripts/live_mcp_uat.py
 - `ISKI_DAMS_CACHE_TTL_SECONDS`
 - `ISKI_FAULTS_STALE_IF_ERROR_SECONDS`
 - `ISKI_DAMS_STALE_IF_ERROR_SECONDS`
+- `IBB_PHARMACY_BASE_URL` (canonical default: `https://cbsproxy.ibb.gov.tr/?eczanews`)
+- `IBB_PHARMACY_REQUEST_TIMEOUT_SECONDS`, `IBB_PHARMACY_REQUEST_ATTEMPTS`
+- `IBB_PHARMACY_CACHE_TTL_SECONDS` (300) and `IBB_PHARMACY_MAX_CACHE_AGE_SECONDS` (1800)
+- `IBB_PHARMACY_STALE_IF_ERROR_SECONDS` and `IBB_PHARMACY_RATE_*`
 - `MARMARAY_API_BASIC_TOKEN`
 - `SEHIR_HATLARI_RELAY_URL`
 - `SEHIR_HATLARI_RELAY_TOKEN`

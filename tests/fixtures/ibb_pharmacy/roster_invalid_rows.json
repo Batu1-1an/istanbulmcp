@@ -1,0 +1,11 @@
+{
+  "ArrayOfAramaList": {
+    "AramaList": [
+      {"ADI": "Geçerli", "ADRES": "Adres", "TELEFON": "0212", "LON": "29.0", "LAT": "41.0", "ILCEID": "1", "ILCEADI": "KADIKÖY"},
+      {"ADI": "", "ADRES": "Adres", "ILCEID": "2", "ILCEADI": "KADIKÖY"},
+      {"ADI": "Eksik İlçe", "ADRES": "Adres", "ILCEID": "", "ILCEADI": ""},
+      {"ADI": "Bozuk Konum", "ADRES": "Adres", "LON": "0", "LAT": "not-a-number", "ILCEID": "3", "ILCEADI": "KADIKÖY"},
+      {"ADI": "Sınır Dışı", "ADRES": "Adres", "LON": "29.0", "LAT": "95", "ILCEID": "4", "ILCEADI": "KADIKÖY"}
+    ]
+  }
+}

@@ -160,7 +160,7 @@ async def istanbul_nobetci_eczane_nearby(
     radius_m: int = 1000,
     limit: int | None = None,
 ) -> dict:
-    """Find current İstanbul on-duty pharmacies near coordinates; this is not a general catalog or duty guarantee."""
+    """Find current İBB City Map on-duty pharmacies near coordinates; not a general catalog or duty-end guarantee."""
     return await PharmacyService(settings=get_settings()).nearby(
         lat=lat,
         lon=lon,
@@ -174,7 +174,7 @@ async def istanbul_nobetci_eczane_by_district(
     district: str,
     limit: int | None = None,
 ) -> dict:
-    """List current İstanbul on-duty pharmacies in a district, not general pharmacy hours or a catalog."""
+    """List current İBB City Map on-duty pharmacies in a district; not pharmacy hours or a general catalog."""
     return await PharmacyService(settings=get_settings()).by_district(
         district=district,
         limit=limit,

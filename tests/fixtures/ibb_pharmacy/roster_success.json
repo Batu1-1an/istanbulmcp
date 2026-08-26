@@ -1,0 +1,10 @@
+{
+  "ArrayOfAramaList": {
+    "@xmlns:xsd": "http://www.w3.org/2001/XMLSchema",
+    "AramaList": [
+      {"ADI": "Moda Eczanesi", "ADRES": "Moda Caddesi No: 1", "TELEFON": "0216 555 10 01", "LON": "29.0303", "LAT": "40.9909", "ILCEID": "1421", "MESAFE": "0", "ILCEADI": "KADIKÖY"},
+      {"ADI": "Beşiktaş Eczanesi", "ADRES": "Barbaros Bulvarı No: 2", "TELEFON": "0212 555 10 02", "LON": "29.0060", "LAT": "41.0430", "ILCEID": "1417", "MESAFE": "0", "ILCEADI": "BEŞİKTAŞ"},
+      {"ADI": "Üsküdar Eczanesi", "ADRES": "Selmani Pak Caddesi No: 3", "TELEFON": "0216 555 10 03", "LON": "29.0150", "LAT": "41.0250", "ILCEID": "1426", "MESAFE": "0", "ILCEADI": "ÜSKÜDAR"}
+    ]
+  }
+}

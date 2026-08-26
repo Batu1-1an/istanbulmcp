@@ -77,12 +77,12 @@ def traffic_rate_limiter() -> AsyncTokenBucket:
 
 
 @lru_cache
-def ieo_rate_limiter() -> AsyncTokenBucket:
+def ibb_pharmacy_rate_limiter() -> AsyncTokenBucket:
     settings = get_settings()
     return AsyncTokenBucket(
-        capacity=settings.ieo_rate_capacity,
-        refill_per_second=settings.ieo_rate_refill_per_second,
-        max_wait_seconds=settings.ieo_rate_max_wait_seconds,
+        capacity=settings.ibb_pharmacy_rate_capacity,
+        refill_per_second=settings.ibb_pharmacy_rate_refill_per_second,
+        max_wait_seconds=settings.ibb_pharmacy_rate_max_wait_seconds,
     )
 
 

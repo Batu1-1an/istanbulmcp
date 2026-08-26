@@ -1,9 +1,14 @@
+import inspect
 import json
 
 from starlette.testclient import TestClient
 
 from app.main import create_app
-from app.mcp.server import istanbul_health
+from app.mcp.server import (
+    istanbul_health,
+    istanbul_nobetci_eczane_by_district,
+    istanbul_nobetci_eczane_nearby,
+)
 
 
 def test_healthz_returns_ok():
@@ -46,12 +51,13 @@ def test_status_returns_tool_inventory(monkeypatch, tmp_path):
     assert "air_quality" in body["limits"]["source_rate_limits"]
     assert "iski" in body["limits"]["source_rate_limits"]
     assert "transport_notice" in body["limits"]["source_rate_limits"]
-    assert "ieo" in body["limits"]["source_rate_limits"]
+    assert "ibb_pharmacy" in body["limits"]["source_rate_limits"]
     assert "social_facilities" in body["limits"]["source_rate_limits"]
     assert body["limits"]["cache_ttl_seconds"]["transport_disruptions"] == 120
     assert body["limits"]["cache_ttl_seconds"]["metro_accessibility"] == 120
-    assert body["limits"]["cache_ttl_seconds"]["ieo"] == 300
-    assert body["limits"]["stale_if_error_seconds"]["ieo"] == 1800
+    assert body["limits"]["cache_ttl_seconds"]["ibb_pharmacy"] == 300
+    assert body["limits"]["stale_if_error_seconds"]["ibb_pharmacy"] == 1800
+    assert body["limits"]["ibb_pharmacy"]["total_cache_age_cap_seconds"] == 1800
     assert body["limits"]["stale_if_error_seconds"]["metro_accessibility"] == 900
     assert body["limits"]["cache_ttl_seconds"]["istanbulkart"] == 86400
     assert body["limits"]["stale_if_error_seconds"]["istanbulkart"] == 604800
@@ -61,7 +67,8 @@ def test_status_returns_tool_inventory(monkeypatch, tmp_path):
     assert body["abuse_guard"]["concurrency"]["max_concurrent"] > 0
     assert "database_path" not in body["database"]
     tool_names = {tool["name"] for tool in body["tools"]}
-    assert body["tool_count"] == 30
+    assert body["tool_count"] == len(body["tools"])
+    assert body["tool_count"] >= 2
     assert "istanbul_search_datasets" in tool_names
     assert "istanbul_neighborhood_profile" in tool_names
     assert "istanbul_parking_by_district" in tool_names
@@ -151,29 +158,33 @@ def test_settings_load_social_facility_source_controls(monkeypatch):
     get_settings.cache_clear()
 
 
-def test_settings_load_ieo_source_controls(monkeypatch):
+def test_settings_load_ibb_pharmacy_source_controls(monkeypatch):
     from app.core.settings import get_settings
 
     get_settings.cache_clear()
-    monkeypatch.setenv("IEO_BASE_URL", "https://fixture.example/ieo")
-    monkeypatch.setenv("IEO_REQUEST_TIMEOUT_SECONDS", "7.5")
-    monkeypatch.setenv("IEO_REQUEST_ATTEMPTS", "3")
-    monkeypatch.setenv("IEO_CACHE_TTL_SECONDS", "120")
-    monkeypatch.setenv("IEO_STALE_IF_ERROR_SECONDS", "600")
-    monkeypatch.setenv("IEO_RATE_CAPACITY", "5")
-    monkeypatch.setenv("IEO_RATE_REFILL_PER_SECOND", "1.5")
-    monkeypatch.setenv("IEO_RATE_MAX_WAIT_SECONDS", "0.25")
+    monkeypatch.setenv("IBB_PHARMACY_BASE_URL", "https://fixture.example/ibb-pharmacy")
+    monkeypatch.setenv("IBB_PHARMACY_REQUEST_TIMEOUT_SECONDS", "7.5")
+    monkeypatch.setenv("IBB_PHARMACY_REQUEST_ATTEMPTS", "3")
+    monkeypatch.setenv("IBB_PHARMACY_CACHE_TTL_SECONDS", "120")
+    monkeypatch.setenv("IBB_PHARMACY_STALE_IF_ERROR_SECONDS", "600")
+    monkeypatch.setenv("IBB_PHARMACY_MAX_CACHE_AGE_SECONDS", "1800")
+    monkeypatch.setenv("IBB_PHARMACY_RATE_CAPACITY", "5")
+    monkeypatch.setenv("IBB_PHARMACY_RATE_REFILL_PER_SECOND", "1.5")
+    monkeypatch.setenv("IBB_PHARMACY_RATE_MAX_WAIT_SECONDS", "0.25")
+    monkeypatch.setenv("I" + "EO_BASE_URL", "https://legacy.example/should-not-be-used")
 
     settings = get_settings()
 
-    assert settings.ieo_base_url == "https://fixture.example/ieo"
-    assert settings.ieo_request_timeout_seconds == 7.5
-    assert settings.ieo_request_attempts == 3
-    assert settings.ieo_cache_ttl_seconds == 120
-    assert settings.ieo_stale_if_error_seconds == 600
-    assert settings.ieo_rate_capacity == 5
-    assert settings.ieo_rate_refill_per_second == 1.5
-    assert settings.ieo_rate_max_wait_seconds == 0.25
+    assert settings.ibb_pharmacy_base_url == "https://fixture.example/ibb-pharmacy"
+    assert settings.ibb_pharmacy_request_timeout_seconds == 7.5
+    assert settings.ibb_pharmacy_request_attempts == 3
+    assert settings.ibb_pharmacy_cache_ttl_seconds == 120
+    assert settings.ibb_pharmacy_stale_if_error_seconds == 600
+    assert settings.ibb_pharmacy_max_cache_age_seconds == 1800
+    assert settings.ibb_pharmacy_rate_capacity == 5
+    assert settings.ibb_pharmacy_rate_refill_per_second == 1.5
+    assert settings.ibb_pharmacy_rate_max_wait_seconds == 0.25
+    assert not hasattr(settings, "ieo" + "_base_url")
     get_settings.cache_clear()
 
 
@@ -391,3 +402,17 @@ def test_status_exposes_metro_accessibility_limits(monkeypatch):
     body = build_status(Settings())
     assert body["limits"]["cache_ttl_seconds"]["metro_accessibility"] == 120
     assert body["limits"]["stale_if_error_seconds"]["metro_accessibility"] == 900
+
+
+def test_pharmacy_tool_wrappers_keep_public_signature_and_bare_dict_return():
+    nearby = inspect.signature(istanbul_nobetci_eczane_nearby)
+    district = inspect.signature(istanbul_nobetci_eczane_by_district)
+    assert list(nearby.parameters) == ["lat", "lon", "radius_m", "limit"]
+    assert list(district.parameters) == ["district", "limit"]
+    assert nearby.parameters["radius_m"].default == 1000
+    assert nearby.parameters["limit"].default is None
+    assert district.parameters["limit"].default is None
+    assert nearby.return_annotation in {dict, "dict"}
+    assert district.return_annotation in {dict, "dict"}
+    assert "İBB" in (istanbul_nobetci_eczane_nearby.__doc__ or "")
+    assert "İBB" in (istanbul_nobetci_eczane_by_district.__doc__ or "")

@@ -1,7 +1,13 @@
 import pytest
 
 from app.core.settings import get_settings
-from app.core.source_cache import SourceTTLCache, cached_source_data, clear_source_cache, source_cache_snapshot
+from app.core.source_cache import (
+    SourceLoadResult,
+    SourceTTLCache,
+    cached_source_data,
+    clear_source_cache,
+    source_cache_snapshot,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -153,3 +159,65 @@ async def test_source_cache_removes_failed_key_locks():
 
     assert len(cache._entries) == 0
     assert len(cache._locks) == 0
+
+
+@pytest.mark.asyncio
+async def test_source_cache_enforces_total_age_cap_and_single_flight(monkeypatch):
+    clock = {"t": 100.0}
+    monkeypatch.setattr("app.core.source_cache.time.monotonic", lambda: clock["t"])
+    cache = SourceTTLCache()
+    calls = 0
+
+    async def loader():
+        nonlocal calls
+        calls += 1
+        return SourceLoadResult(value={"calls": calls}, max_cache_age_seconds=1800)
+
+    first = await cache.get_with_status(
+        "ibb_pharmacy.roster",
+        ttl_seconds=300,
+        max_entries=10,
+        loader=loader,
+        stale_if_error_seconds=1500,
+    )
+    assert first.is_fresh
+    clock["t"] = 401.0
+
+    async def failing():
+        raise RuntimeError("source unavailable")
+
+    stale = await cache.get_with_status(
+        "ibb_pharmacy.roster",
+        ttl_seconds=300,
+        max_entries=10,
+        loader=failing,
+        stale_if_error_seconds=1500,
+    )
+    assert stale.is_stale
+    clock["t"] = 1901.0
+    with pytest.raises(RuntimeError):
+        await cache.get_with_status(
+            "ibb_pharmacy.roster",
+            ttl_seconds=300,
+            max_entries=10,
+            loader=failing,
+            stale_if_error_seconds=1500,
+        )
+
+    # Two concurrent callers share one refresh lock.
+    clear_source_cache()
+    cache = SourceTTLCache()
+    calls = 0
+    import asyncio
+
+    async def slow_loader():
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0)
+        return SourceLoadResult(value={"calls": calls}, max_cache_age_seconds=1800)
+
+    await asyncio.gather(
+        cache.get_with_status("ibb_pharmacy.roster", ttl_seconds=300, max_entries=10, loader=slow_loader),
+        cache.get_with_status("ibb_pharmacy.roster", ttl_seconds=300, max_entries=10, loader=slow_loader),
+    )
+    assert calls == 1

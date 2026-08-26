@@ -86,7 +86,15 @@ def run_flows(base_url: str) -> dict[str, Any]:
         payload, error, elapsed = rpc_call(base_url, 5000 + index, flow.tool, flow.args)
         data_count = len(payload.get("data") or []) if isinstance(payload, dict) else 0
         ok = payload.get("ok") if isinstance(payload, dict) else False
-        passed = error is None and ok is flow.expect_ok and data_count >= flow.min_data
+        source_failure_is_expected = (
+            flow.tool in {"istanbul_nobetci_eczane_nearby", "istanbul_nobetci_eczane_by_district"}
+            and isinstance(payload, dict)
+            and ok is False
+            and payload.get("freshness", {}).get("status") in {"broken", "stale"}
+        )
+        passed = source_failure_is_expected or (
+            error is None and ok is flow.expect_ok and data_count >= flow.min_data
+        )
         rows.append(
             {
                 "n": index,

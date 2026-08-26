@@ -18,8 +18,8 @@ TOOL_SOURCES = {
     "istanbul_bbox_search": "sqlite",
     "istanbul_parking_nearby": "ispark",
     "istanbul_parking_by_district": "ispark",
-    "istanbul_nobetci_eczane_nearby": "ieo",
-    "istanbul_nobetci_eczane_by_district": "ieo",
+    "istanbul_nobetci_eczane_nearby": "ibb_pharmacy",
+    "istanbul_nobetci_eczane_by_district": "ibb_pharmacy",
     "istanbul_istanbulkart_centers_nearby": "istanbulkart",
     "istanbul_sosyal_tesis_nearby": "social_facilities",
     "istanbul_metro_stations_nearby": "metro",
@@ -87,7 +87,7 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
                 "air_quality_station": settings.air_quality_station_cache_ttl_seconds,
                 "air_quality_reading": settings.air_quality_reading_cache_ttl_seconds,
                 "traffic": settings.traffic_cache_ttl_seconds,
-                "ieo": settings.ieo_cache_ttl_seconds,
+                "ibb_pharmacy": settings.ibb_pharmacy_cache_ttl_seconds,
                 "istanbulkart": settings.istanbulkart_cache_ttl_seconds,
                 "social_facilities": settings.social_facilities_cache_ttl_seconds,
                 "iski_faults": settings.iski_faults_cache_ttl_seconds,
@@ -96,10 +96,13 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
             "stale_if_error_seconds": {
                 "iski_faults": settings.iski_faults_stale_if_error_seconds,
                 "iski_dams": settings.iski_dams_stale_if_error_seconds,
-                "ieo": settings.ieo_stale_if_error_seconds,
+                "ibb_pharmacy": settings.ibb_pharmacy_stale_if_error_seconds,
                 "istanbulkart": settings.istanbulkart_stale_if_error_seconds,
                 "social_facilities": settings.social_facilities_stale_if_error_seconds,
                 "metro_accessibility": settings.metro_accessibility_stale_if_error_seconds,
+            },
+            "ibb_pharmacy": {
+                "total_cache_age_cap_seconds": settings.ibb_pharmacy_max_cache_age_seconds,
             },
             "istanbulkart": {
                 "dataset_id": settings.istanbulkart_dataset_id,
@@ -148,10 +151,10 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
                     "refill_per_second": settings.transport_notice_rate_refill_per_second,
                     "max_wait_seconds": settings.transport_notice_rate_max_wait_seconds,
                 },
-                "ieo": {
-                    "capacity": settings.ieo_rate_capacity,
-                    "refill_per_second": settings.ieo_rate_refill_per_second,
-                    "max_wait_seconds": settings.ieo_rate_max_wait_seconds,
+                "ibb_pharmacy": {
+                    "capacity": settings.ibb_pharmacy_rate_capacity,
+                    "refill_per_second": settings.ibb_pharmacy_rate_refill_per_second,
+                    "max_wait_seconds": settings.ibb_pharmacy_rate_max_wait_seconds,
                 },
                 "social_facilities": {
                     "capacity": settings.social_facilities_rate_capacity,

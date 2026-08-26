@@ -1,8 +1,8 @@
 # Kaynak Erişilebilirlik Analizi — Neden Bazı Araçlar Çalışmıyor?
 
-**Tarih:** 2026-08-26
+**Tarih:** 2026-08-26 (İBB eczane geçişi öncesi gözlem)
 **Kapsam:** İstanbul MCP'nin canlı (Railway) ortamda bazı araçlarının `unavailable` / zaman aşımı dönmesinin kök nedeni.
-**Sonuç (tek cümle):** Sorun **kodumuzda değil**; iki dış kaynağın (Şehir Hatları ve İEO) **Railway sunucusuna (Cloudflare/balancer IP aralığı) erişim izni vermemesi** yüzünden.
+**Sonuç (tek cümle):** Bu tarihli raporda iki dış kaynağın (Şehir Hatları ve eski İEO adapter'ı) Railway erişim sorunları kaydedilmiştir; eczane adapter'ı artık resmi İBB City Map kaynağını kullanır.
 
 ---
 
@@ -23,8 +23,8 @@ Bu analiz, **benim eklediğim Metro Arıza aracından bağımsız** olan iki ala
 | Araç | Kaynak (upstream) | Canlı Durum | Kök Neden |
 |------|-------------------|-------------|-----------|
 | `istanbul_ferry_schedules` | `sehirhatlari.istanbul` | ❌ `unavailable` | HTTP 403 + cookie-consent (bot koruması) |
-| `istanbul_nobetci_eczane_by_district` | `istanbuleczaciodasi.org.tr` | ❌ `unavailable` | Zaman aşımı (Railway'den bağlantı kurulamıyor) |
-| `istanbul_nobetci_eczane_nearby` | `istanbuleczaciodasi.org.tr` | ❌ `unavailable` | Zaman aşımı (Railway'den bağlantı kurulamıyor) |
+| `istanbul_nobetci_eczane_by_district` | `cbsproxy.ibb.gov.tr` | ✅ local adapter | İBB City Map roster (`ilceID=all`) |
+| `istanbul_nobetci_eczane_nearby` | `cbsproxy.ibb.gov.tr` | ✅ local adapter | İBB City Map roster (`ilceID=all`) |
 | `istanbul_metro_accessibility_status` | `api.ibb.gov.tr` + `metro.istanbul` | ✅ `fresh` | — (çalışıyor) |
 
 ---
@@ -49,7 +49,9 @@ Projede bir Cloudflare Worker relay var (`istanbul-iski-relay.batuaa70.workers.d
 
 ---
 
-## 4. Sorun 2 — İEO (Nöbetçi Eczane): Zaman Aşımı
+## 4. Tarihsel Sorun 2 — İEO (Nöbetçi Eczane): Zaman Aşımı
+
+> Bu bölüm eski İEO entegrasyonunun 2026-08-26 gözlemidir. İEO entegrasyonu kaldırıldı; mevcut araçlar `https://cbsproxy.ibb.gov.tr/?eczanews&ilceID=all` endpoint'ini kullanır.
 
 ### Ne oluyor?
 Railway'den `istanbuleczaciodasi.org.tr`'ye istek atıldığında **30 saniye boyunca hiç yanıt gelmiyor** (timeout). Ama kendi bilgisayarımdan aynı istek **0.05 saniyede HTTP 200** dönüyor.
@@ -92,7 +94,7 @@ TRANSPORT_UPSTREAMS:
   /transport/sehir-hatlari → www.sehirhatlari.istanbul/tr/iptal-seferler
 ```
 
-**Görülen eksik:** İEO (eczane) için relay **yok**. İEO doğrudan Railway'den çekiliyor → bu yüzden engelleniyor.
+**Tarihsel eksik:** Eski İEO adapter'ı için relay yoktu. Bu bağımlılık kaldırıldı.
 
 ---
 
@@ -102,7 +104,7 @@ TRANSPORT_UPSTREAMS:
 Mevcut Cloudflare Worker relay'i her iki sorun için genişletmek:
 
 - **Şehir Hatları:** Relay'in gittiği adresi ve header'ları düzeltmek, cookie-consent postback'ini simüle etmek. Böylece relay, Cloudflare ağından Şehir Hatları'nı asabilir.
-- **İEO:** Relay'e `/transport/nobetci-eczane` yolu eklemek. Cloudflare ağından İEO'ya erişim, Railway'den erişimden çok daha güvenilir olur.
+- **İEO (tarihsel):** Relay'e `/transport/nobetci-eczane` yolu eklemek. Bu seçenek artık gerekli değildir; İBB City Map resmi kaynağı kullanılmaktadır.
 
 **Artı:** Mevcut `workers/iski-relay` kalıbı korunur, tek çatı altında toplanır.
 **Eksi:** Cloudflare'e deploy + test etmek zaman alır; Şehir Hatları cookie-consent'i hâlâ sorun olabilir.
@@ -112,17 +114,17 @@ Mevcut Cloudflare Worker relay'i her iki sorun için genişletmek:
 - **İBB Şehir Haritası API'si** — **doğrulandı, çalışıyor (2026-08-26):**
 
   ```text
-  Endpoint: https://cbsproxy.ibb.gov.tr/?eczanews&ilceID=
+  Endpoint: https://cbsproxy.ibb.gov.tr/?eczanews&ilceID=all
   ```
 
-  - Boş `ilceID=` veya `all` → tüm İstanbul (131 kayıt)
+  - `ilceID=all` → tüm İstanbul (runtime satır sayısı sabit değildir)
   - `ilceID=<id>` (örn. `1103`) → o ilçe (örn. ADALAR, 5 kayıt)
   - Veri formatı: `{"ArrayOfAramaList": {"AramaList": [...]}}`
   - Her kayıt: `ADI`, `ADRES`, `TELEFON`, `LAT`, `LON`, `ILCEID`, `ILCEADI`, `MESAFE`
   - Kalite testi: 5 ardışık erişim hepsi HTTP 200; tüm `LAT`/`LON` sayısal; 39 ilçe
   - Bu, İBB'nin kendi resmî Şehir Haritası katmanı → Railway'den erişim sorunu yaşama olasılığı çok düşük
 
-  **Not / dikkat:** Bu katman, İEO'nun `get_eczane_markers`'ından daha azdetaylıdır (`nobet_bitis` gibi alan yok; sadece konum + ad + telefon + ilçe). Ama mevcut `istanbul_nobetci_eczane_*` araçları zaten benzer düzeyde veri döndürüyordu. Geçiş için `app/connectors/ieo.py` + `app/services/pharmacy.py` içindeki alan-yeniden adlandırma (`eczane_ad`→`ADI`, `lat/lng`→`LAT/LON`) güncellenmeli.
+  **Not / dikkat:** Bu katman, eski İEO `get_eczane_markers` akışından daha az detaylıdır (`nobet_bitis` gibi alan yok; yalnızca konum + ad + telefon + ilçe). İBB geçişi tamamlandı; `app/connectors/ibb_pharmacy.py` ve `app/services/pharmacy.py` alan eşlemesini yürütür.
 
 - **Şehir Hatları için:** Resmi, dokümante edilmiş bir JSON API yok. Alternatif yok.
 
@@ -136,13 +138,15 @@ Bu iki aracın canlıda `unavailable` / açık hata raporlamasını kabul etmek.
 | Sorun | Kök Neden | Çözüm |
 |-------|-----------|-------|
 | Şehir Hatları (vapur) 403 | Cloudflare bot koruması + cookie-consent | Relay'i güçlendirmek (Seçenek A) |
-| İEO (eczane) timeout | Railway IP aralığına erişim engeli | **İBB CBS API'ye geçmek (Seçenek B, doğrulandı)** veya relay eklemek (A) |
+| Eski İEO (eczane) timeout | Railway IP aralığına erişim engeli | **İBB CBS API'ye geçiş (uygulandı)** |
 
-**Ana fikir:** Bu iki alan **benim eklediğim Metro Accessibility özelliğinden bağımsız**, deploy'dan önce de vardı. Kaynak sitelerin bulut/balancer IP'lerine izin vermemesi nedeniyle. **İEO için** en temiz ve kalıcı çözüm, İBB'nin kendi resmî `cbsproxy.ibb.gov.tr/?eczanews` katmanına geçmek (doğrulandı). **Şehir Hatları için** ise resmi API olmadığından en güçlü seçenek mevcut Cloudflare Worker relay'ini güçlendirmek.
+**Ana fikir:** Bu tarihsel rapor Metro Accessibility özelliğinden bağımsızdır. Eczane erişim sorunu, resmi İBB `cbsproxy.ibb.gov.tr/?eczanews&ilceID=all` katmanına geçişle giderilmiştir; Şehir Hatları için relay araştırması ayrı konudur.
 
 ---
 
-## 9. Ek Not: Testlerin Durumu
+## 9. Ek Not: Tarihsel Test Durumu
+
+> Aşağıdaki canlı test sonuçları İBB eczane geçişinden önceki 2026-08-26 çalıştırmasına aittir; yeni adapter için opt-in testler `tests/live/test_mcp_live.py` içinde tutulur.
 
 - `RUN_LIVE_MCP_TESTS=1 ... -k metro_accessibility` → **geçti** (benim eklediğim araç canlıda çalışıyor) ✅
 - `RUN_LIVE_MCP_TESTS=1` (tüm canlı testler) → **3 fail**:

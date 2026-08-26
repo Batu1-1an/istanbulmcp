@@ -132,8 +132,10 @@ def test_live_mcp_nobetci_eczane_by_district_tool():
     assert error is None
     assert "freshness" in payload
     if payload["ok"]:
+        assert payload["sources"][0]["name"].startswith("İBB Şehir Haritası")
         assert all(row["province"] == "İstanbul" for row in payload["data"])
         assert all("distance_m" not in row for row in payload["data"])
+        assert all(row["duty_ends_at"] is None for row in payload["data"])
     else:
         assert payload["freshness"]["status"] in {"broken", "stale"}
 
@@ -149,8 +151,10 @@ def test_live_mcp_nobetci_eczane_nearby_tool():
     assert error is None
     assert "freshness" in payload
     if payload["ok"]:
+        assert payload["sources"][0]["name"].startswith("İBB Şehir Haritası")
         assert all(row["province"] == "İstanbul" for row in payload["data"])
         assert all(row["distance_m"] <= 5000 for row in payload["data"])
+        assert all(row["duty_ends_at"] is None for row in payload["data"])
         assert all(
             payload["data"][index]["distance_m"] <= payload["data"][index + 1]["distance_m"]
             for index in range(len(payload["data"]) - 1)

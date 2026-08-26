@@ -1,0 +1,9 @@
+{
+  "ArrayOfAramaList": {
+    "AramaList": [
+      {"ADI": "Moda Eczanesi", "ADRES": "Moda Caddesi No: 1", "TELEFON": "0216 555 10 01", "LON": "29.0303", "LAT": "40.9909", "ILCEID": "1421", "ILCEADI": "KADIKÖY"},
+      {"ADI": " Moda Eczanesi ", "ADRES": "Moda Caddesi No: 1", "TELEFON": "0216 555 10 01", "LON": "29.0303", "LAT": "40.9909", "ILCEID": "1421", "ILCEADI": "Kadikoy"},
+      {"ADI": "Aynı Ad Farklı İlçe ID", "ADRES": "Başka Cadde No: 2", "TELEFON": "0216 555 10 02", "LON": "29.0310", "LAT": "40.9910", "ILCEID": "9999", "ILCEADI": "KADIKÖY"}
+    ]
+  }
+}

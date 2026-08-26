@@ -5,7 +5,7 @@ All tools are read-only and return a standard envelope with `summary`, `data`, `
 When local source back-pressure is active, affected tools return `ok=false` with `retry_after_seconds` in `data[0]`.
 Expected validation and source failures return `ok=false` envelopes with `error_code`, field/source context, and actionable limits where available.
 
-Repeated CKAN catalog/resource, IETT line/stop, air-quality and IEO pharmacy requests use local back-pressure or TTL caches to reduce pressure on source systems. `/status` exposes TTL settings and redacted cache metadata with source labels and short key hashes, not raw user query/filter values.
+Repeated CKAN catalog/resource, IETT line/stop, air-quality and İBB pharmacy requests use local back-pressure or TTL caches to reduce pressure on source systems. `/status` exposes TTL settings and redacted cache metadata with source labels and short key hashes, not raw user query/filter values.
 
 ## Core
 
@@ -50,10 +50,12 @@ Coordinate-bearing location results include `maps_url`, a Google Maps search URL
 
 ## On-duty Pharmacies
 
-- `istanbul_nobetci_eczane_nearby(lat, lon, radius_m?, limit?)` returns İstanbul-only records from the official İEO marker roster, sorted by straight-line distance. The default radius is 1,000 meters, the maximum is 5,000 meters, and the default/max limits are 20/100.
+- `istanbul_nobetci_eczane_nearby(lat, lon, radius_m?, limit?)` returns İstanbul-only records from the official İBB City Map roster (`https://cbsproxy.ibb.gov.tr/?eczanews&ilceID=all`), sorted by straight-line distance. The default radius is 1,000 meters, the maximum is 5,000 meters, and the default/max limits are 20/100.
 - `istanbul_nobetci_eczane_by_district(district, limit?)` applies Turkish-character-tolerant exact district matching over the same complete roster. Unknown districts return an empty successful result.
 
-Both tools share a 5-minute fresh cache and may serve the last successful roster for up to 30 minutes as `freshness.status=stale` after a source failure. Responses expose source totals, İstanbul accepted/skipped counts, freshness, limits and warnings. The roster is a current on-duty source list only; it is not a general pharmacy catalog, working-hours directory or guarantee of a duty end time. Missing `nobet_bitis` values remain null.
+Both tools share a 5-minute fresh cache and may serve the last successful roster until its total age reaches 30 minutes as `freshness.status=stale` after a source failure. Responses expose source totals, accepted/skipped and geo-eligible counts, freshness, limits and warnings. The roster is a current on-duty source list only; it is not a general pharmacy catalog, working-hours directory or guarantee of a duty end time. `duty_ends_at` is always null because the İBB payload does not publish a duty-end field.
+
+Each normalized record contains `source_id` (`ibb:` plus a deterministic SHA-256 identity), `name`, nullable `phone`, `province`, `district`, source-preserved `district_id`, `address`, nullable `lat`/`lon`, nullable legacy detail fields, `maps_url`, and (for nearby only) local Haversine `distance_m`. Invalid or missing coordinates are retained as null for district lists and excluded from nearby results. The source request is a read-only `GET` to `https://cbsproxy.ibb.gov.tr/?eczanews&ilceID=all`; malformed wrappers and non-success responses return structured `ok=false` errors.
 
 `istanbul_mobility_nearby` is for practical questions such as nearby parking, metro, public transport stops, air quality, and the citywide traffic index. It accepts explicit `lat`/`lon` or curated reference points such as `Kadıköy Rıhtım`, `Taksim`, or `Levent`. If a district name is supplied instead, it returns district-wide parking records without distances and asks for an exact place only when distance matters.
 
