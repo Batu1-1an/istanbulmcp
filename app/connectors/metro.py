@@ -10,6 +10,18 @@ from app.core.rate_limit import RateLimiter
 from app.core.source_limits import metro_rate_limiter
 
 
+def _normalize_token(value: str) -> str:
+    """Lowercase, strip Turkish diacritics and collapse whitespace for matching."""
+    text = value.strip().casefold()
+    replacements = {
+        "ı": "i", "i": "i", "ö": "o", "ü": "u", "ç": "c", "ş": "s", "ğ": "g",
+        "â": "a", "î": "i", "û": "u",
+    }
+    for src, dst in replacements.items():
+        text = text.replace(src, dst)
+    return " ".join(text.split())
+
+
 class MetroPayloadError(RuntimeError):
     pass
 
@@ -19,12 +31,16 @@ class MetroClient:
         self,
         base_url: str = "https://api.ibb.gov.tr/MetroIstanbul/api/MetroMobile/V2",
         announcements_url: str = "https://api.ibb.gov.tr/MetroIstanbul/api/MetroMobile/V3/GetAnnouncementsWithoutHtml/tr",
+        equipment_summary_url: str = "https://api.ibb.gov.tr/MetroIstanbul/api/MetroMobile/V2/GetFaultyEquipments",
+        equipment_faults_url: str = "https://www.metro.istanbul/MetroIstanbulBuzPateni2024/SeferDurumlari/Ariza",
         timeout: float = 15.0,
         http_client: httpx.AsyncClient | None = None,
         rate_limiter: RateLimiter | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.announcements_url = announcements_url
+        self.equipment_summary_url = equipment_summary_url
+        self.equipment_faults_url = equipment_faults_url
         self.timeout = timeout
         self._client = http_client
         self._rate_limiter = rate_limiter or metro_rate_limiter()
@@ -166,6 +182,196 @@ class MetroClient:
                 }
             )
         return normalized
+
+    async def equipment_summary(self) -> list[dict[str, Any]]:
+        """Return official category equip. counts from the GetFaultyEquipments JSON source."""
+        body = await self._get_json_url(self.equipment_summary_url)
+        if not isinstance(body, dict):
+            raise MetroPayloadError("Metro equipment summary payload must be an object")
+        success = body.get("Success", True)
+        if success is False or str(success).lower() == "false":
+            raise MetroPayloadError("Metro equipment summary response was unsuccessful")
+        data = body.get("Data") or body.get("data")
+        if not isinstance(data, dict):
+            raise MetroPayloadError("Metro equipment summary Data payload must be an object")
+
+        rows: list[dict[str, Any]] = []
+        for group_key, raw_rows in (("EquipmentServiceStatus", data.get("EquipmentServiceStatus")), ("StationServiceStatus", data.get("StationServiceStatus"))):
+            if raw_rows is None:
+                continue
+            if not isinstance(raw_rows, list):
+                raise MetroPayloadError("Metro equipment summary row group must be a list")
+            for row in raw_rows:
+                if not isinstance(row, dict):
+                    raise MetroPayloadError("Metro equipment summary row must be an object")
+                rows.append(self._normalize_summary_row(row, group_key))
+        return rows
+
+    async def equipment_faults(self) -> list[dict[str, Any]]:
+        """Return official equipment fault detail rows from the Metro İstanbul fault page."""
+        html = await self._get_text_url(self.equipment_faults_url)
+        return self._parse_equipment_faults(html)
+
+    def _parse_equipment_faults(self, html: str) -> list[dict[str, Any]]:
+        import re
+
+        rows: list[dict[str, Any]] = []
+        row_pattern = re.compile(
+            r"<tr\b([^>]*\bdata-arizaid\b[^>]*)>(.*?)</tr>",
+            re.IGNORECASE | re.DOTALL,
+        )
+        for match in row_pattern.finditer(html):
+            attrs, body = match.group(1), match.group(2)
+            row = self._parse_fault_row(attrs, body)
+            if row is not None:
+                rows.append(row)
+        return rows
+
+    def _parse_fault_row(self, attrs: str, body: str) -> dict[str, Any] | None:
+        import re
+
+        def attr(name: str) -> str | None:
+            m = re.search(rf"\b{name}=\"([^\"]*)\"", attrs, re.IGNORECASE)
+            return m.group(1).strip() or None if m else None
+
+        fault_id = attr("data-arizaid")
+        line_id = attr("data-hatid")
+        station_id = attr("data-istasyonid")
+        equipment_code = attr("data-refekipman")
+
+        cells = [self._strip_html(c) for c in re.findall(r"<td\b[^>]*>(.*?)</td>", body, re.IGNORECASE | re.DOTALL)]
+        if len(cells) < 6:
+            # A row without the expected number of source cells is treated as unusable.
+            return None
+        cells = cells[:7]
+        line_code = self._text(cells[0]) if len(cells) > 0 else None
+        if line_code is not None and not self._looks_like_line_code(line_code):
+            line_code = self._infer_line_code(line_code, None)
+        station_name = self._text(cells[1]) if len(cells) > 1 else None
+        equipment_label = self._text(cells[2]) if len(cells) > 2 else None
+        location = self._text(cells[3]) if len(cells) > 3 else None
+        reason = self._text(cells[4]) if len(cells) > 4 else None
+        expected_return = self._text(cells[5]) if len(cells) > 5 else None
+        status = self._text(cells[6]) if len(cells) > 6 else None
+
+        return {
+            "source_fault_id": fault_id,
+            "source_line_id": line_id,
+            "source_station_id": station_id,
+            "source_equipment_code": equipment_code,
+            "line_code": line_code,
+            "station_name": station_name,
+            "equipment_type": equipment_label,
+            "location_description": location,
+            "reason": reason,
+            "expected_return": expected_return,
+            "status": status,
+        }
+
+    @staticmethod
+    def _strip_html(value: str) -> str:
+        import re
+
+        text = re.sub(r"<br\s*/?>", "\n", value, flags=re.IGNORECASE)
+        text = re.sub(r"<[^>]+>", " ", text)
+        text = re.sub(r"&nbsp;", " ", text, flags=re.IGNORECASE)
+        text = re.sub(r"&amp;", "&", text, flags=re.IGNORECASE)
+        return " ".join(text.split())
+
+    async def _get_text_url(self, url: str) -> str:
+        await self._rate_limiter.acquire("metro")
+        if self._client is None:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await self._request_text(client, "GET", url)
+        else:
+            response = await self._request_text(self._client, "GET", url)
+        response.raise_for_status()
+        if not response.content:
+            raise MetroPayloadError("Metro equipment fault page returned an empty body")
+        return response.text
+
+    async def _request_text(self, client: httpx.AsyncClient, method: str, url: str) -> httpx.Response:
+        return await request_with_retries(
+            client,
+            method,
+            url,
+            rate_limiter=self._rate_limiter,
+        )
+
+    @classmethod
+    def _normalize_summary_row(cls, row: dict[str, Any], group_key: str) -> dict[str, Any]:
+        name = cls._text(row.get("Name") or row.get("name"))
+        group = cls._text(row.get("GroupName") or row.get("Group") or row.get("group"))
+        category_name = cls._text(row.get("CategoryName") or row.get("categoryName")) or name
+        active = cls._int(row.get("ActiveCount") or row.get("Active"))
+        inactive = cls._int(row.get("InactiveCount") or row.get("Inactive") or row.get("FaultCount"))
+        visible = row.get("IsVisible")
+        source_order = cls._int(row.get("Order") or row.get("SourceOrder") or row.get("sourceOrder"))
+        if category_name is None:
+            raise MetroPayloadError("Metro equipment summary row must have a displayed name")
+        return cls._summary_row(category_name, name, group, active, inactive, visible, source_order, group_key)
+
+    @classmethod
+    def _summary_row(
+        cls,
+        category_name: str,
+        name: str | None,
+        group: str | None,
+        active: int | None,
+        inactive: int | None,
+        visible: Any,
+        source_order: int | None,
+        group_key: str,
+    ) -> dict[str, Any]:
+        return {
+            "category_key": cls._category_key(category_name, group_key),
+            "category_name": category_name,
+            "group_name": group or name,
+            "active_count": active or 0,
+            "inactive_count": inactive or 0,
+            "is_visible": visible,
+            "source_order": source_order,
+        }
+
+    @staticmethod
+    def _category_key(category_name: str, group_key: str) -> str:
+        normalized = _normalize_token(category_name)
+        mapping = {
+            "asansor": "elevator",
+            "asansorler": "elevator",
+            "yuruyen merdiven": "escalator",
+            "yuruyen merdivenler": "escalator",
+            "merdiven": "escalator",
+            "yuruyen bant": "moving_walkway",
+            "yuruyen bantlar": "moving_walkway",
+            "giris cikis": "entrance_exit",
+            "giris cikislar": "entrance_exit",
+            "tuvalet": "restroom",
+            "tuvaletler": "restroom",
+            "mescit": "prayer_room",
+            "bebek bakim odasi": "baby_care_room",
+            "engelli platformu": "accessible_platform",
+            "platform": "accessible_platform",
+        }
+        if normalized in mapping:
+            return mapping[normalized]
+        # Unknown categories keep a deterministic, collision-free source-derived key.
+        if group_key == "EquipmentServiceStatus":
+            return f"equipment:{_normalize_token(category_name)}"
+        return f"station:{_normalize_token(category_name)}"
+
+    @staticmethod
+    def _int(value: Any) -> int | None:
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, (int, float)):
+            return int(value)
+        try:
+            return int(str(value).strip())
+        except (ValueError, TypeError):
+            return None
 
     async def _get_json(self, endpoint: str) -> Any:
         return await self._get_json_url(f"{self.base_url}/{endpoint}")

@@ -90,6 +90,8 @@ class Settings:
     iett_line_cache_ttl_seconds: int = 900
     iett_stops_cache_ttl_seconds: int = 900
     transport_disruptions_cache_ttl_seconds: int = 120
+    metro_accessibility_cache_ttl_seconds: int = 120
+    metro_accessibility_stale_if_error_seconds: int = 900
     ferry_schedule_cache_ttl_seconds: int = 120
     ferry_schedule_default_limit: int = 50
     ferry_schedule_max_limit: int = 100
@@ -256,6 +258,8 @@ def get_settings() -> Settings:
         iett_line_cache_ttl_seconds=_int_env("IETT_LINE_CACHE_TTL_SECONDS", 900),
         iett_stops_cache_ttl_seconds=_int_env("IETT_STOPS_CACHE_TTL_SECONDS", 900),
         transport_disruptions_cache_ttl_seconds=_int_env("TRANSPORT_DISRUPTIONS_CACHE_TTL_SECONDS", 120),
+        metro_accessibility_cache_ttl_seconds=_int_env("METRO_ACCESSIBILITY_CACHE_TTL_SECONDS", 120),
+        metro_accessibility_stale_if_error_seconds=_int_env("METRO_ACCESSIBILITY_STALE_IF_ERROR_SECONDS", 900),
         ferry_schedule_cache_ttl_seconds=_int_env("FERRY_SCHEDULE_CACHE_TTL_SECONDS", 120),
         ferry_schedule_default_limit=_int_env("FERRY_SCHEDULE_DEFAULT_LIMIT", 50),
         ferry_schedule_max_limit=_int_env("FERRY_SCHEDULE_MAX_LIMIT", 100),

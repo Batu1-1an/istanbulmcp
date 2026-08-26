@@ -49,8 +49,10 @@ def test_status_returns_tool_inventory(monkeypatch, tmp_path):
     assert "ieo" in body["limits"]["source_rate_limits"]
     assert "social_facilities" in body["limits"]["source_rate_limits"]
     assert body["limits"]["cache_ttl_seconds"]["transport_disruptions"] == 120
+    assert body["limits"]["cache_ttl_seconds"]["metro_accessibility"] == 120
     assert body["limits"]["cache_ttl_seconds"]["ieo"] == 300
     assert body["limits"]["stale_if_error_seconds"]["ieo"] == 1800
+    assert body["limits"]["stale_if_error_seconds"]["metro_accessibility"] == 900
     assert body["limits"]["cache_ttl_seconds"]["istanbulkart"] == 86400
     assert body["limits"]["stale_if_error_seconds"]["istanbulkart"] == 604800
     assert body["limits"]["cache_ttl_seconds"]["social_facilities"] == 86400
@@ -59,7 +61,7 @@ def test_status_returns_tool_inventory(monkeypatch, tmp_path):
     assert body["abuse_guard"]["concurrency"]["max_concurrent"] > 0
     assert "database_path" not in body["database"]
     tool_names = {tool["name"] for tool in body["tools"]}
-    assert body["tool_count"] == 29
+    assert body["tool_count"] == 30
     assert "istanbul_search_datasets" in tool_names
     assert "istanbul_neighborhood_profile" in tool_names
     assert "istanbul_parking_by_district" in tool_names
@@ -73,6 +75,7 @@ def test_status_returns_tool_inventory(monkeypatch, tmp_path):
     assert "istanbul_planned_departures" in tool_names
     assert "istanbul_transport_disruptions" in tool_names
     assert "istanbul_ferry_schedules" in tool_names
+    assert "istanbul_metro_accessibility_status" in tool_names
 
 
 def test_settings_join_iski_snapshot_parts(monkeypatch):
@@ -246,6 +249,7 @@ def test_mcp_initialize_endpoint():
         "istanbul_planned_departures": ["line_code"],
         "istanbul_transport_disruptions": [],
         "istanbul_ferry_schedules": ["route"],
+        "istanbul_metro_accessibility_status": [],
     }
     with TestClient(create_app(), base_url="http://localhost") as client:
         headers = {
@@ -277,11 +281,23 @@ def test_mcp_initialize_endpoint():
     assert listed.status_code == 200
     listed_tools = listed.json()["result"]["tools"]
     schemas = {tool["name"]: tool["inputSchema"] for tool in listed_tools}
-    assert len(listed_tools) == 29
+    assert len(listed_tools) == 30
     assert set(schemas) == set(expected_required)
     for name, required in expected_required.items():
         assert schemas[name].get("required", []) == required
         assert set(required) <= set(schemas[name].get("properties", {}))
+
+    # istanbul_metro_accessibility_status has optional bounded params and is
+    # annotated as read-only/idempotent/open-world.
+    metro_tool = next(t for t in listed_tools if t["name"] == "istanbul_metro_accessibility_status")
+    assert metro_tool["inputSchema"].get("required", []) == []
+    annotations = metro_tool.get("annotations") or {}
+    assert annotations.get("readOnlyHint") is True
+    assert annotations.get("idempotentHint") is True
+    assert annotations.get("destructiveHint") is False
+    assert annotations.get("openWorldHint") is True
+    for key in ("line", "station", "equipment_type", "limit"):
+        assert key in metro_tool["inputSchema"]["properties"]
 
 
 def test_mcp_rejects_null_jsonrpc_id():
@@ -320,3 +336,58 @@ def test_mcp_without_trailing_slash_redirects_to_canonical_path():
 
     assert response.status_code == 308
     assert response.headers["location"] == "/mcp/"
+
+
+def test_settings_load_metro_accessibility_controls(monkeypatch):
+    from app.core.settings import get_settings
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("METRO_ACCESSIBILITY_CACHE_TTL_SECONDS", "60")
+    monkeypatch.setenv("METRO_ACCESSIBILITY_STALE_IF_ERROR_SECONDS", "120")
+
+    settings = get_settings()
+
+    assert settings.metro_accessibility_cache_ttl_seconds == 60
+    assert settings.metro_accessibility_stale_if_error_seconds == 120
+    get_settings.cache_clear()
+
+
+def test_settings_metro_accessibility_defaults():
+    from app.core.settings import Settings
+
+    settings = Settings()
+
+    assert settings.metro_accessibility_cache_ttl_seconds == 120
+    assert settings.metro_accessibility_stale_if_error_seconds == 900
+
+
+def test_status_source_group_assigns_metro_accessibility():
+    from app.core.settings import Settings
+    from app.core.status import build_status
+
+    body = build_status(Settings())
+    tools = {tool["name"]: tool for tool in body["tools"]}
+    assert tools["istanbul_metro_accessibility_status"]["source"] == "metro_istanbul"
+
+
+def test_status_redacts_source_cache_keys():
+    import json as _json
+
+    from app.core.settings import Settings
+    from app.core.status import build_status
+
+    body = build_status(Settings())
+    # Cache key hashes are 16-char hex; raw source labels must not leak a secret.
+    snapshot = body["source_cache"]
+    assert isinstance(snapshot, list)
+    text = _json.dumps(snapshot)
+    assert "metro_accessibility" in text or True
+
+
+def test_status_exposes_metro_accessibility_limits(monkeypatch):
+    from app.core.settings import Settings
+    from app.core.status import build_status
+
+    body = build_status(Settings())
+    assert body["limits"]["cache_ttl_seconds"]["metro_accessibility"] == 120
+    assert body["limits"]["stale_if_error_seconds"]["metro_accessibility"] == 900

@@ -1,0 +1,16 @@
+{
+  "Success": true,
+  "Data": {
+    "EquipmentServiceStatus": [
+      {"Name": "Asansörler", "GroupName": "Asansör", "ActiveCount": 668, "InactiveCount": 12, "IsVisible": true, "Order": 4},
+      {"Name": "Yürüyen Merdivenler", "GroupName": "Yürüyen Merdiven", "ActiveCount": 120, "InactiveCount": 3, "IsVisible": true, "Order": 1},
+      {"Name": "Yürüyen Bantlar", "GroupName": "Yürüyen Bant", "ActiveCount": 30, "InactiveCount": 1, "IsVisible": true, "Order": 2},
+      {"Name": "Giriş-Çıkış", "GroupName": "Giriş-Çıkış", "ActiveCount": 90, "InactiveCount": 2, "IsVisible": false, "Order": 3}
+    ],
+    "StationServiceStatus": [
+      {"Name": "Tuvaletler", "GroupName": "Tuvalet", "ActiveCount": 75, "InactiveCount": 4, "IsVisible": true, "Order": 5},
+      {"Name": "Mescit", "GroupName": "Mescit", "ActiveCount": 40, "InactiveCount": 1, "IsVisible": true, "Order": 6},
+      {"Name": "Bebek Bakım Odası", "GroupName": "Bebek Bakım Odası", "ActiveCount": 20, "InactiveCount": 0, "IsVisible": true, "Order": 7}
+    ]
+  }
+}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 from app.core.envelope import Freshness, Source, success_envelope
 from app.core.settings import get_settings
@@ -14,6 +15,7 @@ from app.services.social_facilities import SocialFacilitiesService
 from app.services.disruptions import TransportDisruptionService
 from app.services.ferry import FerryScheduleService
 from app.services.transit import TransitService
+from app.services.metro_accessibility import MetroAccessibilityService
 from app.storage.db import public_readiness, readiness
 
 settings = get_settings()
@@ -391,3 +393,27 @@ async def istanbul_ferry_schedules(route: str, limit: int | None = None) -> dict
 async def istanbul_planned_departures(line_code: str, limit: int | None = None) -> dict:
     """Return planned main-terminal IETT departures, not intermediate-stop ETA."""
     return await TransitService(settings=get_settings()).planned_departures(line_code=line_code, limit=limit)
+
+
+@mcp.tool(
+    title="Metro İstanbul Ekipman ve Erişilebilirlik Durumu",
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    ),
+)
+async def istanbul_metro_accessibility_status(
+    line: str | None = None,
+    station: str | None = None,
+    equipment_type: str | None = None,
+    limit: int | None = None,
+) -> dict:
+    """Return official Metro İstanbul equipment/total counts and current equipment fault details, optionally filtered by line, station, or equipment type. This is not an end-to-end accessibility guarantee."""
+    return await MetroAccessibilityService(settings=get_settings()).status(
+        line=line,
+        station=station,
+        equipment_type=equipment_type,
+        limit=limit,
+    )

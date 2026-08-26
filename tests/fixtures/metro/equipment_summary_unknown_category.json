@@ -1,0 +1,10 @@
+{
+  "Success": true,
+  "Data": {
+    "EquipmentServiceStatus": [
+      {"Name": "Asansörler", "GroupName": "Asansör", "ActiveCount": 668, "InactiveCount": 12, "IsVisible": true, "Order": 4},
+      {"Name": "Gece Işıklandırma", "GroupName": "Işıklandırma", "ActiveCount": 300, "InactiveCount": 7, "IsVisible": false, "Order": 11}
+    ],
+    "StationServiceStatus": []
+  }
+}

@@ -38,6 +38,7 @@ TOOL_SOURCES = {
     "istanbul_transport_disruptions": "mixed_transport_official",
     "istanbul_planned_departures": "iett",
     "istanbul_ferry_schedules": "sehir_hatlari",
+    "istanbul_metro_accessibility_status": "metro_istanbul",
 }
 
 
@@ -79,6 +80,7 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
                 "iett_line": settings.iett_line_cache_ttl_seconds,
                 "iett_stops": settings.iett_stops_cache_ttl_seconds,
                 "transport_disruptions": settings.transport_disruptions_cache_ttl_seconds,
+                "metro_accessibility": settings.metro_accessibility_cache_ttl_seconds,
                 "ferry_schedules": settings.ferry_schedule_cache_ttl_seconds,
                 "ispark": settings.ispark_cache_ttl_seconds,
                 "metro": settings.metro_cache_ttl_seconds,
@@ -97,6 +99,7 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
                 "ieo": settings.ieo_stale_if_error_seconds,
                 "istanbulkart": settings.istanbulkart_stale_if_error_seconds,
                 "social_facilities": settings.social_facilities_stale_if_error_seconds,
+                "metro_accessibility": settings.metro_accessibility_stale_if_error_seconds,
             },
             "istanbulkart": {
                 "dataset_id": settings.istanbulkart_dataset_id,

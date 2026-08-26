@@ -305,3 +305,28 @@ def test_live_mcp_planned_departures_tool():
     assert payload["ok"] is True
     assert "main-terminal planned departures" in payload["limits"]
     assert "not intermediate-stop ETA" in payload["limits"]
+
+
+def test_live_mcp_metro_accessibility_smoke():
+    payload, error, elapsed = rpc_call(
+        os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
+        9012,
+        "istanbul_metro_accessibility_status",
+        {"limit": 20},
+    )
+
+    assert error is None
+    assert "freshness" in payload
+    assert "sources" in payload
+    # The live check is non-deterministic; it must record an observed duration and
+    # either report a successful/partial envelope or a structured failure.
+    assert elapsed >= 0
+    if payload["ok"]:
+        assert payload["sources"]
+        for source in payload["sources"]:
+            assert source["coverage_status"] in {"checked", "unavailable"}
+        assert "not_an_end_to_end_accessibility_guarantee" in " ".join(payload.get("limits", []))
+        for frame in payload.get("data", []):
+            # No fabricated accessibility guarantee or inferred alternative route.
+            assert "faults" in frame
+            assert "equipment_summary" in frame

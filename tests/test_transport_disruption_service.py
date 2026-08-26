@@ -311,3 +311,36 @@ async def test_source_cache_reuses_normalized_results_for_concurrent_requests(tm
 
     assert all(result["ok"] for result in results)
     assert iett.calls == metro.calls == sehir.calls == marmaray.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_transport_disruptions_excludes_equipment_faults_and_keeps_contract(tmp_path):
+    # Equipment accessibility faults are a distinct domain served by
+    # istanbul_metro_accessibility_status; the transport disruption flow must not
+    # include them and must retain its existing response contract.
+    metro = FakeMetro(
+        rows=[
+            {
+                "operator": "metro_istanbul",
+                "mode": "metro",
+                "line_code": "M2",
+                "route_label": "Yenikapı-Hacıosman",
+                "event_type": "disruption",
+                "message": "Asansör arızası nedeniyle sefer düzenlemesi.",
+                "updated_at": None,
+            }
+        ]
+    )
+    result = await service(tmp_path, metro=metro).disruptions()
+
+    assert result["ok"] is True
+    assert "freshness" in result
+    assert "sources" in result
+    assert "limits" in result
+    assert "warnings" in result
+    # The disruption envelope uses a flat data row per disruption, not an
+    # equipment_summary + faults composite shape.
+    for row in result["data"]:
+        assert "equipment_summary" not in row
+        assert "faults" not in row
+        assert "line_code" in row
