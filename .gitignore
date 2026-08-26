@@ -1,6 +1,7 @@
 .venv/
 .data/
 .agents/
+AGENTS.md
 .pi/
 __pycache__/
 .pytest_cache/

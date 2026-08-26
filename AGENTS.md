@@ -73,15 +73,3 @@ npx ctx7@latest docs "/org/project" "<question>"
 ```
 
 If `ctx7` is unavailable, or the topic is not a library/framework/tool/cloud service, use web search when current information matters. Summarize checked sources in notes or PRs.
-
-## GSD Workflow
-
-Project context lives in `.planning/PROJECT.md`; requirements and phases live in `.planning/REQUIREMENTS.md` and `.planning/ROADMAP.md`. Before feature work, prefer GSD entry points so planning state stays current:
-
-```bash
-$gsd-discuss-phase 1
-$gsd-plan-phase 1
-$gsd-execute-phase 1
-```
-
-Do not bypass GSD planning for substantial implementation unless the user explicitly asks.
