@@ -1,0 +1,15 @@
+{
+  "live": {
+    "name": "KIR KAHVESİ SOSYAL TESİSİ",
+    "address": "Yıldız Parkı, Yıldız Cd. No.62, 34349 Beşiktaş/İstanbul",
+    "latitude": 41.0499861,
+    "longitude": 29.0129185,
+    "detail_url": "https://tesislerimiz.ibb.istanbul/tesis/kir-kahvesi-sosyal-tesisi"
+  },
+  "fallback": {
+    "name": "KIR KAHVESİ SOSYAL TESİSİ",
+    "address": "YİLDİZ MAHALLESİ, YILDIZ CADDESİ NO: 62 P.K. 34349 BEŞİKTAŞ",
+    "latitude": 41.0479649,
+    "longitude": 29.0131607
+  }
+}

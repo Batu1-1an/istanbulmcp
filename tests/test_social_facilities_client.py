@@ -1,6 +1,7 @@
 from pathlib import Path
 import io
 import zipfile
+import json
 
 import httpx
 import pytest
@@ -12,6 +13,8 @@ from app.connectors.social_facilities import (
     canonical_identity,
     implicit_coordinate,
     parse_map_coordinates,
+    _district_from_address,
+    normalize_name,
 )
 from app.core.settings import Settings
 
@@ -157,11 +160,69 @@ def test_xlsx_parser_reads_implicit_decimal_coordinates_and_skips_bad_rows():
 def test_merge_rows_keeps_live_values_and_fills_missing_fields_with_discrepancy_warning():
     merged, warnings = SocialFacilitiesClient.merge_rows(
         [{"name": "Same", "latitude": 41.0, "longitude": 28.9, "address": None, "detail_url": "https://live.test/same"}],
-        [{"name": "Same", "latitude": 41.1, "longitude": 29.0, "address": "District address"}],
+        [{"name": "Same", "latitude": 41.001, "longitude": 28.901, "address": "District address"}],
     )
     assert merged[0]["latitude"] == 41.0
     assert merged[0]["address"] == "District address"
     assert any("source_discrepancy" in warning for warning in warnings)
+
+
+@pytest.mark.parametrize(("address", "expected"), [
+    ("YİLDİZ MAHALLESİ, YILDIZ CADDESİ NO: 62 P.K. 34349 BEŞİKTAŞ", "Beşiktaş"),
+    ("Yıldız Parkı, Yıldız Cd. No.62, 34349 Beşiktaş/İstanbul", "Beşiktaş"),
+    ("KUZGUNCUK MAHALLESİ, PAŞALİMANI CADDESİ ÜSKÜDAR/İSTANBUL", "Üsküdar"),
+    ("Fatih Mahallesi, Beşiktaş Caddesi No:12, Sarıyer / İstanbul", "Sarıyer"),
+    ("Fatih Mahallesi, Beşiktaş Caddesi No:12, İstanbul", None),
+    ("İSTANBUL", None),
+    (None, None),
+])
+def test_district_uses_validated_address_suffix(address, expected):
+    assert _district_from_address(address) == expected
+
+
+def kir_kahvesi_rows():
+    fixture = json.loads((FIXTURES / "kir_kahvesi_variants.json").read_text(encoding="utf-8"))
+    for row in fixture.values():
+        row["district"] = _district_from_address(row["address"])
+    return fixture["live"], fixture["fallback"]
+
+
+def test_merge_kir_kahvesi_address_variants_preserves_live_location_and_link():
+    live, fallback = kir_kahvesi_rows()
+    merged, warnings = SocialFacilitiesClient.merge_rows([live], [fallback])
+    assert len(merged) == 1
+    assert merged[0]["district"] == "Beşiktaş"
+    assert merged[0]["detail_url"] == live["detail_url"]
+    assert merged[0]["latitude"] == live["latitude"]
+    assert merged[0]["fallback_source"] == "sosyal-tesis-konumlari"
+    assert warnings  # Conflicting source coordinates remain visible.
+
+
+@pytest.mark.parametrize("changes", [
+    {"latitude": 41.10},
+    {"address": "Yıldız Caddesi No:63, Beşiktaş/İstanbul"},
+    {"address": "Başka Caddesi No:62, Beşiktaş/İstanbul"},
+    {"address": "Yıldız Caddesi No:62, Üsküdar/İstanbul"},
+    {"latitude": None},
+])
+def test_same_name_does_not_merge_other_or_unverified_locations(changes):
+    live, fallback = kir_kahvesi_rows()
+    fallback.update(changes)
+    merged, _ = SocialFacilitiesClient.merge_rows([live], [fallback])
+    assert len(merged) == 2
+
+
+def test_ambiguous_live_matches_do_not_consume_fallback():
+    live, fallback = kir_kahvesi_rows()
+    other = dict(live, detail_url="https://fixture.test/other", latitude=41.049)
+    for rows in ([live, other], [other, live]):
+        merged, _ = SocialFacilitiesClient.merge_rows(rows, [fallback])
+        assert len(merged) == 3
+        assert not any("fallback_source" in row for row in merged)
+
+
+def test_turkish_name_normalization_keeps_dotless_i():
+    assert normalize_name("KIR KAHVESİ") == normalize_name("Kır Kahvesi")
 
 
 @pytest.mark.asyncio

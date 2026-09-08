@@ -3,7 +3,6 @@ from __future__ import annotations
 import io
 import math
 import re
-import unicodedata
 import zipfile
 from dataclasses import dataclass
 from html.parser import HTMLParser
@@ -17,6 +16,8 @@ from app.connectors.http_retry import request_with_retries
 from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings, get_settings
 from app.core.source_limits import social_facilities_rate_limiter
+from app.core.geo import haversine_m
+from app.services.places import district_from_text, normalize_place
 
 
 class SocialFacilitiesError(RuntimeError):
@@ -126,12 +127,18 @@ FORBIDDEN_FIELDS = frozenset(
 
 
 def normalize_name(value: Any) -> str:
-    text = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode()
-    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+    return re.sub(r"[^a-z0-9]+", " ", normalize_place(str(value or ""))).strip()
 
 
 def normalize_address(value: Any) -> str:
-    return normalize_name(value)
+    text = normalize_name(value)
+    for pattern, replacement in (
+        (r"\b(?:cd|cad)\b", "caddesi"),
+        (r"\b(?:sk|sok)\b", "sokagi"),
+        (r"\b(?:mh|mah)\b", "mahallesi"),
+    ):
+        text = re.sub(pattern, replacement, text)
+    return text
 
 
 def canonical_url(value: Any, *, base_url: str | None = None) -> str | None:
@@ -506,10 +513,17 @@ class SocialFacilitiesClient:
         warnings: list[str] = []
         if not live:
             return fallback, warnings
+        matched_ids: set[int] = set()
+        pairs = []
         for row in live:
             match = cls._match_fallback(row, fallback)
-            if match is None:
+            # Require an unambiguous match in both directions before enrichment
+            # changes addresses or hides an unmatched source record.
+            if match is None or cls._match_fallback(match, live) is not row:
                 continue
+            pairs.append((row, match))
+            matched_ids.add(id(match))
+        for row, match in pairs:
             for field in ("name", "address", "district", "latitude", "longitude"):
                 current = row.get(field)
                 candidate = match.get(field)
@@ -520,7 +534,7 @@ class SocialFacilitiesClient:
             row["fallback_source"] = "sosyal-tesis-konumlari"
         identities: set[str] = set()
         result: list[dict[str, Any]] = []
-        for row in live + [r for r in fallback if not cls._matched_fallback(r, live)]:
+        for row in live + [r for r in fallback if id(r) not in matched_ids]:
             identity = canonical_identity(row)
             if identity in identities:
                 continue
@@ -532,12 +546,12 @@ class SocialFacilitiesClient:
     def _match_fallback(row: dict[str, Any], fallback: list[dict[str, Any]]) -> dict[str, Any] | None:
         name = normalize_name(row.get("name"))
         address = normalize_address(row.get("address"))
-        exact = [r for r in fallback if name and normalize_name(r.get("name")) == name and (not address or not normalize_address(r.get("address")) or normalize_address(r.get("address")) == address)]
-        return exact[0] if len(exact) == 1 else None
-
-    @classmethod
-    def _matched_fallback(cls, fallback: dict[str, Any], live: list[dict[str, Any]]) -> bool:
-        return cls._match_fallback(fallback, live) is not None
+        candidates = [r for r in fallback if name and normalize_name(r.get("name")) == name]
+        exact = [r for r in candidates if address and normalize_address(r.get("address")) == address]
+        if exact:
+            return exact[0] if len(exact) == 1 else None
+        nearby = [r for r in candidates if _same_location(row, r)]
+        return nearby[0] if len(nearby) == 1 else None
 
     @staticmethod
     def _enrich_reservation(row: dict[str, Any], cards: list[dict[str, str]], warnings: list[str]) -> dict[str, Any]:
@@ -690,8 +704,39 @@ def _is_detail_link(href: str) -> bool:
 def _district_from_address(address: str | None) -> str | None:
     if not address:
         return None
-    parts = [part.strip() for part in re.split(r"[/,|-]", address) if part.strip()]
-    return parts[-2] if len(parts) >= 2 and "istanbul" in parts[-1].lower() else (parts[-1] if parts else None)
+    words = normalize_name(address).split()
+    while words and words[-1] in {"istanbul", "turkiye", "ilcesi"}:
+        words.pop()
+    # Only accept a district in the address suffix, never a street or
+    # neighbourhood such as "Fatih Mahallesi" elsewhere in the address.
+    return district_from_text(words[-1]) if words else None
+
+
+def _same_location(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    coordinates = [
+        _coordinate(row.get(field), -bound, bound)
+        for row in (left, right)
+        for field, bound in (("latitude", 90), ("longitude", 180))
+    ]
+    if any(value is None for value in coordinates) or haversine_m(*coordinates) > 300:
+        return False
+    addresses = [normalize_address(row.get("address")) for row in (left, right)]
+    districts = [_district_from_address(row.get("address")) for row in (left, right)]
+    if all(districts) and districts[0] != districts[1]:
+        return False
+    if not all(addresses):
+        return True
+    if not all(districts):
+        return False
+    # A nearby namesake alone is not sufficient: require the same street
+    # and explicit building number as well. Keep uncertain branches separate.
+    numbers = [re.search(r"\bno\s*(\d+[a-z]?)\b", address) for address in addresses]
+    streets = [set(re.findall(r"\b([a-z0-9]+) (?:caddesi|sokagi)\b", address)) for address in addresses]
+    return bool(
+        all(numbers)
+        and numbers[0].group(1) == numbers[1].group(1)
+        and streets[0] & streets[1]
+    )
 
 
 def _address_after_label(html: str) -> str | None:
