@@ -160,7 +160,17 @@ async def istanbul_nobetci_eczane_nearby(
     radius_m: int = 1000,
     limit: int | None = None,
 ) -> dict:
-    """Find current İBB City Map on-duty pharmacies near coordinates; not a general catalog or duty-end guarantee."""
+    """Find current on-duty pharmacies near coordinates; no duty-end guarantee.
+
+    In the user-facing answer, include a clickable [Haritada aç](maps_url)
+    link for every pharmacy shown. If only maps_search_url is available,
+    use [Adresi haritada ara](maps_search_url) and describe it as an address
+    search, not a verified pin. Include name, district, address and phone.
+    Do not display the İBB source name, source URL or a source/citation footer
+    unless the user explicitly asks for sources. Sources are provenance metadata.
+    Preserve freshness, stale-data warnings, result limits and uncertainty;
+    do not invent duty hours, and advise calling before visiting.
+    """
     return await PharmacyService(settings=get_settings()).nearby(
         lat=lat,
         lon=lon,
@@ -174,7 +184,17 @@ async def istanbul_nobetci_eczane_by_district(
     district: str,
     limit: int | None = None,
 ) -> dict:
-    """List current İBB City Map on-duty pharmacies in a district; not pharmacy hours or a general catalog."""
+    """List current on-duty pharmacies in a district; not hours or a general catalog.
+
+    In the user-facing answer, include a clickable [Haritada aç](maps_url)
+    link for every pharmacy shown. If only maps_search_url is available,
+    use [Adresi haritada ara](maps_search_url) and describe it as an address
+    search, not a verified pin. Include name, district, address and phone.
+    Do not display the İBB source name, source URL or a source/citation footer
+    unless the user explicitly asks for sources. Sources are provenance metadata.
+    Preserve freshness, stale-data warnings, result limits and uncertainty;
+    do not imply proximity ordering or invent duty hours. Advise calling before visiting.
+    """
     return await PharmacyService(settings=get_settings()).by_district(
         district=district,
         limit=limit,

@@ -85,6 +85,8 @@ Bazı istemciler `url` yerine `serverUrl`, `"type": "remote"` veya `"transport":
 
 Konum bilgisi olan kayıtlarda `maps_url` döner. Yalnızca adres bilgisi olan kayıtlarda `maps_search_url` ve `location_precision=address_search` kullanılabilir; bu kayıtlar kesin koordinat gibi sunulmaz.
 
+Nöbetçi eczane araçlarının yanıt talimatı, gösterilen her eczaneye tıklanabilir harita bağlantısı eklenmesini ister. Koordinat eksikse eczane adı ve adresiyle harita arama bağlantısı döner. İBB kaynak adı ve bağlantısı, kullanıcı özellikle kaynak istemedikçe son yanıtta gösterilmez; `sources` alanı teknik izlenebilirlik için korunur. Güncellik, sonuç sınırları ve telefonla teyit uyarıları yanıtta korunur. Son yanıtın biçimlendirilmesi MCP istemcisine bağlıdır.
+
 ## Veri Seti Keşfi
 
 Veri seti araştırması projenin ana kullanım alanlarından biridir. Bir konu hakkında İBB Açık Veri kataloğunda hangi veri setleri var, formatları ne, DataStore üzerinden sorgulanabilir resource'ları var mı gibi sorular doğrudan sorulabilir.

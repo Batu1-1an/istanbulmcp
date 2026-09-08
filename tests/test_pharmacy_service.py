@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -56,6 +57,8 @@ async def test_load_maps_ibb_fields_and_metadata():
     assert row["province"] == "İstanbul"
     assert row["duty_ends_at"] is None
     assert row["maps_url"].startswith("https://www.google.com/maps/search/")
+    assert row["maps_search_url"] is None
+    assert row["location_precision"] == "coordinate"
     assert cached.metadata == {
         "scope": "İstanbul on-duty roster",
         "reported_total": 3,
@@ -81,6 +84,12 @@ async def test_domain_valid_rows_with_bad_coordinates_are_kept_but_not_geo_eligi
     assert cached.metadata["geo_eligible_total"] == 1
     bad = next(row for row in cached.value.rows if row["name"] == "Bozuk Konum")
     assert bad["lat"] is None and bad["lon"] is None and bad["maps_url"] is None
+    assert bad["location_precision"] == "address_search"
+    url = urlparse(bad["maps_search_url"])
+    assert url.netloc == "www.google.com"
+    assert parse_qs(url.query)["query"] == ["Bozuk Konum, Adres, KADIKÖY, İstanbul"]
+    result = await svc.by_district(district="Kadıköy")
+    assert all(row["maps_url"] or row["maps_search_url"] for row in result["data"])
 
 
 @pytest.mark.asyncio

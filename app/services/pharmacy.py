@@ -13,7 +13,7 @@ from app.connectors.ibb_pharmacy import (
 )
 from app.core.envelope import Freshness, Source, error_envelope, success_envelope, utc_now_iso
 from app.core.error_responses import source_error_envelope, validation_error_envelope
-from app.core.geo import google_maps_url, haversine_m
+from app.core.geo import google_maps_search_url, google_maps_url, haversine_m
 from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
 from app.core.source_cache import CachedSourceData, SourceLoadResult, cached_source_data_with_status
@@ -245,6 +245,12 @@ class PharmacyService:
             "duty_ends_at": None,
             "address": address,
             "maps_url": google_maps_url(lat, lon),
+            "maps_search_url": (
+                google_maps_search_url(name, address, district, "İstanbul")
+                if lat is None or lon is None
+                else None
+            ),
+            "location_precision": "address_search" if lat is None or lon is None else "coordinate",
         }
 
     def _source(self, cached: CachedSourceData) -> Source:
@@ -272,7 +278,7 @@ class PharmacyService:
         if cached.is_stale:
             error_type = type(cached.error).__name__ if cached.error is not None else "UnknownError"
             warnings.append(
-                f"İBB kaynağı yenilenemedi ({error_type}); son başarılı liste stale olarak gösteriliyor."
+                f"Nöbetçi eczane listesi yenilenemedi ({error_type}); son başarılı liste stale olarak gösteriliyor."
             )
         if any(row.get("duty_ends_at") is None for row in cached.value.rows):
             warnings.append("Kaynak nöbet bitiş zamanını vermedi; bitiş zamanı tahmin edilmedi.")
@@ -282,7 +288,7 @@ class PharmacyService:
                 "Kaynak bazı eczaneler için geçerli konum/koordinat vermedi; bu kayıtlar yakınlık sonuçlarına dahil edilmedi."
             )
         warnings.append(
-            "Bu sonuçlar İBB Şehir Haritası'nın nöbetçi eczane listesidir; genel katalog, çalışma saati veya kesin nöbet bitiş garantisi değildir."
+            "Bu sonuçlar nöbetçi eczane listesidir; genel katalog, çalışma saati veya kesin nöbet bitiş garantisi değildir. Gitmeden önce telefonla teyit edin."
         )
         return warnings
 
