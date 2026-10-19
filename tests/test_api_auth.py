@@ -37,12 +37,42 @@ def auth(key=KEY_A):
     return {**HEADERS, "authorization": "Bearer " + key}
 
 
-def test_auth_required_by_default_fails_closed_without_keys(monkeypatch):
+def test_public_mode_is_the_default(monkeypatch, tmp_path):
     monkeypatch.delenv("MCP_AUTH_REQUIRED", raising=False)
     monkeypatch.delenv("MCP_API_KEYS", raising=False)
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "public.sqlite3"))
     get_settings.cache_clear()
-    with pytest.raises(ValueError, match="MCP_API_KEYS is required"):
+    with TestClient(create_app(), base_url="http://localhost") as client:
+        status = client.get("/status")
+        listed = client.post("/mcp/", headers=HEADERS, json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+        called = client.post("/mcp/", headers=HEADERS, json={
+            "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+            "params": {"name": "istanbul_health", "arguments": {}},
+        })
+    assert status.status_code == 200
+    assert status.json()["access"]["api_key_required"] is False
+    assert listed.status_code == 200 and len(listed.json()["result"]["tools"]) == 15
+    assert called.status_code == 200 and not called.json()["result"].get("isError", False)
+    # No key configured means no per-key daily quota is enforced.
+    assert "x-ratelimit-limit" not in listed.headers
+
+
+def test_enabling_auth_without_keys_fails_closed(monkeypatch):
+    monkeypatch.setenv("MCP_AUTH_REQUIRED", "true")
+    monkeypatch.delenv("MCP_API_KEYS", raising=False)
+    get_settings.cache_clear()
+    with pytest.raises(ValueError, match="requires MCP_API_KEYS"):
         create_app()
+
+
+def test_configured_keys_alone_enable_auth(monkeypatch, tmp_path):
+    monkeypatch.delenv("MCP_AUTH_REQUIRED", raising=False)
+    monkeypatch.setenv("MCP_API_KEYS", KEY_A)
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "keys.sqlite3"))
+    get_settings.cache_clear()
+    client = TestClient(create_app(), base_url="http://localhost")
+    assert client.get("/status").status_code == 401
+    assert client.get("/status", headers=auth()).status_code == 200
 
 
 @pytest.mark.parametrize("keys", [
@@ -111,6 +141,15 @@ def test_authenticated_mcp_initialize_list_and_call_work(configured):
             assert response.status_code == 200
             assert "error" not in response.json()
             assert not response.json()["result"].get("isError", False)
+
+
+def test_forwarded_allow_ips_is_configurable(monkeypatch):
+    monkeypatch.setenv("FORWARDED_ALLOW_IPS", "10.0.0.0/8")
+    get_settings.cache_clear()
+    assert get_settings().forwarded_allow_ips == "10.0.0.0/8"
+    monkeypatch.delenv("FORWARDED_ALLOW_IPS")
+    get_settings.cache_clear()
+    assert get_settings().forwarded_allow_ips == "127.0.0.1"
 
 
 def test_daily_quota_is_per_key_persistent_and_not_bypassed_by_proxy_headers(configured):

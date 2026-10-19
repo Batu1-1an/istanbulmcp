@@ -28,10 +28,9 @@ Kullanım alanı yalnızca sohbet arayüzleri değildir. Kod yazan bir ajan, ara
 
 ## Hızlı Başlangıç
 
-API key etkin kurulumlarda aşağıdaki URL örnekleri tek başına yeterli değildir:
-istemcide `Authorization: Bearer <API_KEY>` header'ı da yapılandırılmalıdır.
-Statik-key modu özel header desteği ister; yalnız OAuth discovery kullanan
-Claude.ai connector akışıyla otomatik giriş sağlamaz. [Erişim rehberi](docs/api-access.md).
+Kurulum anahtar gerektirmez: URL'i ekleyin, çalışır. İstemci başına burst
+sınırı uygulanır; isteğe bağlı anahtar/kota ve SQL kısıtları için
+[erişim rehberine](docs/api-access.md) bakın.
 
 Codex CLI ile eklemek için:
 
@@ -58,13 +57,12 @@ Sonra yeni bir oturum açıp örnek bir soru sorun:
 Taksim'e arabayla gideceğim. Yakındaki otoparkların boş yer sayısını, çalışma saatini ve haritadaki yerlerini gösterir misin?
 ```
 
-Genel MCP istemci yapılandırması (header destekleyen istemciler):
+Genel MCP istemci yapılandırması:
 
 ```json
 {
   "mcpServers": {
     "istanbul": {
-      "headers": {"Authorization": "Bearer <API_KEY>"},
       "url": "https://istanbulmcp-production.up.railway.app/mcp/"
     }
   }
@@ -217,12 +215,6 @@ Istanbul MCP uzak bir Streamable HTTP MCP endpoint'i sunar:
 ```text
 https://istanbulmcp-production.up.railway.app/mcp/
 ```
-
-**Erişim kontrolü:** Yeni sürüm üretimde `MCP_API_KEYS` ister. İstemcide her isteğe
-`Authorization: Bearer <API_KEY>` header'ı ekleyin; yalnız URL yeterli değildir.
-Statik anahtar modu OAuth discovery değildir; özel header destekleyen istemci gerekir.
-Health endpoint'leri açık kalır. Kurulum, bilinçli public mod ve günlük kota için
-[API erişim rehberine](docs/api-access.md) bakın.
 
 Aşağıdaki örnekler resmi istemci dokümanlarıyla kontrol edilmiştir. İstemci farklı bir alan adı istiyorsa aynı endpoint'i kullanın; örneğin bazıları `url`, bazıları `serverUrl`, bazıları da CLI üzerinde `--transport http` ister.
 
@@ -484,9 +476,10 @@ python scripts/live_mcp_uat.py
 Herkese açık MCP koruma limitleri:
 
 - `CKAN_SQL_ALLOWED_RESOURCE_IDS` — SQL için operatör allowlist'i; varsayılan boş. Boyut/süre/satır ayarları ve hard cap'ler [SQL rehberinde](docs/datastore-sql.md).
-- `MCP_AUTH_REQUIRED` — varsayılan `true`; anahtar yoksa başlamaz. Kasıtlı public/local mod için `false`.
-- `MCP_API_KEYS` — virgülle ayrılmış rastgele Bearer anahtarları; secret olarak saklayın.
-- `MCP_API_KEY_DAILY_QUOTA` — anahtar başına UTC günlük istek kotası; varsayılan `10000`, SQLite ile kalıcı.
+- `MCP_AUTH_REQUIRED` — varsayılan `false` (public mod). `true` yaparsanız anahtar zorunlu olur ve anahtarsız sunucu başlamaz.
+- `MCP_API_KEYS` — virgülle ayrılmış rastgele Bearer anahtarları; doldurulduğunda doğrulama tek başına etkinleşir.
+- `MCP_API_KEY_DAILY_QUOTA` — auth etkinken anahtar başına UTC günlük kota; varsayılan `10000`, SQLite ile kalıcı.
+- `FORWARDED_ALLOW_IPS` — istemci IP'sinin okunacağı güvenilir proxy'ler; imajda `*`, dışarıdan çalıştırırken varsayılan `127.0.0.1`.
 - `MCP_LEGACY_TOOLS_ENABLED` — eski araç adlarını ayrıca yayımlar; varsayılan `false`.
 - `MCP_MAX_BODY_BYTES`
 - `MCP_RATE_LIMIT_CAPACITY`

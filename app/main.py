@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 
 import uvicorn
 from starlette.applications import Starlette
@@ -18,6 +19,9 @@ from app.core.settings import get_settings
 from app.core.status import build_status
 from app.mcp.registry import create_mcp_server
 from app.storage.db import public_readiness, readiness
+
+
+logger = logging.getLogger("istanbul_mcp.runtime")
 
 
 async def healthz(_request):
@@ -46,6 +50,11 @@ def create_app() -> Starlette:
     settings = get_settings()
     validate_sql_settings(settings)
     auth_enabled = validate_auth_settings(settings)
+    if not auth_enabled and settings.ckan_sql_allowed_resource_ids:
+        logger.warning(
+            "SQL allowlist is active without API keys: anonymous clients can trigger bounded "
+            "DataStore downloads. Add MCP_API_KEYS or keep the allowlist empty."
+        )
     quota = DailyQuota(settings.database_path, settings.mcp_api_key_daily_quota) if auth_enabled else None
     mcp = create_mcp_server(settings)
     mcp_rate_limiter = ClientRateLimiter(
@@ -94,4 +103,10 @@ app = create_app()
 
 if __name__ == "__main__":
     settings = get_settings()
-    uvicorn.run("app.main:app", host=settings.host, port=settings.port)
+    uvicorn.run(
+        "app.main:app",
+        host=settings.host,
+        port=settings.port,
+        proxy_headers=True,
+        forwarded_allow_ips=settings.forwarded_allow_ips,
+    )

@@ -18,11 +18,12 @@ Local back-pressure includes `retry_after_seconds` where available.
 - `GET /status` — actual registered tools, source groups, limits, redacted cache
   metadata (source labels and short hashes, not raw query/filter values).
 
-Remote MCP and status requests require a Bearer API key by default;
-health endpoints stay public. Missing configured keys prevent startup.
-See [API access](api-access.md) for static-key client configuration, per-key
-burst/daily quotas, persistent SQLite usage and the explicit public-mode opt-out.
-This is not OAuth discovery.
+The remote MCP endpoint is public by default: no key is needed to connect.
+A per-client burst limit applies, and client identity comes from the ASGI
+server's trusted proxy headers. Setting `MCP_API_KEYS` turns on Bearer
+verification (and per-key daily quota); `MCP_AUTH_REQUIRED=true` additionally
+refuses to start without keys. See [API access](api-access.md). Static keys are
+not OAuth discovery.
 
 Each HTTP app owns its own Streamable HTTP session manager; managers are not
 reused after shutdown.

@@ -2,12 +2,17 @@
 
 The project is designed for Railway using the included `Dockerfile` and `.railway/railway.ts` Infrastructure as Code file. The service remains a single read-only web service; this feature adds no Railway volume, backup, replica increase, or new service.
 
-## API-key/kota sürümüne geçiş
+## Public mod ve erişim
 
-Deploy'dan **önce** secret olarak `MCP_API_KEYS` tanımlayın; yeni varsayılan
-`MCP_AUTH_REQUIRED=true` anahtarsız başlamaz. `/healthz` ve `/readyz` public
-kalır; `/status` ve MCP istekleri Bearer header ister. İstemcilere kendi
-anahtarlarını verin; [API erişim rehberi](api-access.md) kota ve header ayrıntılarını içerir.
+Varsayılan deploy **anahtarsız** çalışır; deploy için ek secret gerekmez.
+Docker imajı `FORWARDED_ALLOW_IPS=*` ile gelir; böylece burst sınırı istemci
+IP'sine göre uygulanır (container yalnız platform proxy'si üzerinden erişilebilir).
+Container'a doğrudan port açılırsa bu değeri proxy IP'leriyle daraltın.
+
+Anahtar/kota isterseniz `MCP_API_KEYS` secret'ı ekleyin; `MCP_AUTH_REQUIRED=true`
+anahtarsız başlatmayı engeller. `/healthz` ve `/readyz` her durumda public
+kalır. [API erişim rehberi](api-access.md).
+
 
 Kota SQLite dosyasında restart'a dayanıklıdır, ancak container'ın ephemeral
 dosya sistemi deploy/replacement ile silinirse sayaçlar da silinir.

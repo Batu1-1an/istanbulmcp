@@ -1,4 +1,4 @@
-"""Tests explicitly opt into local/public mode; production defaults fail closed."""
+"""Tests pin the default public mode so ambient secrets never change behavior."""
 import os
 
 import pytest
@@ -6,6 +6,7 @@ import pytest
 # app.main creates its default ASGI app at import time, before fixtures run.
 os.environ["MCP_AUTH_REQUIRED"] = "false"
 os.environ.pop("MCP_API_KEYS", None)
+os.environ.pop("FORWARDED_ALLOW_IPS", None)
 
 
 @pytest.fixture(autouse=True)

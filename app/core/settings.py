@@ -112,9 +112,10 @@ class Settings:
     sehir_hatlari_relay_url: str | None = None
     sehir_hatlari_relay_token: str | None = None
     source_cache_max_entries: int = 1024
-    mcp_auth_required: bool = True
+    mcp_auth_required: bool = False
     mcp_api_keys: tuple[str, ...] = field(default=(), repr=False)
     mcp_api_key_daily_quota: int = 10000
+    forwarded_allow_ips: str = "127.0.0.1"
     mcp_max_body_bytes: int = 256 * 1024
     mcp_rate_limit_capacity: int = 60
     mcp_rate_limit_refill_per_second: float = 1.0
@@ -314,7 +315,8 @@ def get_settings() -> Settings:
         sehir_hatlari_relay_url=_str_env("SEHIR_HATLARI_RELAY_URL"),
         sehir_hatlari_relay_token=_str_env("SEHIR_HATLARI_RELAY_TOKEN"),
         source_cache_max_entries=_int_env("SOURCE_CACHE_MAX_ENTRIES", 1024),
-        mcp_auth_required=_bool_env("MCP_AUTH_REQUIRED", True),
+        mcp_auth_required=_bool_env("MCP_AUTH_REQUIRED", False),
+        forwarded_allow_ips=_str_env("FORWARDED_ALLOW_IPS", "127.0.0.1"),
         mcp_api_keys=tuple(key.strip() for key in (_str_env("MCP_API_KEYS") or "").split(",")) if _str_env("MCP_API_KEYS") else (),
         mcp_api_key_daily_quota=_int_env("MCP_API_KEY_DAILY_QUOTA", 10000),
         mcp_max_body_bytes=_int_env("MCP_MAX_BODY_BYTES", 256 * 1024),

@@ -1,78 +1,112 @@
-# API anahtarı ve kota
+# Erişim, kimlik ve sınırlar
 
-## Başlangıç ve istemci
+## Varsayılan: public mod
 
-Üretim varsayılanı fail-closed'dur: `MCP_AUTH_REQUIRED=true` iken geçerli
-`MCP_API_KEYS` yoksa sunucu başlamaz. Anahtarlar virgülle ayrılır; her biri
-32–256 karakterlik, URL-safe (`A-Z a-z 0-9 . _ ~ -`) rastgele bir değer olmalı.
-Aynı anahtar iki kez tanımlanamaz; üst sınır 100 anahtardır.
+Sunucu **anahtarsız** çalışır. İstemci yalnız URL'i ekler:
 
 ```bash
-# Değeri terminale yazdırmadan yeni anahtar oluşturur:
+claude mcp add istanbul --url https://istanbulmcp-production.up.railway.app/mcp/
+codex mcp add istanbul --url https://istanbulmcp-production.up.railway.app/mcp/
+```
+
+Public modda koruma katmanları:
+
+- İstemci başına token-bucket burst sınırı (varsayılan 60 kapasite, saniyede 1).
+- İstek gövdesi üst sınırı (`MCP_MAX_BODY_BYTES`), eşzamanlılık sınırı.
+- Kaynak başına back-pressure ve TTL cache (İBB, İETT, İSKİ).
+- SQL aracı **kapalı**: `CKAN_SQL_ALLOWED_RESOURCE_IDS` boş olduğu sürece
+  hiçbir resource sorgulanamaz.
+
+### İstemci IP'si nereden gelir?
+
+Public modda burst sınırı istemci IP'sine göre uygulanır. Railway/Cloudflare gibi
+platformlarda bağlantı proxy'den gelir; bu yüzden ASGI sunucusu
+`X-Forwarded-For`'u güvenilir proxy'lerden okur:
+
+- Docker imajı `FORWARDED_ALLOW_IPS=*` ile gelir; container portu yalnız
+  platform proxy'si üzerinden erişilebilir olduğu için bu doğrudur.
+- Container'a doğrudan erişim varsa `FORWARDED_ALLOW_IPS` değerini proxy
+  IP'leriyle daraltın. Varsayılan değer `127.0.0.1`'dir.
+- Uygulama `X-Real-IP`, `CF-Connecting-IP` gibi başlıkları kendi başına
+  güvenilir saymaz; tek karar noktası ASGI sunucusunun proxy ayarıdır.
+
+Bu ayar yanlışsa iki uç sonuç olur: tüm istemciler tek kovayı paylaşır (çok sıkı)
+veya istemci kendi IP'sini uydurabilir (çok gevşek).
+
+## Anahtar istemek (opsiyonel)
+
+Anahtar zorunlu değildir. İki env değişkeni yeterlidir:
+
+```bash
+# Anahtar tanımlamak auth'u tek başına açar:
 export MCP_API_KEYS="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
-python -m app.main
+
+# İsteğe bağlı: anahtar yoksa sunucu hiç başlamasın (fail-closed)
+export MCP_AUTH_REQUIRED=true
 ```
 
-İstemci her HTTP isteğinde `Authorization: Bearer <API_KEY>` göndermelidir.
-URL/query parametresi üzerinden anahtar kabul edilmez. Birden fazla Authorization
-başlığı da reddedilir. Anahtarı istemci secret/env mekanizmasında tutun;
-README'ye, repoya veya paylaşılacak çıktılara koymayın. İnternette HTTPS kullanın.
+- Anahtarlar virgülle ayrılır; her biri 32–256 karakter, URL-safe
+  (`A-Z a-z 0-9 . _ ~ -`), en fazla 100 adet ve benzersiz olmalı.
+- `MCP_API_KEYS` doluyken doğrulama **her zaman** etkindir; bir anahtar
+  sessizce yok sayılmaz.
+- `MCP_AUTH_REQUIRED=true` + boş anahtar listesi = başlatma hatası.
+- Geçersiz boolean (`MCP_AUTH_REQUIRED=maybe`) sessizce public moda düşmez;
+  başlatma hatası verir.
 
-Bu **statik API-key** mekanizmasıdır; OAuth 2.1 sunucusu, yetkilendirme ekranı veya
-otomatik OAuth discovery sağlamaz. Özel Bearer header yapılandırabilen istemci
-gerekir. Yalnız OAuth discovery destekleyen istemciler için ayrı OAuth
-entegrasyonu gerekir. Yanıttaki `WWW-Authenticate: Bearer` bunu OAuth'a dönüştürmez.
+İstemci her istekte `Authorization: Bearer <API_KEY>` gönderir. Query
+parametresiyle anahtar kabul edilmez, çift `Authorization` başlığı reddedilir.
+Anahtarlar `repr(Settings)`, HTTP logları ve `/status` içinde görünmez; kota
+tablosunda yalnız SHA-256 fingerprint tutulur.
 
-- `/mcp`, `/mcp/*`, `/status`: anahtar zorunlu.
-- `/healthz`, `/readyz`: minimal health kontrolleri anahtarsız.
-- Hatalı/eksik anahtar: **401**, payload parse edilmeden.
-- Anahtarlar `repr(Settings)`, HTTP logları ve `/status` içinde yayımlanmaz.
-  Kota tablosunda yalnız SHA-256 fingerprint tutulur.
+Bu **statik API-key** mekanizmasıdır; OAuth 2.1 sunucusu veya discovery değildir.
+Yalnız otomatik OAuth destekleyen istemciler (ör. Claude.ai custom connector)
+için ayrı entegrasyon gerekir.
 
-Kasıtlı yerel/public kullanım için:
-```bash
-# Anahtar da tanımlı olmamalı; anahtar varsa doğrulama yine etkinleşir.
-MCP_AUTH_REQUIRED=false MCP_API_KEYS= python -m app.main
-```
+## Anahtar başına günlük kota
 
-`.env.example` referanstır; uygulama `.env` dosyasını kendiliğinden yüklemez.
-Değerleri process ortamına veya deploy secret yönetimine aktarın.
+Auth etkinken:
 
-## Burst sınırı ve günlük kota
-
-- Mevcut token-bucket burst sınırı doğrulanmış **anahtar başına** uygulanır
-  (varsayılan kapasite 60, saniyede 1 token).
 - `MCP_API_KEY_DAILY_QUOTA=10000`: anahtar başına UTC gününde kabul edilen
-  kanonik `POST /mcp/` deneme sayısı. Initialize/list/call/notification ve
-  geçerli anahtarla yapılmış hatalı JSON/tool denemeleri de sayılır.
-- Auth, içerik-boyutu header, burst ve concurrency reddi günlük kotaya girmez.
-  Chunked body sonradan aşılırsa deneme kotadan düşülmüş olabilir.
-- GET/health/status ve `/mcp` → `/mcp/` yönlendirmesi günlük kotaya girmez.
-- Kota dolunca **429** + `Retry-After`. UTC gece yarısında sıfırlanır.
-- Başarılı doğrulanan POST yanıtları `X-RateLimit-Limit`,
-  `X-RateLimit-Remaining`, `X-RateLimit-Reset` (Unix saniyesi) taşır.
-- Günlük kullanım `DATABASE_PATH` SQLite dosyasındaki `api_daily_usage`
-  tablosunda atomik transaction ile tutulur; restart ile sıfırlanmaz.
-- Aynı DB/volume'u paylaşan worker'lar kotayı paylaşır. Ayrı replica diskleri
-  **global kota değildir**; tek replica kullanın veya merkezi kota deposu ekleyin.
-  Burst/concurrency sınırları ise process-local'dır.
-- Kota DB'si kullanılamazsa **503** döner; istek kotasız ilerlemez.
-- Anahtar rotasyonu kimliği değiştirir ve yeni günlük bütçe oluşturur. Tüm
-  istemcilere aynı anahtarı vermek bağımsız kota sağlamaz.
+  kanonik `POST /mcp/` denemesi.
+- Initialize/list/call/notification ve geçerli anahtarla yapılmış hatalı
+  JSON/tool denemeleri sayılır. Auth, gövde-boyutu, burst ve eşzamanlılık
+  reddi sayılmaz. Chunked gövde sonradan aşılırsa deneme düşülmüş olabilir.
+- Kota dolunca **429** + `Retry-After`; UTC gece yarısı sıfırlanır.
+- Yanıtlarda `X-RateLimit-Limit`, `X-RateLimit-Remaining`,
+  `X-RateLimit-Reset` (Unix saniye) bulunur.
+- Sayaç `DATABASE_PATH` SQLite dosyasındaki `api_daily_usage` tablosundadır;
+  restart ile sıfırlanmaz. Aynı dosyayı paylaşan worker'lar kotayı paylaşır.
+  Ayrı replica diskleri **global kota değildir**.
+- Kota deposu okunamazsa **503**; istek kotasız ilerlemez.
 
-Anonim/public modda mevcut ağ bazlı burst sınırı kalır. Ham
-`X-Real-IP`, `CF-Connecting-IP`, `X-Forwarded-For` başlıkları uygulamada
-güvenilir kimlik kabul edilmez. Proxy güvenini ASGI sunucusunda yalnız gerçekten
-güvendiğiniz proxy'lere sınırlandırın; doğrulanmış anahtar kimliği her zaman
-ağ adresinin önündedir.
+Public modda günlük kota yoktur; yalnız burst sınırı ve kaynak back-pressure
+geçerlidir.
+
+## SQL aracını açarken
+
+`CKAN_SQL_ALLOWED_RESOURCE_IDS` doldurulduğunda anonim istemciler bounded
+DataStore kopyası indirebilir (istek başına en fazla 20 MiB). Public modda
+allowlist'i boş tutun; açacaksanız `MCP_API_KEYS` ile birlikte açın. Sunucu bu
+kombinasyonda başlangıçta uyarı loglar. Ayrıntı: [bounded SQL](datastore-sql.md).
+
+## Uçlar
+
+| Uç | Public mod | Auth etkinken |
+|---|---|---|
+| `/healthz`, `/readyz` | Açık | Açık |
+| `/mcp/`, `/mcp` | Açık | Bearer zorunlu |
+| `/status` | Açık | Bearer zorunlu |
+
+`/status` yalnız yapılandırma metadatası döndürür: tool listesi, TTL'ler,
+redakte edilmiş cache özeti ve `access` bloğu (`api_key_required`,
+`daily_quota_per_key`). Anahtar, token veya veritabanı yolu içermez.
 
 ## Yerel doğrulama
 
 ```bash
 pytest tests/test_api_auth.py tests/test_abuse_guard.py
-MCP_LIVE_API_KEY="<client-secret>" python -m scripts.live_mcp_uat --help
+python -m scripts.smoke_mcp          # public mod + auth modu ayrı ayrı
 ```
 
-Live UAT helper anahtarı yalnız Authorization header'ına ekler; raporuna
-yazmaz. `MCP_LIVE_API_KEY`, test sunucusunun `MCP_API_KEYS` yapılandırmasından
-ayrı bir istemci değişkenidir. Canlı testler varsayılan kapalıdır.
+`scripts/smoke_mcp.py` gerçek `python -m app.main` sürecini başlatır, dış veri
+kaynağına bağlanmaz, ürettiği anahtarı yazdırmaz ve geçici dizini siler.

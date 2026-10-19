@@ -21,11 +21,12 @@ KEY_PATTERN = re.compile(r"[A-Za-z0-9._~-]{32,256}", re.ASCII)
 def validate_auth_settings(settings: Settings) -> bool:
     keys = settings.mcp_api_keys
     if settings.mcp_auth_required and not keys:
-        raise ValueError("MCP_API_KEYS is required; use MCP_AUTH_REQUIRED=false only for intentional public/local access")
+        raise ValueError("MCP_AUTH_REQUIRED=true requires MCP_API_KEYS; omit both for the default public mode")
     if len(keys) > 100 or len(set(keys)) != len(keys) or any(not KEY_PATTERN.fullmatch(key) for key in keys):
         raise ValueError("MCP_API_KEYS must contain 1-100 unique 32-256 character URL-safe keys")
-    if settings.mcp_api_key_daily_quota <= 0:
+    if settings.mcp_api_key_daily_quota <= 0 and (keys or settings.mcp_auth_required):
         raise ValueError("MCP_API_KEY_DAILY_QUOTA must be positive")
+    # Keys alone switch authentication on, so a configured key is never ignored.
     return bool(keys)
 
 

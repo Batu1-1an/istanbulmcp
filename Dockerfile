@@ -4,6 +4,9 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+# The container port is only reachable through the platform proxy, so client
+# IPs arrive in X-Forwarded-For. Narrow this if the container is exposed directly.
+ENV FORWARDED_ALLOW_IPS=*
 
 COPY pyproject.toml README.md ./
 COPY app ./app
