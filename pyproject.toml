@@ -15,6 +15,7 @@ dependencies = [
   "starlette>=0.37",
   "uvicorn>=0.30",
   "zeep>=4.2",
+  "sqlglot>=30.23,<31",
 ]
 
 [project.optional-dependencies]

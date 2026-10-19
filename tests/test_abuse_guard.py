@@ -1,7 +1,7 @@
 import pytest
 from starlette.testclient import TestClient
 
-from app.core.abuse_guard import ConcurrencyLimiter
+from app.core.abuse_guard import ClientRateLimiter, ConcurrencyLimiter
 from app.core.settings import get_settings
 from app.main import create_app
 
@@ -82,7 +82,7 @@ def test_mcp_rate_limit_ignores_spoofed_x_forwarded_for(monkeypatch):
     assert second.status_code == 429
 
 
-def test_mcp_rate_limit_uses_x_real_ip_when_present(monkeypatch):
+def test_mcp_rate_limit_ignores_untrusted_x_real_ip(monkeypatch):
     monkeypatch.setenv("MCP_RATE_LIMIT_CAPACITY", "1")
     monkeypatch.setenv("MCP_RATE_LIMIT_REFILL_PER_SECOND", "0.001")
     client = TestClient(create_app(), base_url="http://localhost")
@@ -107,7 +107,14 @@ def test_mcp_rate_limit_uses_x_real_ip_when_present(monkeypatch):
     )
 
     assert first.status_code != 429
-    assert second.status_code != 429
+    assert second.status_code == 429
+
+
+@pytest.mark.asyncio
+async def test_rate_bucket_is_not_evicted_when_existing_client_returns_at_capacity():
+    limiter = ClientRateLimiter(capacity=1, refill_per_second=0.001, max_clients=1)
+    assert (await limiter.acquire("same-client"))[0] is True
+    assert (await limiter.acquire("same-client"))[0] is False
 
 
 @pytest.mark.asyncio

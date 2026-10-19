@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
@@ -88,11 +88,20 @@ class Settings:
     iski_dams_stale_if_error_seconds: int = 86400
     ckan_catalog_cache_ttl_seconds: int = 900
     ckan_resource_cache_ttl_seconds: int = 900
+    ckan_sql_allowed_resource_ids: tuple[str, ...] = ()
+    ckan_sql_max_rows: int = 50000
+    ckan_sql_max_bytes: int = 20 * 1024 * 1024
+    ckan_sql_page_size: int = 5000
+    ckan_sql_snapshot_ttl_seconds: int = 900
+    ckan_sql_load_timeout_seconds: float = 30.0
+    ckan_sql_query_timeout_seconds: float = 0.5
     iett_line_cache_ttl_seconds: int = 900
     iett_stops_cache_ttl_seconds: int = 900
     transport_disruptions_cache_ttl_seconds: int = 120
     metro_accessibility_cache_ttl_seconds: int = 120
     metro_accessibility_stale_if_error_seconds: int = 900
+    mcp_legacy_tools_enabled: bool = False
+    ferry_schedules_enabled: bool = False
     ferry_schedule_cache_ttl_seconds: int = 120
     ferry_schedule_default_limit: int = 50
     ferry_schedule_max_limit: int = 100
@@ -103,6 +112,9 @@ class Settings:
     sehir_hatlari_relay_url: str | None = None
     sehir_hatlari_relay_token: str | None = None
     source_cache_max_entries: int = 1024
+    mcp_auth_required: bool = True
+    mcp_api_keys: tuple[str, ...] = field(default=(), repr=False)
+    mcp_api_key_daily_quota: int = 10000
     mcp_max_body_bytes: int = 256 * 1024
     mcp_rate_limit_capacity: int = 60
     mcp_rate_limit_refill_per_second: float = 1.0
@@ -129,6 +141,18 @@ def _str_env(name: str, default: str | None = None) -> str | None:
     if value is None or value == "":
         return default
     return value
+
+
+def _bool_env(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} must be a boolean")
 
 
 def _joined_env_parts(prefix: str) -> str | None:
@@ -266,11 +290,20 @@ def get_settings() -> Settings:
         iski_dams_stale_if_error_seconds=_int_env("ISKI_DAMS_STALE_IF_ERROR_SECONDS", 86400),
         ckan_catalog_cache_ttl_seconds=_int_env("CKAN_CATALOG_CACHE_TTL_SECONDS", 900),
         ckan_resource_cache_ttl_seconds=_int_env("CKAN_RESOURCE_CACHE_TTL_SECONDS", 900),
+        ckan_sql_allowed_resource_ids=tuple(part.strip() for part in (_str_env("CKAN_SQL_ALLOWED_RESOURCE_IDS") or "").split(",") if part.strip()),
+        ckan_sql_max_rows=_int_env("CKAN_SQL_MAX_ROWS", 50000),
+        ckan_sql_max_bytes=_int_env("CKAN_SQL_MAX_BYTES", 20 * 1024 * 1024),
+        ckan_sql_page_size=_int_env("CKAN_SQL_PAGE_SIZE", 5000),
+        ckan_sql_snapshot_ttl_seconds=_int_env("CKAN_SQL_SNAPSHOT_TTL_SECONDS", 900),
+        ckan_sql_load_timeout_seconds=_float_env("CKAN_SQL_LOAD_TIMEOUT_SECONDS", 30.0),
+        ckan_sql_query_timeout_seconds=_float_env("CKAN_SQL_QUERY_TIMEOUT_SECONDS", 0.5),
         iett_line_cache_ttl_seconds=_int_env("IETT_LINE_CACHE_TTL_SECONDS", 900),
         iett_stops_cache_ttl_seconds=_int_env("IETT_STOPS_CACHE_TTL_SECONDS", 900),
         transport_disruptions_cache_ttl_seconds=_int_env("TRANSPORT_DISRUPTIONS_CACHE_TTL_SECONDS", 120),
         metro_accessibility_cache_ttl_seconds=_int_env("METRO_ACCESSIBILITY_CACHE_TTL_SECONDS", 120),
         metro_accessibility_stale_if_error_seconds=_int_env("METRO_ACCESSIBILITY_STALE_IF_ERROR_SECONDS", 900),
+        mcp_legacy_tools_enabled=_bool_env("MCP_LEGACY_TOOLS_ENABLED", False),
+        ferry_schedules_enabled=_bool_env("FERRY_SCHEDULES_ENABLED", False),
         ferry_schedule_cache_ttl_seconds=_int_env("FERRY_SCHEDULE_CACHE_TTL_SECONDS", 120),
         ferry_schedule_default_limit=_int_env("FERRY_SCHEDULE_DEFAULT_LIMIT", 50),
         ferry_schedule_max_limit=_int_env("FERRY_SCHEDULE_MAX_LIMIT", 100),
@@ -281,6 +314,9 @@ def get_settings() -> Settings:
         sehir_hatlari_relay_url=_str_env("SEHIR_HATLARI_RELAY_URL"),
         sehir_hatlari_relay_token=_str_env("SEHIR_HATLARI_RELAY_TOKEN"),
         source_cache_max_entries=_int_env("SOURCE_CACHE_MAX_ENTRIES", 1024),
+        mcp_auth_required=_bool_env("MCP_AUTH_REQUIRED", True),
+        mcp_api_keys=tuple(key.strip() for key in (_str_env("MCP_API_KEYS") or "").split(",")) if _str_env("MCP_API_KEYS") else (),
+        mcp_api_key_daily_quota=_int_env("MCP_API_KEY_DAILY_QUOTA", 10000),
         mcp_max_body_bytes=_int_env("MCP_MAX_BODY_BYTES", 256 * 1024),
         mcp_rate_limit_capacity=_int_env("MCP_RATE_LIMIT_CAPACITY", 60),
         mcp_rate_limit_refill_per_second=_float_env("MCP_RATE_LIMIT_REFILL_PER_SECOND", 1.0),

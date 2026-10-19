@@ -12,5 +12,35 @@ specs/
 docs/research/
 node_modules/
 .wrangler/
-.dev.vars
 my-video/
+
+# Secrets — keep only example files in the repository
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Cloudflare local secret files
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+!.dev.vars.*.example
+
+# Logs
+*.log
+
+# Test coverage and tool caches
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Python packaging output
+/build/
+/dist/
+*.egg-info/
+
+# Operating system files
+.DS_Store

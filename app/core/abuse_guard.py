@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import ipaddress
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -28,9 +27,9 @@ class ClientRateLimiter:
     async def acquire(self, client_id: str) -> tuple[bool, float]:
         now = time.monotonic()
         async with self._lock:
-            self._prune_locked(now)
             bucket = self._clients.get(client_id)
             if bucket is None:
+                self._prune_locked(now)
                 bucket = ClientBucket(tokens=float(self.capacity), updated_at=now, last_seen_at=now)
                 self._clients[client_id] = bucket
 
@@ -170,26 +169,17 @@ class McpAbuseGuardMiddleware:
         return None
 
     def _client_id(self, scope: Scope) -> str:
-        headers = {
-            key.decode("latin-1").lower(): value.decode("latin-1")
-            for key, value in scope.get("headers", [])
-        }
-        for header in ("x-real-ip", "cf-connecting-ip"):
-            if client_ip := self._trusted_header_ip(headers.get(header)):
-                return client_ip
+        # Verified API key identity takes precedence over network addresses.
+        from app.core.api_auth import KEY_ID
+
+        if scope.get(KEY_ID):
+            return scope[KEY_ID]
+        # Forwarded headers are untrusted here. Configure the ASGI server's
+        # trusted proxies to populate scope["client"] instead.
         client = scope.get("client")
         if isinstance(client, tuple) and client:
             return str(client[0])
         return "unknown"
-
-    def _trusted_header_ip(self, value: str | None) -> str | None:
-        if not value:
-            return None
-        candidate = value.strip()
-        try:
-            return str(ipaddress.ip_address(candidate))
-        except ValueError:
-            return None
 
     async def _reject(
         self,

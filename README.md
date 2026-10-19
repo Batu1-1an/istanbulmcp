@@ -12,7 +12,7 @@
 
 Istanbul MCP, İstanbul'a dair açık verileri MCP destekleyen yapay zekâ araçları, geliştirici ortamları ve ajan tabanlı iş akışları için erişilebilir hale getiren uzak bir Model Context Protocol sunucusudur.
 
-Herkese açık endpoint:
+Uzak endpoint:
 
 ```text
 https://istanbulmcp-production.up.railway.app/mcp/
@@ -27,6 +27,11 @@ Istanbul MCP bu boşluğu kapatır. Codex, Claude, Cursor, OpenCode, Windsurf, A
 Kullanım alanı yalnızca sohbet arayüzleri değildir. Kod yazan bir ajan, araştırma yapan bir iş akışı, veri analizi çıkaran bir sistem veya kendi otomasyonunuz da aynı endpoint'i kullanabilir.
 
 ## Hızlı Başlangıç
+
+API key etkin kurulumlarda aşağıdaki URL örnekleri tek başına yeterli değildir:
+istemcide `Authorization: Bearer <API_KEY>` header'ı da yapılandırılmalıdır.
+Statik-key modu özel header desteği ister; yalnız OAuth discovery kullanan
+Claude.ai connector akışıyla otomatik giriş sağlamaz. [Erişim rehberi](docs/api-access.md).
 
 Codex CLI ile eklemek için:
 
@@ -53,12 +58,13 @@ Sonra yeni bir oturum açıp örnek bir soru sorun:
 Taksim'e arabayla gideceğim. Yakındaki otoparkların boş yer sayısını, çalışma saatini ve haritadaki yerlerini gösterir misin?
 ```
 
-Genel MCP istemci yapılandırması:
+Genel MCP istemci yapılandırması (header destekleyen istemciler):
 
 ```json
 {
   "mcpServers": {
     "istanbul": {
+      "headers": {"Authorization": "Bearer <API_KEY>"},
       "url": "https://istanbulmcp-production.up.railway.app/mcp/"
     }
   }
@@ -151,7 +157,10 @@ Tüm araç sonuçları standart bir cevap modeliyle döner: `summary`, `data`, `
 
 ## MCP Araçları
 
-Sunucu 30 salt okunur MCP aracı sağlar:
+Varsayılan yüzey **15 salt okunur araçtır**; eski adlar
+`MCP_LEGACY_TOOLS_ENABLED=true` ile ayrıca açılabilir. Yetenekler kaldırılmadı,
+yakınlık/ilçe sorguları, su verileri ve İETT hat işlemleri birleştirildi.
+[Geçiş tablosu](docs/tool-migration.md) eski → yeni çağrıları gösterir.
 
 ```text
 istanbul_health
@@ -159,65 +168,41 @@ istanbul_search_datasets
 istanbul_get_dataset
 istanbul_get_resource_schema
 istanbul_query_resource
+istanbul_datastore_query
 istanbul_nearby
-istanbul_bbox_search
-istanbul_parking_nearby
-istanbul_parking_by_district
-istanbul_nobetci_eczane_nearby
-istanbul_nobetci_eczane_by_district
-istanbul_istanbulkart_centers_nearby
-istanbul_sosyal_tesis_nearby
-istanbul_metro_stations_nearby
-istanbul_air_quality_nearby
 istanbul_traffic_status
-istanbul_iski_active_faults
-istanbul_iski_fault_by_number
-istanbul_iski_nearby_faults
-istanbul_iski_dam_occupancy
+istanbul_water_status
 istanbul_mobility_nearby
 istanbul_city_services_nearby
 istanbul_neighborhood_profile
-istanbul_transit_line_info
-istanbul_stops_for_line
-istanbul_transit_disruptions
+istanbul_transit_line
 istanbul_transport_disruptions
-istanbul_ferry_schedules
-istanbul_planned_departures
 istanbul_metro_accessibility_status
 ```
 
-| Araç | Ne işe yarar? | Örnek soru |
-|------|---------------|------------|
-| `istanbul_health` | Servis ve lokal SQLite hazırlık durumunu kontrol eder. | "Servis sağlıklı mı?" |
-| `istanbul_search_datasets` | İBB Açık Veri kataloğunda konuya göre veri seti arar. | "Müzelerle ilgili hangi veri setleri var?" |
-| `istanbul_get_dataset` | Belirli bir veri setinin metadata ve resource bilgilerini getirir. | "Bu dataset içinde hangi kaynaklar var?" |
-| `istanbul_get_resource_schema` | Bir CKAN DataStore resource'unun alan/kolon şemasını döndürür. | "Bu resource hangi alanları içeriyor?" |
-| `istanbul_query_resource` | Seçili CKAN DataStore resource'unu filtre ve limitlerle sorgular. | "Bu resource'tan 5 örnek kayıt getir." |
-| `istanbul_nearby` | Koordinata yakın şehir noktalarını tür, mesafe ve harita linkiyle bulur. | "Bu konumun yakınında hangi şehir noktaları var?" |
-| `istanbul_bbox_search` | Verilen harita kutusu içinde kalan şehir noktalarını arar. | "Kadıköy çevresindeki WiFi noktalarını bul." |
-| `istanbul_parking_nearby` | Koordinata yakın İSPARK otoparklarını kapasite, boş yer ve harita linkiyle listeler. | "Taksim yakınındaki otoparkları göster." |
-| `istanbul_parking_by_district` | İlçedeki İSPARK otoparklarını mesafe uydurmadan listeler. | "Başakşehir'de hangi otoparklar var?" |
-| `istanbul_nobetci_eczane_nearby` | İBB Şehir Haritası'nın güncel İstanbul nöbetçi eczane listesinden koordinata yakın eczaneleri mesafeye göre listeler. Bu genel eczane kataloğu veya kesin nöbet bitiş garantisi değildir. | "Kadıköy'de konumuma yakın nöbetçi eczaneler hangileri?" |
-| `istanbul_nobetci_eczane_by_district` | İBB Şehir Haritası'nın güncel İstanbul nöbetçi eczane listesini ilçe bazında listeler; çalışma saatleri veya genel katalog sunmaz. | "Kadıköy'de bugün hangi eczaneler nöbetçi?" |
-| `istanbul_istanbulkart_centers_nearby` | Resmi İBB İstanbulkart dolum merkezi konumlarını yarıçap içinde mesafeye göre listeler. Veri yıllık/statiktir; terminalin anlık açık, yükleme kabul ediyor, bakiyesi veya stoğu olduğu garantisini vermez. | "Taksim'e yakın İstanbulkart dolum merkezleri hangileri?" |
-| `istanbul_sosyal_tesis_nearby` | Resmi İBB sosyal tesis konumlarını yarıçap içinde mesafeye göre listeler; detay ve güvenilir eşleşme varsa rezervasyon bağlantısı verir. Yalnızca konum rehberidir, canlı işletim durumu sunmaz. | "Beşiktaş'a yakın sosyal tesisler hangileri?" |
-| `istanbul_metro_stations_nearby` | Koordinata yakın Metro İstanbul istasyonlarını hat bilgisiyle getirir. | "Levent yakınındaki metro istasyonları hangileri?" |
-| `istanbul_air_quality_nearby` | Koordinata yakın hava kalitesi istasyonlarını ve varsa son okumaları döndürür. | "Kadıköy çevresindeki hava kalitesi istasyonları nerede?" |
-| `istanbul_traffic_status` | İstanbul geneli trafik yoğunluğu indeksini döndürür. | "İstanbul trafik yoğunluğu şu an hangi seviyede?" |
-| `istanbul_iski_active_faults` | Aktif İSKİ su arızalarını listeler; ilçe filtresi ve limit destekler. | "Şişli'de aktif su kesintisi var mı?" |
-| `istanbul_iski_fault_by_number` | Aktif İSKİ arızasını arıza numarasıyla bulur. | "10000511943 numaralı İSKİ arızasının detayını göster." |
-| `istanbul_iski_nearby_faults` | Koordinata yakın aktif İSKİ arızalarını yaklaşık geometri merkezine göre sıralar. | "Taksim'e yakın aktif su arızaları var mı?" |
-| `istanbul_iski_dam_occupancy` | İSKİ baraj doluluk kayıtlarını döndürür; baraj adı ve minimum doluluk filtresi destekler. | "Baraj doluluk oranları şu an nasıl?" |
-| `istanbul_mobility_nearby` | Bilinen yer veya koordinat için otopark, metro, durak, hava kalitesi ve trafik özetini verir. | "Kadıköy Rıhtım çevresinde ulaşım seçenekleri neler?" |
-| `istanbul_city_services_nearby` | Yakındaki WiFi noktalarını ve ilçe düzeyindeki kütüphane bilgilerini getirir. | "Beşiktaş'ta hangi kütüphaneler var?" |
-| `istanbul_neighborhood_profile` | Mahalle profilini sosyal yardım, bina stoku ve deprem senaryosu verileriyle oluşturur. | "Kadıköy Caferağa mahalle profili nedir?" |
-| `istanbul_transit_line_info` | İETT hat adı, tarife, uzunluk ve tahmini süre gibi temel hat bilgilerini getirir. | "500T hattının bilgileri nedir?" |
-| `istanbul_stops_for_line` | İETT hattının duraklarını yönlerine göre sıralı ve harita linkleriyle döndürür. | "500T hattı hangi duraklardan geçiyor?" |
-| `istanbul_transit_disruptions` | Güncel İETT duyurularını listeler; isteğe bağlı tam hat kodu filtresi ve limit destekler. | "34A için güncel bir duyuru var mı?" |
-| `istanbul_transport_disruptions` | İETT, Metro İstanbul, Şehir Hatları ve Marmaray'ın doğrulanmış resmî arıza/sefer duyurularını tek sonuçta birleştirir; ulaşım türü, işletme, hat etiketi ve limit filtresi destekler. | "Metro ve vapurlarda güncel aksaklık var mı?" |
-| `istanbul_ferry_schedules` | Şehir Hatları'nın resmî rota detaylarından yayımlanmış normal vapur tarife/saatlerini listeler. Statik plandır; canlı kalkış, gecikme veya ETA değildir. | "Kadıköy-Beşiktaş vapur saatleri nedir?" |
-| `istanbul_planned_departures` | Bir hattın planlanan ana durak kalkışlarını gün ve yön bilgisiyle listeler. Bu veri ara durak ETA'sı değildir. | "34A'nın bugün planlanan kalkışları neler?" |
-| `istanbul_metro_accessibility_status` | Resmî Metro İstanbul ekipman/tesis toplamları ile güncel ekipman arıza ayrıntılarını hat, istasyon ve ekipman türü filtreleriyle döndürür. Tek ekipman kaydı kesin istasyon/yolculuk erişilebilirliği, alternatif rota veya çalışan yedek ekipman sonucu üretmez. | "M2 Levent'te asansör arızası var mı?" |
+| Araç | İşlev ve örnek |
+|---|---|
+| `istanbul_health` | Servis ve SQLite hazırlığı. |
+| `istanbul_search_datasets` | Konuya göre İBB katalog araması. |
+| `istanbul_get_dataset` | Veri seti metadata ve kaynakları. |
+| `istanbul_get_resource_schema` | Resource kolonları. |
+| `istanbul_query_resource` | CKAN kayıtlarını güvenli filtre ve limitle getirir. |
+| `istanbul_datastore_query` | İzin verilen resource'un tam ve sınırlı kopyası üzerinde SELECT/GROUP BY. [SQL rehberi](docs/datastore-sql.md). |
+| `istanbul_nearby` | `kind=parking,pharmacy,istanbulkart,social_facility,metro_station,air_quality,water_fault,city_feature`. Koordinatla yakınlık; parking/pharmacy için ilçe; city_feature için bbox. |
+| `istanbul_traffic_status` | Şehir geneli trafik indeksi; yol bazlı değildir. |
+| `istanbul_water_status` | `kind=faults`: ilçe veya arıza numarası; `kind=dams`: baraj dolulukları. |
+| `istanbul_mobility_nearby` | Bilinen yer veya koordinata göre ulaşım özeti. |
+| `istanbul_city_services_nearby` | WiFi ve ilçe düzeyinde kütüphaneler. |
+| `istanbul_neighborhood_profile` | Sosyal yardım, bina stoku, deprem **senaryosu**; anlık risk değildir. |
+| `istanbul_transit_line` | `action=info,stops,departures`; planlı kalkışlar ana durak içindir, ETA değildir. |
+| `istanbul_transport_disruptions` | Desteklenen işletmelerin güncel durumları ve resmî duyuruları. |
+| `istanbul_metro_accessibility_status` | Ekipman toplamları ve arıza ayrıntıları; yolculuk erişilebilirliği garantisi değildir. |
+
+`istanbul_ferry_schedules` varsayılan kapalıdır (`FERRY_SCHEDULES_ENABLED=false`).
+Kontrol edilen çıkıştan Şehir Hatları tarife kaynağı HTTP 403 challenge döndürdü.
+Deploy ortamından erişim doğrulanmadan açmayın; mevcut iptal-duyurusu relay'i
+tarifeyi taşımaz. İptal duyuruları aksaklık aracında kalır; kaynak hatası
+`unavailable` olarak raporlanır.
 
 `istanbul_transport_disruptions` yalnızca dört doğrulanmış resmî aksaklık kapsamını kontrol eder: İETT ve Metro İstanbul canlı durumları ile Metro resmî planlı duyuruları; Şehir Hatları iptal/sefer düzenlemesi duyuruları; Marmaray resmî son dakika duyuruları. Metro canlı durum ve planlı duyurular ayrı `sources[]` coverage kayıtlarıdır; biri okunamazsa genel “aksaklık yok” özeti verilmez. `istanbul_ferry_schedules` normal tarife için ayrı çalışır: önce resmî tarife indeksinden tam rota eşleşmesi yapar, sonra canonical rota HTML tablosunu parse eder. Bu sonuç `coverage_kind=published_timetable` ve statik tarife uyarısı taşır; canlı kalkış, gecikme veya ETA değildir. `mode`, `operator`, `line` ve `limit` isteğe bağlıdır. `line`, `line_code` veya `route_label` üzerinde büyük/küçük harften bağımsız tam eşleşir. Kaynaklar 120 saniye önbelleklenir; kısmi kaynak hataları `sources[].coverage_status=unavailable`, `freshness=unknown` ve `warnings` ile görünür. Şehir Hatları sayfası genel ve tarihli bir duyuru verirse sistem hat kodu uydurmaz; relay veya doğrudan resmi sayfa erişimi `403` ile engellenirse bunu açıkça `unavailable` bildirir. Marmaray Angular kabuğu döndürdüğünde, yapılandırılmış `MARMARAY_API_BASIC_TOKEN` ile resmi frontend API’si kullanılır; API boş liste döndürürse bu checked empty sonucudur. İDO, Turyol, Dentur, minibüs ve taksi-dolmuş canlı kapsama dahil değildir ve cevap `limits[]` içinde belirtilir. Metro ekipman arızası, rota motoru, ETA ve GTFS `stop_times` arşivi bu araçların kapsamı değildir.
 
@@ -232,6 +217,12 @@ Istanbul MCP uzak bir Streamable HTTP MCP endpoint'i sunar:
 ```text
 https://istanbulmcp-production.up.railway.app/mcp/
 ```
+
+**Erişim kontrolü:** Yeni sürüm üretimde `MCP_API_KEYS` ister. İstemcide her isteğe
+`Authorization: Bearer <API_KEY>` header'ı ekleyin; yalnız URL yeterli değildir.
+Statik anahtar modu OAuth discovery değildir; özel header destekleyen istemci gerekir.
+Health endpoint'leri açık kalır. Kurulum, bilinçli public mod ve günlük kota için
+[API erişim rehberine](docs/api-access.md) bakın.
 
 Aşağıdaki örnekler resmi istemci dokümanlarıyla kontrol edilmiştir. İstemci farklı bir alan adı istiyorsa aynı endpoint'i kullanın; örneğin bazıları `url`, bazıları `serverUrl`, bazıları da CLI üzerinde `--transport http` ister.
 
@@ -438,6 +429,16 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 pytest
+# Üretim varsayılanı anahtar zorunlu; değeri terminale yazdırmadan üretin:
+export MCP_API_KEYS="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+# 20 soru × fresh/stale/broken × compact/legacy dispatch ve envelope sözleşmesi
+pytest tests/test_tool_evals.py
+# Tool tanımlarının sayısı ve UTF-8 byte boyutu (token veya LLM başarı metriği değil)
+python -m scripts.eval_tools
+# SQL güvenlik/tamlık ve bounded HTTP testleri
+pytest tests/test_guarded_sql.py tests/test_datastore_sql.py tests/test_ckan_bounded.py
+# Dış kaynağa bağlanmadan gerçek yerel süreç + auth/kota/restart smoke testi
+python -m scripts.smoke_mcp
 python -m app.main
 ```
 
@@ -476,11 +477,17 @@ python scripts/live_mcp_uat.py
 - `IBB_PHARMACY_CACHE_TTL_SECONDS` (300) and `IBB_PHARMACY_MAX_CACHE_AGE_SECONDS` (1800)
 - `IBB_PHARMACY_STALE_IF_ERROR_SECONDS` and `IBB_PHARMACY_RATE_*`
 - `MARMARAY_API_BASIC_TOKEN`
+- `FERRY_SCHEDULES_ENABLED` — varsayılan `false`; yalnızca deploy ortamından tarife erişimi doğrulandıktan sonra açın. Mevcut iptal-duyurusu relay'i tarife desteği sağlamaz.
 - `SEHIR_HATLARI_RELAY_URL`
 - `SEHIR_HATLARI_RELAY_TOKEN`
 
 Herkese açık MCP koruma limitleri:
 
+- `CKAN_SQL_ALLOWED_RESOURCE_IDS` — SQL için operatör allowlist'i; varsayılan boş. Boyut/süre/satır ayarları ve hard cap'ler [SQL rehberinde](docs/datastore-sql.md).
+- `MCP_AUTH_REQUIRED` — varsayılan `true`; anahtar yoksa başlamaz. Kasıtlı public/local mod için `false`.
+- `MCP_API_KEYS` — virgülle ayrılmış rastgele Bearer anahtarları; secret olarak saklayın.
+- `MCP_API_KEY_DAILY_QUOTA` — anahtar başına UTC günlük istek kotası; varsayılan `10000`, SQLite ile kalıcı.
+- `MCP_LEGACY_TOOLS_ENABLED` — eski araç adlarını ayrıca yayımlar; varsayılan `false`.
 - `MCP_MAX_BODY_BYTES`
 - `MCP_RATE_LIMIT_CAPACITY`
 - `MCP_RATE_LIMIT_REFILL_PER_SECOND`

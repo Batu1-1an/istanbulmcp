@@ -40,8 +40,8 @@ def test_live_mcp_validation_envelope():
     payload, error, _elapsed = rpc_call(
         os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
         9003,
-        "istanbul_air_quality_nearby",
-        {"lat": 40.9909, "lon": 29.0303, "radius_m": 7000, "limit": 1},
+        "istanbul_nearby",
+        {"kind":"air_quality","lat":40.9909,"lon":29.0303,"radius_m":7000,"limit":1},
     )
 
     assert error is None
@@ -50,6 +50,10 @@ def test_live_mcp_validation_envelope():
     assert payload["data"][0]["allowed_max"] == 5000
 
 
+@pytest.mark.skipif(
+    os.getenv("FERRY_SCHEDULES_ENABLED", "").lower() not in {"1", "true", "yes", "on"},
+    reason="Timetable tool is opt-in; verify upstream access before enabling.",
+)
 def test_live_mcp_ferry_schedule_scope_is_explicit():
     payload, error, _elapsed = rpc_call(
         os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
@@ -111,8 +115,8 @@ def test_live_mcp_parking_by_district_tool():
     payload, error, _elapsed = rpc_call(
         os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
         9007,
-        "istanbul_parking_by_district",
-        {"district": "Başakşehir", "limit": 5},
+        "istanbul_nearby",
+        {"kind":"parking","district":"Başakşehir","limit":5},
     )
 
     assert error is None
@@ -125,8 +129,8 @@ def test_live_mcp_nobetci_eczane_by_district_tool():
     payload, error, _elapsed = rpc_call(
         os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
         9020,
-        "istanbul_nobetci_eczane_by_district",
-        {"district": "Kadıköy", "limit": 20},
+        "istanbul_nearby",
+        {"kind":"pharmacy","district":"Kadıköy","limit":20},
     )
 
     assert error is None
@@ -144,8 +148,8 @@ def test_live_mcp_nobetci_eczane_nearby_tool():
     payload, error, _elapsed = rpc_call(
         os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
         9021,
-        "istanbul_nobetci_eczane_nearby",
-        {"lat": 40.9909, "lon": 29.0303, "radius_m": 5000, "limit": 20},
+        "istanbul_nearby",
+        {"kind":"pharmacy","lat":40.9909,"lon":29.0303,"radius_m":5000,"limit":20},
     )
 
     assert error is None
@@ -167,8 +171,8 @@ def test_live_mcp_istanbulkart_centers_nearby_tool():
     payload, error, _elapsed = rpc_call(
         os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
         9022,
-        "istanbul_istanbulkart_centers_nearby",
-        {"lat": 41.038878, "lon": 28.961898, "radius_m": 5000, "limit": 20},
+        "istanbul_nearby",
+        {"kind":"istanbulkart","lat":41.038878,"lon":28.961898,"radius_m":5000,"limit":20},
     )
 
     assert error is None
@@ -185,8 +189,8 @@ def test_live_mcp_social_facilities_nearby_tool():
     payload, error, _elapsed = rpc_call(
         os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
         9023,
-        "istanbul_sosyal_tesis_nearby",
-        {"lat": 41.038878, "lon": 28.961898, "radius_m": 5000, "limit": 20},
+        "istanbul_nearby",
+        {"kind":"social_facility","lat":41.038878,"lon":28.961898,"radius_m":5000,"limit":20},
     )
 
     assert error is None
@@ -236,8 +240,8 @@ def test_live_mcp_transit_disruptions_tool():
     payload, error, _elapsed = rpc_call(
         os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
         9010,
-        "istanbul_transit_disruptions",
-        {"limit": 5},
+        "istanbul_transport_disruptions",
+        {"operator":"iett","limit":5},
     )
 
     assert error is None
@@ -249,8 +253,8 @@ def test_live_mcp_transit_disruptions_line_filter_preserves_line_code():
     payload, error, _elapsed = rpc_call(
         os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
         9012,
-        "istanbul_transit_disruptions",
-        {"line_code": "34A", "limit": 5},
+        "istanbul_transport_disruptions",
+        {"operator":"iett","line_code":"34A","limit":5},
     )
 
     assert error is None
@@ -301,8 +305,8 @@ def test_live_mcp_planned_departures_tool():
     payload, error, _elapsed = rpc_call(
         os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
         9011,
-        "istanbul_planned_departures",
-        {"line_code": "34A", "limit": 5},
+        "istanbul_transit_line",
+        {"action":"departures","line_code":"34A","limit":5},
     )
 
     assert error is None

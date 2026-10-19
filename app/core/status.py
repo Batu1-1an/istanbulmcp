@@ -14,7 +14,10 @@ TOOL_SOURCES = {
     "istanbul_get_dataset": "ckan",
     "istanbul_get_resource_schema": "ckan",
     "istanbul_query_resource": "ckan",
-    "istanbul_nearby": "sqlite",
+    "istanbul_datastore_query": "ckan",
+    "istanbul_nearby": "mixed_city_open_data",
+    "istanbul_water_status": "iski",
+    "istanbul_transit_line": "iett",
     "istanbul_bbox_search": "sqlite",
     "istanbul_parking_nearby": "ispark",
     "istanbul_parking_by_district": "ispark",
@@ -42,12 +45,17 @@ TOOL_SOURCES = {
 }
 
 
-def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = None) -> dict[str, Any]:
-    tools = _tool_inventory()
+def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = None, server=None) -> dict[str, Any]:
+    tools = _tool_inventory(server)
     return {
         "ok": True,
         "service": settings.app_name,
         "version": _package_version(),
+        "access": {
+            "api_key_required": settings.mcp_auth_required or bool(settings.mcp_api_keys),
+            "daily_quota_per_key": settings.mcp_api_key_daily_quota,
+            "quota_window": "UTC day; shared SQLite volume required across workers",
+        },
         "transport": {
             "streamable_http": "/mcp/",
             "canonical_redirect": "/mcp -> /mcp/",
@@ -63,6 +71,7 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
             "iski_relay_enabled": bool(settings.iski_relay_base_url and settings.iski_relay_token),
             "iski_relay_timeout_seconds": settings.iski_relay_timeout_seconds,
             "marmaray_api_fallback_enabled": bool(settings.marmaray_api_basic_token),
+            "ferry_schedules_enabled": settings.ferry_schedules_enabled,
             "sehir_hatlari_relay_enabled": bool(
                 settings.sehir_hatlari_relay_url and settings.sehir_hatlari_relay_token
             ),
@@ -178,8 +187,8 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
     }
 
 
-def _tool_inventory() -> list[dict[str, Any]]:
-    manager = getattr(mcp, "_tool_manager", None)
+def _tool_inventory(server=None) -> list[dict[str, Any]]:
+    manager = getattr(server if server is not None else mcp, "_tool_manager", None)
     registered = getattr(manager, "_tools", {}) if manager is not None else {}
     return [
         {

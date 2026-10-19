@@ -1,6 +1,8 @@
+import asyncio
 import inspect
 import json
 
+from mcp.server.fastmcp import FastMCP
 from starlette.testclient import TestClient
 
 from app.main import create_app
@@ -8,6 +10,7 @@ from app.mcp.server import (
     istanbul_health,
     istanbul_nobetci_eczane_by_district,
     istanbul_nobetci_eczane_nearby,
+    register_ferry_schedule_tool,
 )
 
 
@@ -71,18 +74,55 @@ def test_status_returns_tool_inventory(monkeypatch, tmp_path):
     assert body["tool_count"] >= 2
     assert "istanbul_search_datasets" in tool_names
     assert "istanbul_neighborhood_profile" in tool_names
-    assert "istanbul_parking_by_district" in tool_names
-    assert "istanbul_nobetci_eczane_nearby" in tool_names
-    assert "istanbul_nobetci_eczane_by_district" in tool_names
-    assert "istanbul_istanbulkart_centers_nearby" in tool_names
-    assert "istanbul_sosyal_tesis_nearby" in tool_names
-    assert "istanbul_iski_active_faults" in tool_names
-    assert "istanbul_iski_dam_occupancy" in tool_names
-    assert "istanbul_transit_disruptions" in tool_names
-    assert "istanbul_planned_departures" in tool_names
+    assert "istanbul_nearby" in tool_names
+    assert "istanbul_water_status" in tool_names
+    assert "istanbul_transit_line" in tool_names
     assert "istanbul_transport_disruptions" in tool_names
-    assert "istanbul_ferry_schedules" in tool_names
     assert "istanbul_metro_accessibility_status" in tool_names
+    assert "istanbul_parking_nearby" not in tool_names
+    # Timetable access failed from the checked egress; opt-in is required.
+    assert "istanbul_ferry_schedules" not in tool_names
+
+
+def test_tool_source_map_matches_registered_tools():
+    """Keep ``status.TOOL_SOURCES`` in sync with the registered tool surface."""
+    from app.core.status import TOOL_SOURCES, _tool_inventory
+
+    registered = {tool["name"] for tool in _tool_inventory()}
+    from app.mcp.registry import DEFAULT_TOOL_NAMES, LEGACY_TOOL_NAMES
+
+    assert registered == set(DEFAULT_TOOL_NAMES)
+    assert set(TOOL_SOURCES) == registered | set(LEGACY_TOOL_NAMES) | {"istanbul_ferry_schedules"}
+
+
+def test_settings_load_ferry_gate(monkeypatch):
+    from app.core.settings import get_settings
+
+    monkeypatch.setenv("FERRY_SCHEDULES_ENABLED", "true")
+    get_settings.cache_clear()
+    assert get_settings().ferry_schedules_enabled is True
+    monkeypatch.setenv("FERRY_SCHEDULES_ENABLED", "false")
+    get_settings.cache_clear()
+    assert get_settings().ferry_schedules_enabled is False
+    get_settings.cache_clear()
+
+
+def test_ferry_schedule_tool_stays_hidden_when_disabled():
+    server = FastMCP("ferry-gate-off")
+
+    register_ferry_schedule_tool(server, False)
+
+    names = {tool.name for tool in asyncio.run(server.list_tools())}
+    assert "istanbul_ferry_schedules" not in names
+
+
+def test_ferry_schedule_tool_registers_when_enabled():
+    server = FastMCP("ferry-gate-on")
+
+    register_ferry_schedule_tool(server, True)
+
+    names = {tool.name for tool in asyncio.run(server.list_tools())}
+    assert "istanbul_ferry_schedules" in names
 
 
 def test_settings_join_iski_snapshot_parts(monkeypatch):
@@ -236,30 +276,15 @@ def test_mcp_initialize_endpoint():
         "istanbul_get_dataset": ["dataset_id"],
         "istanbul_get_resource_schema": ["resource_id"],
         "istanbul_query_resource": ["resource_id"],
-        "istanbul_nearby": ["lat", "lon"],
-        "istanbul_bbox_search": ["bbox"],
-        "istanbul_parking_nearby": ["lat", "lon"],
-        "istanbul_parking_by_district": ["district"],
-        "istanbul_nobetci_eczane_nearby": ["lat", "lon"],
-        "istanbul_nobetci_eczane_by_district": ["district"],
-        "istanbul_istanbulkart_centers_nearby": ["lat", "lon"],
-        "istanbul_sosyal_tesis_nearby": ["lat", "lon"],
-        "istanbul_metro_stations_nearby": ["lat", "lon"],
-        "istanbul_air_quality_nearby": ["lat", "lon"],
+        "istanbul_datastore_query": ["resource_id", "sql"],
+        "istanbul_nearby": [],
         "istanbul_traffic_status": [],
-        "istanbul_iski_active_faults": [],
-        "istanbul_iski_fault_by_number": ["fault_number"],
-        "istanbul_iski_nearby_faults": ["lat", "lon"],
-        "istanbul_iski_dam_occupancy": [],
+        "istanbul_water_status": [],
         "istanbul_mobility_nearby": [],
         "istanbul_city_services_nearby": [],
         "istanbul_neighborhood_profile": ["district"],
-        "istanbul_transit_line_info": ["line_code"],
-        "istanbul_stops_for_line": ["line_code"],
-        "istanbul_transit_disruptions": [],
-        "istanbul_planned_departures": ["line_code"],
+        "istanbul_transit_line": ["line_code"],
         "istanbul_transport_disruptions": [],
-        "istanbul_ferry_schedules": ["route"],
         "istanbul_metro_accessibility_status": [],
     }
     with TestClient(create_app(), base_url="http://localhost") as client:
@@ -292,7 +317,7 @@ def test_mcp_initialize_endpoint():
     assert listed.status_code == 200
     listed_tools = listed.json()["result"]["tools"]
     schemas = {tool["name"]: tool["inputSchema"] for tool in listed_tools}
-    assert len(listed_tools) == 30
+    assert len(listed_tools) == len(expected_required) == 15
     assert set(schemas) == set(expected_required)
     for name, required in expected_required.items():
         assert schemas[name].get("required", []) == required

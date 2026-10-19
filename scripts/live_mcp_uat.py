@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import time
 import urllib.request
 from dataclasses import dataclass
@@ -26,27 +27,27 @@ CRITICAL_FLOWS = [
     Flow("Servis sağlıklı mı?", "istanbul_health", {}, min_data=1),
     Flow("Trafik catalog araması sonuç veriyor mu?", "istanbul_search_datasets", {"query": "trafik", "limit": 2}, min_data=1),
     Flow("Taksim yakınında şehir verisi var mı?", "istanbul_nearby", {"lat": 41.0369, "lon": 28.9850, "radius_m": 1000, "limit": 3}, min_data=1),
-    Flow("Kadıköy otopark verisi var mı?", "istanbul_parking_nearby", {"lat": 40.9909, "lon": 29.0303, "radius_m": 1500, "limit": 3}, min_data=1),
-    Flow("Levent metro istasyonları dönüyor mu?", "istanbul_metro_stations_nearby", {"lat": 41.0812, "lon": 29.0105, "radius_m": 1500, "limit": 3}, min_data=1),
-    Flow("Kadıköy hava kalitesi istasyonları dönüyor mu?", "istanbul_air_quality_nearby", {"lat": 40.9909, "lon": 29.0303, "radius_m": 5000, "limit": 3}, min_data=1),
+    Flow("Kadıköy otopark verisi var mı?", "istanbul_nearby", {"kind":"parking","lat":40.9909,"lon":29.0303,"radius_m":1500,"limit":3}, min_data=1),
+    Flow("Levent metro istasyonları dönüyor mu?", "istanbul_nearby", {"kind":"metro_station","lat":41.0812,"lon":29.0105,"radius_m":1500,"limit":3}, min_data=1),
+    Flow("Kadıköy hava kalitesi istasyonları dönüyor mu?", "istanbul_nearby", {"kind":"air_quality","lat":40.9909,"lon":29.0303,"radius_m":5000,"limit":3}, min_data=1),
     Flow("İstanbul trafik index dönüyor mu?", "istanbul_traffic_status", {}, min_data=1),
     Flow("Kadıköy Rıhtım yakın mobilite özeti dönüyor mu?", "istanbul_mobility_nearby", {"place": "Kadıköy Rıhtım", "radius_m": 1500, "limit": 3}, min_data=1),
     Flow("Başakşehir merkez sorusu ilçe otoparkı olarak mesafesiz dönüyor mu?", "istanbul_mobility_nearby", {"place": "Başakşehir merkez", "radius_m": 1500, "limit": 5}, min_data=1),
     Flow("Taksim yakın şehir hizmetleri dönüyor mu?", "istanbul_city_services_nearby", {"place": "Taksim", "radius_m": 1500, "limit": 3}, min_data=1),
-    Flow("Başakşehir ilçe otoparkları mesafesiz dönüyor mu?", "istanbul_parking_by_district", {"district": "Başakşehir", "limit": 5}, min_data=1),
-    Flow("Kadıköy nöbetçi eczaneleri ilçe bazında dönüyor mu?", "istanbul_nobetci_eczane_by_district", {"district": "Kadıköy", "limit": 20}),
-    Flow("Kadıköy yakınındaki nöbetçi eczaneler dönüyor mu?", "istanbul_nobetci_eczane_nearby", {"lat": 40.9909, "lon": 29.0303, "radius_m": 5000, "limit": 20}),
+    Flow("Başakşehir ilçe otoparkları mesafesiz dönüyor mu?", "istanbul_nearby", {"kind":"parking","district":"Başakşehir","limit":5}, min_data=1),
+    Flow("Kadıköy nöbetçi eczaneleri ilçe bazında dönüyor mu?", "istanbul_nearby", {"kind":"pharmacy","district":"Kadıköy","limit":20}),
+    Flow("Kadıköy yakınındaki nöbetçi eczaneler dönüyor mu?", "istanbul_nearby", {"kind":"pharmacy","lat":40.9909,"lon":29.0303,"radius_m":5000,"limit":20}),
     Flow("Kadıköy Caferağa mahalle profili dönüyor mu?", "istanbul_neighborhood_profile", {"district": "Kadıköy", "neighborhood": "Caferağa"}, min_data=1),
     Flow("Kadıköy mahalle profil adayları listeleniyor mu?", "istanbul_neighborhood_profile", {"district": "Kadıköy", "limit": 3}, min_data=1),
-    Flow("34A hat bilgisi dönüyor mu?", "istanbul_transit_line_info", {"line_code": "34A"}, min_data=1),
-    Flow("34A durakları dönüyor mu?", "istanbul_stops_for_line", {"line_code": "34A"}, min_data=1),
-    Flow("İETT duyuruları dönüyor mu?", "istanbul_transit_disruptions", {}, min_data=1),
+    Flow("34A hat bilgisi dönüyor mu?", "istanbul_transit_line", {"action":"info","line_code":"34A"}, min_data=1),
+    Flow("34A durakları dönüyor mu?", "istanbul_transit_line", {"action":"stops","line_code":"34A"}, min_data=1),
+    Flow("İETT duyuruları dönüyor mu?", "istanbul_transport_disruptions", {"operator":"iett"}, min_data=1),
     Flow("Tüm desteklenen ulaşım aksaklıkları dönüyor mu?", "istanbul_transport_disruptions", {"limit": 5}),
     Flow("Metro aksaklık kapsamı dönüyor mu?", "istanbul_transport_disruptions", {"mode": "metro", "limit": 5}),
     Flow("Vapur iptal duyuruları dönüyor mu?", "istanbul_transport_disruptions", {"mode": "ferry", "limit": 5}),
     Flow("Marmaray duyuruları dönüyor mu?", "istanbul_transport_disruptions", {"mode": "suburban_rail", "limit": 5}),
-    Flow("34A planlanan kalkışları dönüyor mu?", "istanbul_planned_departures", {"line_code": "34A", "limit": 5}, min_data=1),
-    Flow("Invalid radius envelope dönüyor mu?", "istanbul_air_quality_nearby", {"lat": 40.9909, "lon": 29.0303, "radius_m": 7000, "limit": 1}, expect_ok=False),
+    Flow("34A planlanan kalkışları dönüyor mu?", "istanbul_transit_line", {"action":"departures","line_code":"34A","limit":5}, min_data=1),
+    Flow("Invalid radius envelope dönüyor mu?", "istanbul_nearby", {"kind":"air_quality","lat":40.9909,"lon":29.0303,"radius_m":7000,"limit":1}, expect_ok=False),
 ]
 
 
@@ -63,6 +64,8 @@ def rpc_call(base_url: str, request_id: int, tool: str, args: dict[str, Any]) ->
         headers={
             "accept": "application/json, text/event-stream",
             "content-type": "application/json",
+            **({"authorization": "Bearer " + os.environ["MCP_LIVE_API_KEY"]}
+               if os.getenv("MCP_LIVE_API_KEY") else {}),
         },
         method="POST",
     )
@@ -87,7 +90,7 @@ def run_flows(base_url: str) -> dict[str, Any]:
         data_count = len(payload.get("data") or []) if isinstance(payload, dict) else 0
         ok = payload.get("ok") if isinstance(payload, dict) else False
         source_failure_is_expected = (
-            flow.tool in {"istanbul_nobetci_eczane_nearby", "istanbul_nobetci_eczane_by_district"}
+            flow.tool == "istanbul_nearby" and flow.args.get("kind") == "pharmacy"
             and isinstance(payload, dict)
             and ok is False
             and payload.get("freshness", {}).get("status") in {"broken", "stale"}

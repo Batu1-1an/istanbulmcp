@@ -1,0 +1,38 @@
+{
+  "fields": [
+    {
+      "id": "_id",
+      "type": "int"
+    },
+    {
+      "id": "district",
+      "type": "text"
+    },
+    {
+      "id": "subscribers",
+      "type": "int"
+    }
+  ],
+  "records": [
+    {
+      "_id": 1,
+      "district": "Kadıköy",
+      "subscribers": 7
+    },
+    {
+      "_id": 2,
+      "district": "Kadıköy",
+      "subscribers": 3
+    },
+    {
+      "_id": 3,
+      "district": "Beşiktaş",
+      "subscribers": 4
+    },
+    {
+      "_id": 4,
+      "district": null,
+      "subscribers": null
+    }
+  ]
+}

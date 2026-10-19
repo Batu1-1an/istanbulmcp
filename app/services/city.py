@@ -262,7 +262,7 @@ class CityService:
                 ),
                 timeout=MOBILITY_COMPONENT_TIMEOUT_SECONDS,
             )
-            warnings.append("Air quality in mobility summaries includes station locations only; use istanbul_air_quality_nearby for latest readings.")
+            warnings.append("Air quality in mobility summaries includes station locations only; use istanbul_nearby(kind=air_quality) for latest readings.")
         except asyncio.TimeoutError:
             warnings.append(
                 f"Air quality station source timed out after {MOBILITY_COMPONENT_TIMEOUT_SECONDS:g} seconds."
@@ -296,9 +296,9 @@ class CityService:
             limits=[f"radius_m={radius_m}", f"limit_per_section={safe_limit}", "traffic=citywide"],
             warnings=warnings,
             next_queries=[
-                "Use istanbul_parking_nearby for parking-only details.",
-                "Use istanbul_parking_by_district for district-wide parking without synthetic distances.",
-                "Use istanbul_stops_for_line for ordered IETT line stops.",
+                "Use istanbul_nearby(kind=parking) for parking-only details.",
+                "Use istanbul_nearby(kind=parking, district=...) for district-wide parking without synthetic distances.",
+                "Use istanbul_transit_line(action=stops) for ordered IETT line stops.",
             ],
         )
 

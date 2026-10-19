@@ -1,0 +1,558 @@
+{
+  "description": "20 Turkish tool-contract scenarios; not an LLM tool-selection benchmark. Service responses are fixtures.",
+  "cases": [
+    {
+      "id": "catalog-search",
+      "question": "Kütüphanelerle ilgili hangi açık veri setleri var?",
+      "legacy_tool": "istanbul_search_datasets",
+      "legacy_arguments": {
+        "query": "kütüphane",
+        "limit": 3
+      },
+      "tool": "istanbul_search_datasets",
+      "arguments": {
+        "query": "kütüphane",
+        "limit": 3
+      },
+      "service": "CatalogService",
+      "method": "search_datasets",
+      "service_args": [],
+      "service_kwargs": {
+        "query": "kütüphane",
+        "formats": null,
+        "limit": 3
+      },
+      "record": {
+        "title": "Kütüphaneler",
+        "id": "fixture-dataset"
+      }
+    },
+    {
+      "id": "catalog-detail",
+      "question": "fixture-dataset veri setinin kaynaklarını göster.",
+      "legacy_tool": "istanbul_get_dataset",
+      "legacy_arguments": {
+        "dataset_id": "fixture-dataset"
+      },
+      "tool": "istanbul_get_dataset",
+      "arguments": {
+        "dataset_id": "fixture-dataset"
+      },
+      "service": "CatalogService",
+      "method": "get_dataset",
+      "service_args": [
+        "fixture-dataset"
+      ],
+      "service_kwargs": {},
+      "record": {
+        "id": "fixture-dataset",
+        "resources": []
+      }
+    },
+    {
+      "id": "resource-schema",
+      "question": "fixture-resource hangi kolonları içeriyor?",
+      "legacy_tool": "istanbul_get_resource_schema",
+      "legacy_arguments": {
+        "resource_id": "fixture-resource"
+      },
+      "tool": "istanbul_get_resource_schema",
+      "arguments": {
+        "resource_id": "fixture-resource"
+      },
+      "service": "CatalogService",
+      "method": "get_resource_schema",
+      "service_args": [
+        "fixture-resource"
+      ],
+      "service_kwargs": {},
+      "record": {
+        "resource_id": "fixture-resource",
+        "fields": [
+          {
+            "id": "district",
+            "type": "text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "resource-records",
+      "question": "Bu kaynaktan Kadıköy için üç kayıt getir.",
+      "legacy_tool": "istanbul_query_resource",
+      "legacy_arguments": {
+        "resource_id": "fixture-resource",
+        "filters": {
+          "district": "Kadıköy"
+        },
+        "limit": 3
+      },
+      "tool": "istanbul_query_resource",
+      "arguments": {
+        "resource_id": "fixture-resource",
+        "filters": {
+          "district": "Kadıköy"
+        },
+        "limit": 3
+      },
+      "service": "CatalogService",
+      "method": "query_resource",
+      "service_args": [],
+      "service_kwargs": {
+        "resource_id": "fixture-resource",
+        "filters": {
+          "district": "Kadıköy"
+        },
+        "limit": 3
+      },
+      "record": {
+        "district": "Kadıköy"
+      }
+    },
+    {
+      "id": "parking-nearby",
+      "question": "Taksim çevresindeki otoparkları yakınlığa göre göster.",
+      "legacy_tool": "istanbul_parking_nearby",
+      "legacy_arguments": {
+        "lat": 41.035,
+        "lon": 28.985,
+        "radius_m": 1000,
+        "limit": 3
+      },
+      "tool": "istanbul_nearby",
+      "arguments": {
+        "kind": "parking",
+        "lat": 41.035,
+        "lon": 28.985,
+        "radius_m": 1000,
+        "limit": 3
+      },
+      "service": "CityService",
+      "method": "parking_nearby",
+      "service_args": [],
+      "service_kwargs": {
+        "lat": 41.035,
+        "lon": 28.985,
+        "radius_m": 1000,
+        "limit": 3
+      },
+      "record": {
+        "name": "Fixture Park",
+        "distance_m": 120,
+        "maps_url": "https://maps.google.com/?q=41,29"
+      }
+    },
+    {
+      "id": "parking-district",
+      "question": "Kadıköy'deki otoparkları göster; kesin konumum yok.",
+      "legacy_tool": "istanbul_parking_by_district",
+      "legacy_arguments": {
+        "district": "Kadıköy",
+        "limit": 3
+      },
+      "tool": "istanbul_nearby",
+      "arguments": {
+        "kind": "parking",
+        "district": "Kadıköy",
+        "limit": 3
+      },
+      "service": "CityService",
+      "method": "parking_by_district",
+      "service_args": [],
+      "service_kwargs": {
+        "district": "Kadıköy",
+        "limit": 3
+      },
+      "record": {
+        "name": "Fixture Park",
+        "district": "Kadıköy"
+      }
+    },
+    {
+      "id": "pharmacy-nearby",
+      "question": "Konumuma yakın nöbetçi eczane nerede?",
+      "legacy_tool": "istanbul_nobetci_eczane_nearby",
+      "legacy_arguments": {
+        "lat": 41.035,
+        "lon": 28.985,
+        "radius_m": 1000,
+        "limit": 3
+      },
+      "tool": "istanbul_nearby",
+      "arguments": {
+        "kind": "pharmacy",
+        "lat": 41.035,
+        "lon": 28.985,
+        "radius_m": 1000,
+        "limit": 3
+      },
+      "service": "PharmacyService",
+      "method": "nearby",
+      "service_args": [],
+      "service_kwargs": {
+        "lat": 41.035,
+        "lon": 28.985,
+        "radius_m": 1000,
+        "limit": 3
+      },
+      "record": {
+        "name": "Fixture Eczane",
+        "district": "Beyoğlu",
+        "phone": "02120000000",
+        "maps_url": "https://maps.google.com/?q=41,29"
+      }
+    },
+    {
+      "id": "pharmacy-district",
+      "question": "Kadıköy'deki nöbetçi eczaneleri telefonlarıyla listele.",
+      "legacy_tool": "istanbul_nobetci_eczane_by_district",
+      "legacy_arguments": {
+        "district": "Kadıköy",
+        "limit": 3
+      },
+      "tool": "istanbul_nearby",
+      "arguments": {
+        "kind": "pharmacy",
+        "district": "Kadıköy",
+        "limit": 3
+      },
+      "service": "PharmacyService",
+      "method": "by_district",
+      "service_args": [],
+      "service_kwargs": {
+        "district": "Kadıköy",
+        "limit": 3
+      },
+      "record": {
+        "name": "Fixture Eczane",
+        "district": "Kadıköy",
+        "phone": "02120000000"
+      }
+    },
+    {
+      "id": "istanbulkart",
+      "question": "Yakınımdaki İstanbulkart dolum merkezlerini bul.",
+      "legacy_tool": "istanbul_istanbulkart_centers_nearby",
+      "legacy_arguments": {
+        "lat": 41.035,
+        "lon": 28.985,
+        "radius_m": 1000,
+        "limit": 3
+      },
+      "tool": "istanbul_nearby",
+      "arguments": {
+        "kind": "istanbulkart",
+        "lat": 41.035,
+        "lon": 28.985,
+        "radius_m": 1000,
+        "limit": 3
+      },
+      "service": "IstanbulkartService",
+      "method": "nearby",
+      "service_args": [],
+      "service_kwargs": {
+        "lat": 41.035,
+        "lon": 28.985,
+        "radius_m": 1000,
+        "limit": 3
+      },
+      "record": {
+        "name": "Fixture Merkez",
+        "distance_m": 180
+      }
+    },
+    {
+      "id": "social-facility",
+      "question": "Konumumun yakınındaki sosyal tesisleri göster.",
+      "legacy_tool": "istanbul_sosyal_tesis_nearby",
+      "legacy_arguments": {
+        "lat": 41.035,
+        "lon": 28.985,
+        "radius_m": 1000,
+        "limit": 3
+      },
+      "tool": "istanbul_nearby",
+      "arguments": {
+        "kind": "social_facility",
+        "lat": 41.035,
+        "lon": 28.985,
+        "radius_m": 1000,
+        "limit": 3
+      },
+      "service": "SocialFacilitiesService",
+      "method": "nearby",
+      "service_args": [],
+      "service_kwargs": {
+        "lat": 41.035,
+        "lon": 28.985,
+        "radius_m": 1000,
+        "limit": 3
+      },
+      "record": {
+        "name": "Fixture Tesis",
+        "distance_m": 240
+      }
+    },
+    {
+      "id": "metro-nearby",
+      "question": "Bana en yakın metro istasyonları hangileri?",
+      "legacy_tool": "istanbul_metro_stations_nearby",
+      "legacy_arguments": {
+        "lat": 41.035,
+        "lon": 28.985,
+        "radius_m": 1000,
+        "limit": 3
+      },
+      "tool": "istanbul_nearby",
+      "arguments": {
+        "kind": "metro_station",
+        "lat": 41.035,
+        "lon": 28.985,
+        "radius_m": 1000,
+        "limit": 3
+      },
+      "service": "CityService",
+      "method": "metro_stations_nearby",
+      "service_args": [],
+      "service_kwargs": {
+        "lat": 41.035,
+        "lon": 28.985,
+        "radius_m": 1000,
+        "limit": 3
+      },
+      "record": {
+        "name": "Taksim",
+        "distance_m": 240
+      }
+    },
+    {
+      "id": "air-quality",
+      "question": "Yakınımdaki istasyonların son hava kalitesi ölçümü ne?",
+      "legacy_tool": "istanbul_air_quality_nearby",
+      "legacy_arguments": {
+        "lat": 41.035,
+        "lon": 28.985,
+        "radius_m": 1000,
+        "limit": 3
+      },
+      "tool": "istanbul_nearby",
+      "arguments": {
+        "kind": "air_quality",
+        "lat": 41.035,
+        "lon": 28.985,
+        "radius_m": 1000,
+        "limit": 3
+      },
+      "service": "CityService",
+      "method": "air_quality_nearby",
+      "service_args": [],
+      "service_kwargs": {
+        "lat": 41.035,
+        "lon": 28.985,
+        "radius_m": 1000,
+        "limit": 3
+      },
+      "record": {
+        "name": "Fixture İstasyon",
+        "readings": {
+          "aqi": 42
+        }
+      }
+    },
+    {
+      "id": "traffic",
+      "question": "İstanbul genelinde trafik yoğunluğu ne?",
+      "legacy_tool": "istanbul_traffic_status",
+      "legacy_arguments": {},
+      "tool": "istanbul_traffic_status",
+      "arguments": {},
+      "service": "CityService",
+      "method": "traffic_status",
+      "service_args": [],
+      "service_kwargs": {},
+      "record": {
+        "traffic_index": 42
+      }
+    },
+    {
+      "id": "water-faults",
+      "question": "Kadıköy'deki aktif su arızalarını göster.",
+      "legacy_tool": "istanbul_iski_active_faults",
+      "legacy_arguments": {
+        "district": "Kadıköy",
+        "limit": 3
+      },
+      "tool": "istanbul_water_status",
+      "arguments": {
+        "kind": "faults",
+        "district": "Kadıköy",
+        "limit": 3
+      },
+      "service": "IskiService",
+      "method": "active_faults",
+      "service_args": [],
+      "service_kwargs": {
+        "district": "Kadıköy",
+        "limit": 3
+      },
+      "record": {
+        "fault_number": "F-123",
+        "district": "Kadıköy"
+      }
+    },
+    {
+      "id": "water-fault-detail",
+      "question": "F-123 numaralı su arızasının detayını göster.",
+      "legacy_tool": "istanbul_iski_fault_by_number",
+      "legacy_arguments": {
+        "fault_number": "F-123"
+      },
+      "tool": "istanbul_water_status",
+      "arguments": {
+        "kind": "faults",
+        "fault_number": "F-123"
+      },
+      "service": "IskiService",
+      "method": "fault_by_number",
+      "service_args": [
+        "F-123"
+      ],
+      "service_kwargs": {},
+      "record": {
+        "fault_number": "F-123",
+        "description": "Fixture arıza"
+      }
+    },
+    {
+      "id": "dams",
+      "question": "Ömerli barajının doluluk oranı nedir?",
+      "legacy_tool": "istanbul_iski_dam_occupancy",
+      "legacy_arguments": {
+        "dam_name": "Ömerli",
+        "limit": 3
+      },
+      "tool": "istanbul_water_status",
+      "arguments": {
+        "kind": "dams",
+        "dam_name": "Ömerli",
+        "limit": 3
+      },
+      "service": "IskiService",
+      "method": "dam_occupancy",
+      "service_args": [],
+      "service_kwargs": {
+        "dam_name": "Ömerli",
+        "min_occupancy": null,
+        "limit": 3
+      },
+      "record": {
+        "dam_name": "Ömerli",
+        "occupancy_percent": 60
+      }
+    },
+    {
+      "id": "line-info",
+      "question": "500T hattının temel bilgileri nedir?",
+      "legacy_tool": "istanbul_transit_line_info",
+      "legacy_arguments": {
+        "line_code": "500T"
+      },
+      "tool": "istanbul_transit_line",
+      "arguments": {
+        "action": "info",
+        "line_code": "500T"
+      },
+      "service": "TransitService",
+      "method": "line_info",
+      "service_args": [
+        "500T"
+      ],
+      "service_kwargs": {},
+      "record": {
+        "line_code": "500T",
+        "line_name": "Fixture Hat"
+      }
+    },
+    {
+      "id": "line-stops",
+      "question": "500T hangi duraklardan geçiyor?",
+      "legacy_tool": "istanbul_stops_for_line",
+      "legacy_arguments": {
+        "line_code": "500T"
+      },
+      "tool": "istanbul_transit_line",
+      "arguments": {
+        "action": "stops",
+        "line_code": "500T"
+      },
+      "service": "TransitService",
+      "method": "stops_for_line",
+      "service_args": [
+        "500T"
+      ],
+      "service_kwargs": {},
+      "record": {
+        "line_code": "500T",
+        "stop_name": "Fixture Durak"
+      }
+    },
+    {
+      "id": "line-departures",
+      "question": "500T'nin planlı ana durak kalkışları neler?",
+      "legacy_tool": "istanbul_planned_departures",
+      "legacy_arguments": {
+        "line_code": "500T",
+        "limit": 3
+      },
+      "tool": "istanbul_transit_line",
+      "arguments": {
+        "action": "departures",
+        "line_code": "500T",
+        "limit": 3
+      },
+      "service": "TransitService",
+      "method": "planned_departures",
+      "service_args": [],
+      "service_kwargs": {
+        "line_code": "500T",
+        "limit": 3
+      },
+      "record": {
+        "line_code": "500T",
+        "planned_departure_time": "08:30"
+      }
+    },
+    {
+      "id": "accessibility",
+      "question": "M2 Levent'te asansör arızası var mı?",
+      "legacy_tool": "istanbul_metro_accessibility_status",
+      "legacy_arguments": {
+        "line": "M2",
+        "station": "Levent",
+        "equipment_type": "elevator",
+        "limit": 3
+      },
+      "tool": "istanbul_metro_accessibility_status",
+      "arguments": {
+        "line": "M2",
+        "station": "Levent",
+        "equipment_type": "elevator",
+        "limit": 3
+      },
+      "service": "MetroAccessibilityService",
+      "method": "status",
+      "service_args": [],
+      "service_kwargs": {
+        "line": "M2",
+        "station": "Levent",
+        "equipment_type": "elevator",
+        "limit": 3
+      },
+      "record": {
+        "line": "M2",
+        "station": "Levent",
+        "equipment_type": "elevator"
+      }
+    }
+  ]
+}

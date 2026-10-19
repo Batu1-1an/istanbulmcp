@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+import json
 
 import httpx
 
@@ -51,6 +52,43 @@ class CkanClient:
         if not body.get("success", False):
             raise CkanError(f"CKAN action failed: {action}")
         return body["result"]
+
+    async def datastore_search_bounded(
+        self, *, resource_id: str, limit: int, offset: int, max_bytes: int,
+    ) -> tuple[dict[str, Any], int]:
+        """One bounded page for local SQL snapshots; never calls upstream SQL."""
+        await self._rate_limiter.acquire("ckan")
+        payload = {"resource_id": resource_id, "limit": limit, "offset": offset,
+                   "sort": "_id asc", "include_total": True}
+
+        async def read_page(client: httpx.AsyncClient) -> tuple[dict[str, Any], int]:
+            async with client.stream(
+                "POST", f"{self.base_url}/datastore_search", json=payload,
+                headers={"Accept-Encoding": "identity"}, timeout=self.timeout,
+                follow_redirects=False,
+            ) as response:
+                response.raise_for_status()
+                if response.headers.get("content-encoding", "identity").lower() != "identity":
+                    raise CkanError("Compressed SQL snapshot pages are not accepted")
+                declared = response.headers.get("content-length", "")
+                if declared.isdecimal() and int(declared) > max_bytes:
+                    raise CkanError("SQL snapshot response byte limit exceeded")
+                body = bytearray()
+                async for chunk in response.aiter_bytes(chunk_size=65536):
+                    if len(body) + len(chunk) > max_bytes:
+                        raise CkanError("SQL snapshot response byte limit exceeded")
+                    body.extend(chunk)
+                def reject_constant(_value):
+                    raise CkanError("Non-finite JSON numbers are not accepted")
+                parsed = json.loads(body, parse_constant=reject_constant)
+                if not isinstance(parsed, dict) or parsed.get("success") is not True or not isinstance(parsed.get("result"), dict):
+                    raise CkanError("Invalid DataStore response")
+                return parsed["result"], len(body)
+
+        if self._client is not None:
+            return await read_page(self._client)
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            return await read_page(client)
 
     async def package_search(
         self,

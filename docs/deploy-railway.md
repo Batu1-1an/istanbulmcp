@@ -2,6 +2,24 @@
 
 The project is designed for Railway using the included `Dockerfile` and `.railway/railway.ts` Infrastructure as Code file. The service remains a single read-only web service; this feature adds no Railway volume, backup, replica increase, or new service.
 
+## API-key/kota sürümüne geçiş
+
+Deploy'dan **önce** secret olarak `MCP_API_KEYS` tanımlayın; yeni varsayılan
+`MCP_AUTH_REQUIRED=true` anahtarsız başlamaz. `/healthz` ve `/readyz` public
+kalır; `/status` ve MCP istekleri Bearer header ister. İstemcilere kendi
+anahtarlarını verin; [API erişim rehberi](api-access.md) kota ve header ayrıntılarını içerir.
+
+Kota SQLite dosyasında restart'a dayanıklıdır, ancak container'ın ephemeral
+dosya sistemi deploy/replacement ile silinirse sayaçlar da silinir.
+Gerçek deploy'lar arası kalıcılık için `DATABASE_PATH` mevcut/ayrıca kurulacak
+kalıcı volume'a işaret etmelidir. Bu değişiklik kendi başına Railway volume'u
+oluşturmaz; IaC apply veya deploy yapılmadan önce ayrıca karar verin.
+Birbirinden bağımsız replica diskleri ortak kota oluşturmaz.
+
+Kompakt varsayılan yüzeye geçerken istemcilerin tool listesini yenileyin;
+geçişte gerekirse `MCP_LEGACY_TOOLS_ENABLED=true` kullanın. Ferry tarifesi
+ayrı, varsayılan kapalıdır. Bu geliştirme üretime uygulanmış gibi varsayılmamalıdır.
+
 ## Plan-only verification
 
 The IaC file uses the pinned Railway TypeScript SDK declared in the root `package.json`. Install it once before running the Railway plan commands:

@@ -10,10 +10,13 @@ from starlette.routing import Mount, Route
 
 from app.core.abuse_guard import ClientRateLimiter, ConcurrencyLimiter, McpAbuseGuardMiddleware
 from app.core.http_logging import JsonRequestLogMiddleware
+from app.core.api_auth import ApiKeyAuthMiddleware, ApiKeyQuotaMiddleware, validate_auth_settings
+from app.storage.quota import DailyQuota
+from app.services.datastore_sql import validate_sql_settings
 from app.core.mcp_transport import McpJsonRpcGuard
 from app.core.settings import get_settings
 from app.core.status import build_status
-from app.mcp.server import mcp
+from app.mcp.registry import create_mcp_server
 from app.storage.db import public_readiness, readiness
 
 
@@ -21,8 +24,8 @@ async def healthz(_request):
     return JSONResponse({"ok": True, "service": "istanbul-mcp"})
 
 
-async def readyz(_request):
-    settings = get_settings()
+async def readyz(request):
+    settings = request.app.state.settings
     return JSONResponse(public_readiness(readiness(settings.database_path)))
 
 
@@ -32,7 +35,7 @@ async def status(request):
         abuse_guard["rate_limit"] = request.app.state.mcp_rate_limiter.snapshot()
     if hasattr(request.app.state, "mcp_concurrency_limiter"):
         abuse_guard["concurrency"] = request.app.state.mcp_concurrency_limiter.snapshot()
-    return JSONResponse(build_status(get_settings(), abuse_guard=abuse_guard))
+    return JSONResponse(build_status(request.app.state.settings, abuse_guard=abuse_guard, server=request.app.state.mcp_server))
 
 
 async def mcp_redirect(_request):
@@ -41,10 +44,14 @@ async def mcp_redirect(_request):
 
 def create_app() -> Starlette:
     settings = get_settings()
+    validate_sql_settings(settings)
+    auth_enabled = validate_auth_settings(settings)
+    quota = DailyQuota(settings.database_path, settings.mcp_api_key_daily_quota) if auth_enabled else None
+    mcp = create_mcp_server(settings)
     mcp_rate_limiter = ClientRateLimiter(
         capacity=settings.mcp_rate_limit_capacity,
         refill_per_second=settings.mcp_rate_limit_refill_per_second,
-        max_clients=settings.mcp_rate_limit_max_clients,
+        max_clients=max(settings.mcp_rate_limit_max_clients, len(settings.mcp_api_keys)),
     )
     mcp_concurrency_limiter = ConcurrencyLimiter(max_concurrent=settings.mcp_max_concurrent_requests)
 
@@ -63,16 +70,20 @@ def create_app() -> Starlette:
         ],
         middleware=[
             Middleware(JsonRequestLogMiddleware),
+            Middleware(ApiKeyAuthMiddleware, keys=settings.mcp_api_keys),
             Middleware(
                 McpAbuseGuardMiddleware,
                 max_body_bytes=settings.mcp_max_body_bytes,
                 rate_limiter=mcp_rate_limiter,
                 concurrency_limiter=mcp_concurrency_limiter,
             ),
+            Middleware(ApiKeyQuotaMiddleware, quota=quota),
             Middleware(McpJsonRpcGuard),
         ],
         lifespan=lifespan,
     )
+    app.state.settings = settings
+    app.state.mcp_server = mcp
     app.state.mcp_rate_limiter = mcp_rate_limiter
     app.state.mcp_concurrency_limiter = mcp_concurrency_limiter
     return app

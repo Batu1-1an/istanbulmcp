@@ -98,7 +98,7 @@ class IskiService:
                 kind="faults",
                 source_mode=source_mode,
             ),
-            next_queries=["Use istanbul_iski_nearby_faults with coordinates when distance matters."],
+            next_queries=["Use istanbul_nearby(kind=water_fault) with coordinates when distance matters."],
         )
 
     async def fault_by_number(self, fault_number: str) -> dict[str, Any]:
