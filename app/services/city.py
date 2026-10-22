@@ -19,7 +19,10 @@ from app.core.error_responses import source_error_envelope, validation_error_env
 from app.core.geo import google_maps_search_url, google_maps_url, parse_wkt_point
 from app.core.settings import Settings
 from app.core.source_cache import CachedSourceData, SourceLoadResult, cached_source_data, cached_source_data_with_status
-from app.core.validation import InputValidationError, validate_bbox, validate_lat_lon, validate_limit, validate_radius, validate_text
+from app.core.validation import (
+    InputValidationError, resolve_limit, validate_bbox, validate_lat_lon, validate_radius,
+    validate_text,
+)
 from app.services.places import ResolvedPlace, district_from_text, is_district_place, known_place_names, normalize_place, resolve_place
 from app.storage.geo import GeoRepository
 
@@ -97,7 +100,7 @@ class CityService:
             if not district or not district.strip():
                 raise InputValidationError("district is required", field="district")
             district = validate_text(district, field="district", max_length=80)
-            safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
+            safe_limit = resolve_limit(limit, self.settings.default_limit, self.settings.max_limit)
             parks = await self._parks()
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[CITY_SOURCE])
@@ -426,7 +429,7 @@ class CityService:
     async def bbox_search(self, *, bbox: list[float], types: list[str] | None = None, limit: int | None = None) -> dict:
         try:
             min_lon, min_lat, max_lon, max_lat = validate_bbox(bbox)
-            safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
+            safe_limit = resolve_limit(limit, self.settings.default_limit, self.settings.max_limit)
             refresh = await self._refresh_requested(types)
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[CITY_SOURCE])
@@ -467,7 +470,7 @@ class CityService:
     def _validate_geo(self, lat: float, lon: float, radius_m: int, limit: int | None) -> int:
         validate_lat_lon(lat, lon)
         validate_radius(radius_m, self.settings.max_radius_m)
-        return validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
+        return resolve_limit(limit, self.settings.default_limit, self.settings.max_limit)
 
     async def _refresh_requested(self, types: list[str] | None) -> _CityRefresh:
         # Query only layers actually refreshed/validated for this request.

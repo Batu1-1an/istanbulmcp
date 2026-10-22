@@ -9,7 +9,9 @@ from app.core.geo import google_maps_url, haversine_m
 from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
 from app.core.source_cache import CachedSourceData, SourceLoadResult, cached_source_data_with_status
-from app.core.validation import InputValidationError, validate_lat_lon, validate_limit, validate_radius, validate_text
+from app.core.validation import (
+    InputValidationError, resolve_limit, validate_lat_lon, validate_radius, validate_text,
+)
 from app.services.places import normalize_place
 
 
@@ -64,7 +66,7 @@ class IskiService:
         limit: int | None = None,
     ) -> dict[str, Any]:
         try:
-            safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
+            safe_limit = resolve_limit(limit, self.settings.default_limit, self.settings.max_limit)
             safe_district = validate_text(district, field="district", max_length=80) if district else None
             source_result = await self._active_fault_geojson()
             rows = [self._fault_row(feature) for feature in source_result.value.get("features", [])]
@@ -148,7 +150,7 @@ class IskiService:
         try:
             validate_lat_lon(lat, lon)
             validate_radius(radius_m, self.settings.max_radius_m)
-            safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
+            safe_limit = resolve_limit(limit, self.settings.default_limit, self.settings.max_limit)
             source_result = await self._active_fault_geojson()
             rows = [self._fault_row(feature) for feature in source_result.value.get("features", [])]
         except InputValidationError as exc:
@@ -202,7 +204,7 @@ class IskiService:
         limit: int | None = None,
     ) -> dict[str, Any]:
         try:
-            safe_limit = validate_limit(limit or self.settings.max_limit, self.settings.max_limit)
+            safe_limit = resolve_limit(limit, self.settings.max_limit, self.settings.max_limit)
             safe_dam_name = validate_text(dam_name, field="dam_name", max_length=80) if dam_name else None
             safe_min = self._validate_min_occupancy(min_occupancy)
             source_result = await self._dams()

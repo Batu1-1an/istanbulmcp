@@ -9,7 +9,9 @@ from app.core.error_responses import source_error_envelope, validation_error_env
 from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
 from app.core.source_cache import cached_source_data
-from app.core.validation import InputValidationError, validate_filters, validate_identifier, validate_limit, validate_text
+from app.core.validation import (
+    InputValidationError, resolve_limit, validate_filters, validate_identifier, validate_text,
+)
 from app.storage.catalog import CatalogRepository
 
 IBB_SOURCE = Source(
@@ -39,7 +41,7 @@ class CatalogService:
         limit: int | None = None,
     ) -> dict[str, Any]:
         try:
-            safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
+            safe_limit = resolve_limit(limit, self.settings.default_limit, self.settings.max_limit)
             safe_query = validate_text(query, field="query", max_length=120)
             safe_formats = self._validate_formats(formats)
         except InputValidationError as exc:
@@ -115,7 +117,7 @@ class CatalogService:
         limit: int | None = None,
     ) -> dict[str, Any]:
         try:
-            safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
+            safe_limit = resolve_limit(limit, self.settings.default_limit, self.settings.max_limit)
             safe_resource_id = validate_identifier(resource_id, field="resource_id")
             safe_filters = validate_filters(filters)
         except InputValidationError as exc:

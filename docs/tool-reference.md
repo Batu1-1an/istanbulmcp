@@ -96,7 +96,9 @@ source access.
 | `water_fault` | ISKI faults ordered by approximate geometry center | 1,000 m |
 
 Global radius maximum: 5,000 m; default/max result limits: 20/100 (configurable).
-District lists never invent distances. `bbox` is
+An explicit `limit` must be a positive integer: `0` or a negative value is a
+validation error, never treated as "not supplied". Omitting `limit` (or sending
+`null`) selects the configured default. District lists never invent distances. `bbox` is
 `[min_lon,min_lat,max_lon,max_lat]`, available only with `kind="city_feature"`.
 `types` accepts `parking`, `metro_station`, `air_quality_station`,
 `public_transport_stop`, `wifi`; it does not apply to dedicated kinds.

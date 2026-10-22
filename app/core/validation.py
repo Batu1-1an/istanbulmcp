@@ -45,6 +45,15 @@ def validate_limit(limit: int, max_limit: int = 100) -> int:
     return limit
 
 
+def resolve_limit(limit: int | None, default_limit: int, max_limit: int = 100) -> int:
+    """Validate an optional limit, treating only ``None`` as "not supplied".
+
+    ``limit or default`` silently turned an explicit 0 into the default, so the
+    same request was rejected by some tools and accepted by others.
+    """
+    return validate_limit(default_limit if limit is None else limit, max_limit)
+
+
 def validate_text(value: str, *, field: str, max_length: int, min_length: int = 1) -> str:
     text = str(value or "").strip()
     if len(text) < min_length:

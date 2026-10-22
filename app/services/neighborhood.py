@@ -11,7 +11,9 @@ from app.core.envelope import Freshness, Pagination, Source, success_envelope
 from app.core.error_responses import source_error_envelope, validation_error_envelope
 from app.core.settings import Settings
 from app.core.source_cache import cached_source_data
-from app.core.validation import InputValidationError, validate_limit, validate_text
+from app.core.validation import (
+    InputValidationError, resolve_limit, validate_text,
+)
 
 SOCIAL_ASSISTANCE_DATASET_ID = "1f92165c-d8f4-4020-a858-3fd9cf6d00b7"
 SOCIAL_ASSISTANCE_RESOURCE_ID = "af59d08d-7e7d-4404-98be-4adc7d2857f9"
@@ -97,7 +99,7 @@ class NeighborhoodService:
             district = validate_text(district, field="district", max_length=80)
             if neighborhood is not None:
                 neighborhood = validate_text(neighborhood, field="neighborhood", max_length=120)
-            safe_limit = validate_limit(limit or self.settings.default_limit, self.settings.max_limit)
+            safe_limit = resolve_limit(limit, self.settings.default_limit, self.settings.max_limit)
             district_key = normalize_neighborhood_text(district)
             source_district = DISTRICTS_BY_NORMALIZED.get(district_key)
             if source_district is None:
