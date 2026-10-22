@@ -4,6 +4,7 @@
 
 - [Başlangıç](#hızlı-başlangıç)
 - [Kullanım](#ne-yapabilir)
+- [MCP keşfi](#mcp-keşfi-ve-promptlar)
 - [Kurulum](#i̇stemci-kurulumları)
 - [Geliştirme](#geliştirme)
 - [Dağıtım](#dağıtım)
@@ -208,6 +209,50 @@ tarifeyi taşımaz. İptal duyuruları aksaklık aracında kalır; kaynak hatas�
 
 Parametreler, davranışlar ve sınırlar için [docs/tool-reference.md](docs/tool-reference.md) dosyasına bakın.
 
+### GTFS durak konumları
+
+`istanbul_nearby(lat=...,lon=...,types=["public_transport_stop"])` ve
+`istanbul_mobility_nearby`, resmî İBB `stops.csv` dosyasını kullanır;
+`stop_times` durak konumu olarak taranmaz ve DataStore aktivasyonu gerekmez.
+BOM/`;` ve bilinen nokta-gruplamalı koordinat biçimi kaynak-özel olarak işlenir.
+Varsayılan bütçe **5 MiB / 50.000 satır / 20 saniye**; başarısız veya eksik
+yükleme mevcut indeksi değiştirmez. Eski veri yalnız sınırlı stale penceresinde
+uyarıyla sunulur; kaynağa erişilememesi “yakında durak yok” anlamına gelmez.
+
+Bunlar **statik durak konumlarıdır**; canlı varış, işletilme durumu veya yeni bir
+`next_departures` özelliği değildir. Kaynak zamanı, alınan/kabul edilen/atlanan
+sayıları cevapta korunur. Ayrıntılar ve canlı kabul komutu:
+[GTFS durak katmanı](docs/gtfs-stops.md).
+
+## MCP Keşfi ve Promptlar
+
+Python MCP SDK **2.3+** ile aynı `/mcp/` endpoint'i hem eski `initialize`
+istemiyle hem `2026-07-28` sürümündeki `server/discover` akışıyla çalışır.
+Varsayılan araç sayısı **15** olarak kalır. Sunucu talimatlarına ek olarak:
+
+| Resource URI | İçerik |
+|---|---|
+| `istanbul://coverage` | Desteklenen yetenekler, yapılandırma kapıları ve kapsam sınırları |
+| `istanbul://sources` | Canonical veri kaynakları, yayıncılar, lisans/güncellik açıklamaları |
+| `istanbul://schema/catalog` | Katalog keşif akışı, araç input şemaları ve sorgu sınırları |
+
+Bunlar yerel metadata'dır; okunmaları dış API çağırmaz ve **canlı kaynak sağlığını
+kanıtlamaz**. Asıl güncellik ve kaynak hataları tool sonuçlarından okunmalıdır.
+
+İstemci destekliyorsa `prompts/list` / `prompts/get` ile dört Türkçe iş akışı seçilebilir:
+
+- `gunun_ozeti(district?)` — trafik, su ve ulaşım uyarıları.
+- `mahalle_ozeti(district, neighborhood?)` — tarihsel mahalle profili ve sınırları.
+- `veri_kesfi(query)` — veri seti → şema → sınırlı kayıt sorgusu.
+- `yolculuk_plani(origin, destination, line_code?)` — ulaşım bilgisi; rota motoru veya canlı ETA değildir.
+
+Prompt seçmek tool çalıştırmaz; yalnız iş akışı mesajını üretir.
+`istanbul_nearby` (eczane dahil), `istanbul_traffic_status`, `istanbul_water_status`,
+`istanbul_transit_line` ve `istanbul_transport_disruptions` ayrıca `outputSchema` ve
+`structuredContent` sunar. Geriye uyumlu JSON metni ve Python dict dönüşleri korunur.
+
+Protokol ayrıntıları, şema maliyeti ve doğrulama için [MCP arayüzü](docs/mcp-interface.md).
+
 ## İstemci Kurulumları
 
 Istanbul MCP uzak bir Streamable HTTP MCP endpoint'i sunar:
@@ -383,10 +428,9 @@ Kontrol edilen resmi kaynaklar:
 curl -fsS https://istanbulmcp-production.up.railway.app/healthz
 curl -fsS https://istanbulmcp-production.up.railway.app/readyz
 curl -fsS https://istanbulmcp-production.up.railway.app/status
-curl -i --max-time 5 -H "Accept: application/json, text/event-stream" https://istanbulmcp-production.up.railway.app/mcp/
 ```
 
-`/mcp` path'i `/mcp/` adresine yönlenir. MCP istemci yapılandırmalarında doğrudan `/mcp/` kullanın. MCP GET çağrısı stream açar; `200` ve `content-type: text/event-stream` görmek yeterlidir.
+`/mcp` path'i `/mcp/` adresine yönlenir. MCP istemci yapılandırmalarında doğrudan `/mcp/` kullanın. MCP işlemleri JSON-RPC POST çağrılarıdır; düz GET isteği genel bir sağlık testi değildir. Liveness/readiness için yukarıdaki HTTP sağlık uçlarını kullanın.
 
 ## Cevap Modeli
 
@@ -420,19 +464,39 @@ Sunucu salt okunur çalışır. Otopark rezervasyonu yapmaz, kamu verisini deği
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
+python -m pip check
 pytest
-# Üretim varsayılanı anahtar zorunlu; değeri terminale yazdırmadan üretin:
+# SDK/protokol, yerel discovery ve output schema sözleşmeleri
+pytest tests/test_mcp_protocol.py tests/test_mcp_discovery.py tests/test_mcp_structured.py
+# İsteğe bağlı anahtarlı mod; değeri terminale yazdırmadan üretin:
 export MCP_API_KEYS="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
 # 20 soru × fresh/stale/broken × compact/legacy dispatch ve envelope sözleşmesi
 pytest tests/test_tool_evals.py
-# Tool tanımlarının sayısı ve UTF-8 byte boyutu (token veya LLM başarı metriği değil)
+# Tool tanımları, output schema ek maliyeti ve resource/prompt sayıları (byte, token değil)
 python -m scripts.eval_tools
+# GTFS kaynak/CSV/byte-row-timeout/stale ve gerçek registry regresyonları (offline)
+pytest tests/test_gtfs.py tests/test_gtfs_regression.py tests/test_city_service.py tests/test_ckan_bounded.py
 # SQL güvenlik/tamlık ve bounded HTTP testleri
 pytest tests/test_guarded_sql.py tests/test_datastore_sql.py tests/test_ckan_bounded.py
 # Dış kaynağa bağlanmadan gerçek yerel süreç + auth/kota/restart smoke testi
 python -m scripts.smoke_mcp
 python -m app.main
 ```
+
+Minimum Python sürümünü temiz ortamda doğrulamak için (opsiyonel `uv`):
+
+```bash
+uv run --isolated --no-project --python 3.11 --with-editable '.[dev]' python -m pytest
+```
+
+Container kurulumunu doğrulamak için:
+
+```bash
+docker build -t istanbul-mcp:local .
+```
+
+Katman A'nın Python 3.11/3.12, gerçek süreç ve container doğrulama sonuçları
+[MCP arayüzü belgesinde](docs/mcp-interface.md#6-doğrulama) kayıtlıdır.
 
 Lokal server şunları sunar:
 
@@ -446,6 +510,8 @@ Canlı MCP regresyon testleri opt-in çalışır:
 ```bash
 RUN_LIVE_MCP_TESTS=1 pytest tests/live
 python scripts/live_mcp_uat.py
+# Ayrı opt-in: yerel ASGI MCP + gerçek GTFS kaynağı; geçici DB, deploy yok
+RUN_LIVE_GTFS_TESTS=1 pytest -s tests/live/test_gtfs_source_live.py
 ```
 
 ## Konfigürasyon
@@ -456,6 +522,8 @@ python scripts/live_mcp_uat.py
 - `CKAN_RESOURCE_CACHE_TTL_SECONDS`
 - `IETT_LINE_CACHE_TTL_SECONDS`
 - `IETT_STOPS_CACHE_TTL_SECONDS`
+- `GTFS_STOPS_MAX_BYTES` (5 MiB), `GTFS_STOPS_MAX_ROWS` (50.000), `GTFS_STOPS_LOAD_TIMEOUT_SECONDS` (20)
+- `GTFS_STOPS_CACHE_TTL_SECONDS` (86.400) ve `GTFS_STOPS_STALE_IF_ERROR_SECONDS` (604.800; 0 kapatır) — [sınırlar ve tazelik](docs/gtfs-stops.md)
 - `SOURCE_CACHE_MAX_ENTRIES`
 - `AIR_QUALITY_RATE_CAPACITY`
 - `AIR_QUALITY_RATE_REFILL_PER_SECOND`

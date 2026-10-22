@@ -1,0 +1,25 @@
+{
+  "id": "8540e256-6df5-4719-85bc-e64e91508ede",
+  "name": "iett-gtfs-verisi",
+  "metadata_modified": "2026-04-21T12:52:23.095287",
+  "resources": [
+    {
+      "id": "23778613-16fe-4d30-b8b8-8ca934ed2978",
+      "name": "stop_times",
+      "description": "Toplu taşıma araçlarının duraklara ulaşma ve duraktan ayrılma zamanlarını içerir. İçerisinde durağa varış ve duraktan kalkış zamanları, durak bilgileri, durak sıralamaları, yolcuların gideceği yeri belirten tabelada görünen metinler gibi parametreleri barındırır.\r\n\r\n__Not: Bu doküman veri ön izlemesi için paylaşılmıştır. Tüm verilere \"stop_times\" isimli zip dosyasından ulaşabilirsiniz.__\r\n\r\n",
+      "format": "CSV",
+      "datastore_active": true,
+      "url": "https://data.ibb.gov.tr/dataset/8540e256-6df5-4719-85bc-e64e91508ede/resource/23778613-16fe-4d30-b8b8-8ca934ed2978/download/stop_times.csv",
+      "last_modified": "2026-03-17T08:14:43.440344"
+    },
+    {
+      "id": "2299bc82-983b-4bdf-8520-5cef8c555e29",
+      "name": "stops",
+      "description": "Araçların yolcu indirme ve bindirme yaptıkları noktaları içerir. İçerisinde durak, istasyon veya istasyon girişleri, konumlara verilen kısa metin veya numaralar, konum isimleri, konumlara dair açıklamalar, konumların enlem ve boylam bilgileri, konum URL'leri, ücret bölgeleri, konumlar arasındaki hiyerarşiler, konumlara tekerlekli sandalye ile erişimin mümkünlük durumu gibi parametreleri barındırır.\r\n\r\n",
+      "format": "CSV",
+      "datastore_active": false,
+      "url": "https://data.ibb.gov.tr/dataset/8540e256-6df5-4719-85bc-e64e91508ede/resource/2299bc82-983b-4bdf-8520-5cef8c555e29/download/stops.csv",
+      "last_modified": "2026-03-17T12:25:15.191826"
+    }
+  ]
+}

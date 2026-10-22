@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 
 from app.mcp.registry import READ_ONLY, create_mcp_server
 from app.core.envelope import Freshness, Source, success_envelope
@@ -435,7 +435,7 @@ async def istanbul_ferry_schedules(route: str, limit: int | None = None) -> dict
     return await FerryScheduleService(settings=get_settings()).schedules(route=route, limit=limit)
 
 
-def register_ferry_schedule_tool(server: FastMCP, enabled: bool) -> None:
+def register_ferry_schedule_tool(server: MCPServer, enabled: bool) -> None:
     """Opt in only after verifying timetable access from the deployment.
 
     Direct requests in the 2026-10-19 check received HTTP 403 challenges.

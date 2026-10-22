@@ -24,11 +24,27 @@ def score_predictions(cases: list[dict], predictions: dict) -> dict:
     return {"exact_matches": correct, "total": len(cases)}
 
 
-async def footprint() -> dict:
-    tools = [tool.model_dump(by_alias=True, exclude_none=True) for tool in await mcp.list_tools()]
-    encoded = json.dumps(tools, ensure_ascii=False, separators=(",", ":"))
-    return {"tool_count": len(tools), "definition_utf8_bytes": len(encoded.encode()),
-            "tool_names": [tool["name"] for tool in tools]}
+async def footprint(server=None) -> dict:
+    server = server if server is not None else mcp
+    tools = [tool.model_dump(by_alias=True, exclude_none=True) for tool in await server.list_tools()]
+    without_output = [{key: value for key, value in tool.items() if key != "outputSchema"} for tool in tools]
+
+    def size(value) -> int:
+        return len(json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode())
+
+    total = size(tools)
+    input_only = size(without_output)
+    resources = await server.list_resources()
+    prompts = await server.list_prompts()
+    return {
+        "tool_count": len(tools), "definition_utf8_bytes": total,
+        "definition_without_output_schema_utf8_bytes": input_only,
+        "output_schema_overhead_utf8_bytes": total - input_only,
+        "structured_tool_count": sum("outputSchema" in tool for tool in tools),
+        "tool_names": [tool["name"] for tool in tools],
+        "resource_count": len(resources), "prompt_count": len(prompts),
+        "instructions_utf8_bytes": len((server.instructions or "").encode()),
+    }
 
 
 def main() -> None:

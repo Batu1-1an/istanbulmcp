@@ -97,6 +97,11 @@ class Settings:
     ckan_sql_query_timeout_seconds: float = 0.5
     iett_line_cache_ttl_seconds: int = 900
     iett_stops_cache_ttl_seconds: int = 900
+    gtfs_stops_max_bytes: int = 5 * 1024 * 1024
+    gtfs_stops_max_rows: int = 50000
+    gtfs_stops_load_timeout_seconds: float = 20.0
+    gtfs_stops_cache_ttl_seconds: int = 86400
+    gtfs_stops_stale_if_error_seconds: int = 604800
     transport_disruptions_cache_ttl_seconds: int = 120
     metro_accessibility_cache_ttl_seconds: int = 120
     metro_accessibility_stale_if_error_seconds: int = 900
@@ -300,6 +305,11 @@ def get_settings() -> Settings:
         ckan_sql_query_timeout_seconds=_float_env("CKAN_SQL_QUERY_TIMEOUT_SECONDS", 0.5),
         iett_line_cache_ttl_seconds=_int_env("IETT_LINE_CACHE_TTL_SECONDS", 900),
         iett_stops_cache_ttl_seconds=_int_env("IETT_STOPS_CACHE_TTL_SECONDS", 900),
+        gtfs_stops_max_bytes=_int_env("GTFS_STOPS_MAX_BYTES", 5 * 1024 * 1024),
+        gtfs_stops_max_rows=_int_env("GTFS_STOPS_MAX_ROWS", 50000),
+        gtfs_stops_load_timeout_seconds=_float_env("GTFS_STOPS_LOAD_TIMEOUT_SECONDS", 20.0),
+        gtfs_stops_cache_ttl_seconds=_int_env("GTFS_STOPS_CACHE_TTL_SECONDS", 86400),
+        gtfs_stops_stale_if_error_seconds=_int_env("GTFS_STOPS_STALE_IF_ERROR_SECONDS", 604800),
         transport_disruptions_cache_ttl_seconds=_int_env("TRANSPORT_DISRUPTIONS_CACHE_TTL_SECONDS", 120),
         metro_accessibility_cache_ttl_seconds=_int_env("METRO_ACCESSIBILITY_CACHE_TTL_SECONDS", 120),
         metro_accessibility_stale_if_error_seconds=_int_env("METRO_ACCESSIBILITY_STALE_IF_ERROR_SECONDS", 900),

@@ -26,7 +26,33 @@ refuses to start without keys. See [API access](api-access.md). Static keys are
 not OAuth discovery.
 
 Each HTTP app owns its own Streamable HTTP session manager; managers are not
-reused after shutdown.
+reused after shutdown. The SDK is `mcp>=2.3,<3` (`MCPServer`); HTTP transport
+options are applied at app construction. Legacy initialize and modern
+`2026-07-28` requests share the same guarded, stateless endpoint.
+
+## Resources, prompts and structured output
+
+Three local JSON resources are listed by `resources/list`: `istanbul://coverage`,
+`istanbul://sources`, and `istanbul://schema/catalog`. They describe configuration
+and capability metadata, **not current upstream health**, and reading them does
+not contact external data APIs or expose deployment secrets.
+
+`prompts/list` exposes four user-selected workflows: `gunun_ozeti(district?)`,
+`mahalle_ozeti(district,neighborhood?)`, `veri_kesfi(query)` and
+`yolculuk_plani(origin,destination,line_code?)`. Prompt rendering does not execute
+tools; the travel workflow is not a route engine or live ETA. Arguments are
+bounded printable strings (1–200 characters per supplied value).
+
+Five default tools publish the canonical `ResponseEnvelope` output schema:
+`istanbul_nearby` (including pharmacy), `istanbul_traffic_status`,
+`istanbul_water_status`, `istanbul_transit_line`, `istanbul_transport_disruptions`.
+Their `structuredContent` equals the backwards-compatible JSON text. Direct
+Python calls still return dictionaries; domain records inside `data` remain open
+objects. Expected `ok=false` envelopes are not MCP execution errors. When legacy
+names are enabled, the two pharmacy aliases also publish this schema.
+
+See [MCP interface and verification](mcp-interface.md) for protocol-era behavior,
+source-health caveats, output schema cost and official sources.
 
 ## Catalog
 
@@ -77,6 +103,28 @@ District lists never invent distances. `bbox` is
 
 Coordinates produce `maps_url`. Address-only results may have
 `maps_search_url` and `location_precision=address_search`, not a verified pin.
+
+### GTFS stop locations
+
+`types=["public_transport_stop"]` (nearby or bbox) and the mobility summary
+use the official static `stops.csv`, even with DataStore inactive. Neither
+`stop_times` descriptions nor ZIPs are used to discover stop coordinates.
+The source-specific parser handles BOM/semicolon CSV and the observed grouped
+coordinate format; it never guesses shifted fields or arbitrary integer scaling.
+
+Default ingestion bounds are 5 MiB, 50,000 raw rows and a 20 s source-load
+deadline; metadata is separately capped at 512 KiB. Failed/partial/empty/all-invalid
+captures do not replace the prior geo layer. Successful responses retain
+dataset/resource IDs, source time and received/accepted/skipped counts.
+A valid snapshot with no nearby matches is checked-empty; an unavailable source
+is not.
+
+Fresh TTL is 24 h, with at most 7 additional days of stale-if-error. Stale
+responses retain the successful snapshot time and warn explicitly; expired or
+unverified persisted rows cannot appear as fresh success. GTFS-only failure
+returns `ok=false`/`broken`; partial mobility remains `unknown` with unavailable
+stop coverage. These are **static locations, not arrivals or operating status**.
+See [GTFS bounds, provenance and verification](gtfs-stops.md).
 
 ### Pharmacy contract
 

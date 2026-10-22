@@ -60,3 +60,10 @@ Eksik tahminler başarısız sayılır.
 kaydedildi: 29 tool, 13.796 UTF-8 byte. Byte ölçüsü **token değildir**; SDK sürümü,
 şemalar ve açıklamalarla değişir. Bir model çağrısı yapılmadan seçim başarısı
 iyileşti iddiası kurulmaz.
+
+Katman A ile beş varsayılan araca output schema eklendi. Aynı 15 aracın input ve
+açıklama tanımları 10.522 byte; output şemaları dahil toplam 28.347 byte oldu
+(SDK 2.3.0). Bu maliyet saklanmaz: `scripts.eval_tools` output schema ek maliyetini,
+resource/prompt sayılarını ve talimat byte boyutunu ayrı raporlar. Resources ve
+prompts yeni tool değildir. [MCP arayüzü](mcp-interface.md) protokol/SDK geçişini
+ve bare-dict Python uyumluluğunu açıklar.

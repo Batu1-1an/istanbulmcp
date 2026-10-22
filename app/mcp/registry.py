@@ -1,13 +1,17 @@
 """Build the compact surface without deleting legacy Python entry points."""
 from __future__ import annotations
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
 
 from app.core.settings import Settings
+from app.mcp.instructions import SERVER_INSTRUCTIONS
+from app.mcp.prompts import register_prompts
+from app.mcp.resources import register_resources
+from app.mcp.structured import STRUCTURED_LEGACY_TOOL_NAMES, STRUCTURED_TOOL_NAMES, with_envelope_output
 
 READ_ONLY = ToolAnnotations(
-    readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=True,
+    read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=True,
 )
 
 DEFAULT_TOOL_NAMES = (
@@ -31,19 +35,22 @@ LEGACY_TOOL_NAMES = (
 )
 
 
-def create_mcp_server(settings: Settings) -> FastMCP:
+def create_mcp_server(settings: Settings) -> MCPServer:
     # Lazy import avoids a cycle: the module's compatibility singleton is built
     # only after its functions have been defined.
     from app.mcp import server as handlers
 
-    server = FastMCP(
-        "istanbul-mcp", host=settings.host, stateless_http=True,
-        json_response=True, streamable_http_path="/",
-    )
+    server = MCPServer("istanbul-mcp", version="0.1.0", instructions=SERVER_INSTRUCTIONS)
     names = DEFAULT_TOOL_NAMES
     if settings.mcp_legacy_tools_enabled:
         names += LEGACY_TOOL_NAMES
     for name in names:
-        server.add_tool(getattr(handlers, name), annotations=READ_ONLY)
+        handler = getattr(handlers, name)
+        structured = name in STRUCTURED_TOOL_NAMES | STRUCTURED_LEGACY_TOOL_NAMES
+        if structured:
+            handler = with_envelope_output(handler)
+        server.add_tool(handler, annotations=READ_ONLY, structured_output=True if structured else None)
     handlers.register_ferry_schedule_tool(server, settings.ferry_schedules_enabled)
+    register_resources(server, settings)
+    register_prompts(server)
     return server

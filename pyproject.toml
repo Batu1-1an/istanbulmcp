@@ -10,8 +10,8 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "httpx>=0.27",
-  "mcp>=1.12.4,<2",
-  "pydantic>=2.7",
+  "mcp>=2.3,<3",
+  "pydantic>=2.12,<3",
   "starlette>=0.37",
   "uvicorn>=0.30",
   "zeep>=4.2",
@@ -23,6 +23,7 @@ dev = [
   "pytest>=8.2",
   "pytest-asyncio>=0.23",
   "respx>=0.21",
+  "jsonschema>=4.20",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -32,3 +33,4 @@ packages = ["app"]
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-q"
+markers = ["integration: opt-in external-source acceptance checks"]

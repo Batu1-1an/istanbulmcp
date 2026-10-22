@@ -10,6 +10,9 @@ __pycache__/
 .specify/
 specs/
 docs/research/
+# Keep generated OpenWiki content and its publishing workflow local.
+openwiki/
+.github/workflows/openwiki-update.yml
 node_modules/
 .wrangler/
 my-video/

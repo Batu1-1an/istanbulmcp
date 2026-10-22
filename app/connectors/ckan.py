@@ -56,39 +56,50 @@ class CkanClient:
     async def datastore_search_bounded(
         self, *, resource_id: str, limit: int, offset: int, max_bytes: int,
     ) -> tuple[dict[str, Any], int]:
-        """One bounded page for local SQL snapshots; never calls upstream SQL."""
-        await self._rate_limiter.acquire("ckan")
+        """One bounded, stable page for complete captures; never calls upstream SQL."""
         payload = {"resource_id": resource_id, "limit": limit, "offset": offset,
                    "sort": "_id asc", "include_total": True}
+        return await self._request_bounded("datastore_search", payload, max_bytes=max_bytes)
 
-        async def read_page(client: httpx.AsyncClient) -> tuple[dict[str, Any], int]:
+    async def package_show_bounded(self, dataset_id: str, *, max_bytes: int) -> dict[str, Any]:
+        result, _size = await self._request_bounded("package_show", {"id": dataset_id}, max_bytes=max_bytes)
+        return result
+
+    async def _request_bounded(
+        self, action: str, payload: dict[str, Any], *, max_bytes: int,
+    ) -> tuple[dict[str, Any], int]:
+        if max_bytes < 1:
+            raise CkanError("CKAN response byte budget exhausted")
+        await self._rate_limiter.acquire("ckan")
+
+        async def read_response(client: httpx.AsyncClient) -> tuple[dict[str, Any], int]:
             async with client.stream(
-                "POST", f"{self.base_url}/datastore_search", json=payload,
+                "POST", f"{self.base_url}/{action}", json=payload,
                 headers={"Accept-Encoding": "identity"}, timeout=self.timeout,
                 follow_redirects=False,
             ) as response:
                 response.raise_for_status()
                 if response.headers.get("content-encoding", "identity").lower() != "identity":
-                    raise CkanError("Compressed SQL snapshot pages are not accepted")
-                declared = response.headers.get("content-length", "")
-                if declared.isdecimal() and int(declared) > max_bytes:
-                    raise CkanError("SQL snapshot response byte limit exceeded")
+                    raise CkanError("Compressed bounded CKAN responses are not accepted")
+                declared = response.headers.get("content-length")
+                if declared is not None and (not declared.isdecimal() or int(declared) > max_bytes):
+                    raise CkanError("CKAN response byte limit exceeded or invalid Content-Length")
                 body = bytearray()
                 async for chunk in response.aiter_bytes(chunk_size=65536):
                     if len(body) + len(chunk) > max_bytes:
-                        raise CkanError("SQL snapshot response byte limit exceeded")
+                        raise CkanError("CKAN response byte limit exceeded")
                     body.extend(chunk)
                 def reject_constant(_value):
                     raise CkanError("Non-finite JSON numbers are not accepted")
                 parsed = json.loads(body, parse_constant=reject_constant)
                 if not isinstance(parsed, dict) or parsed.get("success") is not True or not isinstance(parsed.get("result"), dict):
-                    raise CkanError("Invalid DataStore response")
+                    raise CkanError("Invalid bounded CKAN response")
                 return parsed["result"], len(body)
 
         if self._client is not None:
-            return await read_page(self._client)
+            return await read_response(self._client)
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            return await read_page(client)
+            return await read_response(client)
 
     async def package_search(
         self,

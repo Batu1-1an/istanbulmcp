@@ -14,6 +14,7 @@ from app.core.http_logging import JsonRequestLogMiddleware
 from app.core.api_auth import ApiKeyAuthMiddleware, ApiKeyQuotaMiddleware, validate_auth_settings
 from app.storage.quota import DailyQuota
 from app.services.datastore_sql import validate_sql_settings
+from app.connectors.gtfs import validate_gtfs_settings
 from app.core.mcp_transport import McpJsonRpcGuard
 from app.core.settings import get_settings
 from app.core.status import build_status
@@ -49,6 +50,7 @@ async def mcp_redirect(_request):
 def create_app() -> Starlette:
     settings = get_settings()
     validate_sql_settings(settings)
+    validate_gtfs_settings(settings)
     auth_enabled = validate_auth_settings(settings)
     if not auth_enabled and settings.ckan_sql_allowed_resource_ids:
         logger.warning(
@@ -75,7 +77,11 @@ def create_app() -> Starlette:
             Route("/readyz", readyz, methods=["GET"]),
             Route("/status", status, methods=["GET"]),
             Route("/mcp", mcp_redirect, methods=["GET", "POST", "HEAD", "OPTIONS"]),
-            Mount("/mcp", app=mcp.streamable_http_app()),
+            Mount("/mcp", app=mcp.streamable_http_app(
+                host=settings.host, streamable_http_path="/",
+                stateless_http=True, json_response=True,
+                max_request_body_size=settings.mcp_max_body_bytes,
+            )),
         ],
         middleware=[
             Middleware(JsonRequestLogMiddleware),

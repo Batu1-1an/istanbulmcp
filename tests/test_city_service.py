@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import pytest
 
@@ -84,7 +85,17 @@ class FakeTraffic:
         return [{"TrafficIndex": 63, "TrafficIndexDate": "2026-06-12T15:05:00"}]
 
 
-class FakeCkan:
+class BoundedGtfsFixture:
+    async def package_show_bounded(self, dataset_id, *, max_bytes):
+        return await self.package_show(dataset_id)
+
+    async def datastore_search_bounded(self, *, resource_id, limit, offset, max_bytes):
+        result = await self.datastore_search(resource_id=resource_id, limit=limit, offset=offset)
+        result["fields"] = [{"id": field} for field in ("stop_id", "stop_name", "stop_lat", "stop_lon")]
+        return result, len(json.dumps(result).encode())
+
+
+class FakeCkan(BoundedGtfsFixture):
     async def package_show(self, dataset_id):
         return {
             "name": dataset_id,
@@ -155,7 +166,7 @@ class FakeCkan:
         return {"records": records.get(resource_id, [])[:limit], "total": len(records.get(resource_id, []))}
 
 
-class PagedGtfsCkan:
+class PagedGtfsCkan(BoundedGtfsFixture):
     def __init__(self):
         self.datastore_calls = []
         self.records = [
@@ -207,7 +218,7 @@ class AmbiguousGtfsCkan(PagedGtfsCkan):
             "name": dataset_id,
             "resources": [
                 {"id": "active-stops", "name": "stops.txt", "datastore_active": True},
-                {"id": "active-stops-copy", "name": "GTFS stops backup", "datastore_active": True},
+                {"id": "active-stops-copy", "name": "stops.txt", "datastore_active": True},
             ],
         }
 
@@ -449,10 +460,9 @@ async def test_mobility_nearby_aggregates_sections_for_place(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_mobility_nearby_returns_partial_result_when_gtfs_times_out(tmp_path, monkeypatch):
-    monkeypatch.setattr("app.services.city.MOBILITY_COMPONENT_TIMEOUT_SECONDS", 0.01)
+async def test_mobility_nearby_returns_partial_result_when_gtfs_times_out(tmp_path):
     clear_source_cache()
-    settings = Settings(database_path=tmp_path / "city.sqlite3")
+    settings = Settings(database_path=tmp_path / "city.sqlite3", gtfs_stops_load_timeout_seconds=0.01)
     svc = CityService(
         settings=settings,
         geo_repository=GeoRepository(settings.database_path),

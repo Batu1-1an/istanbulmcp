@@ -2,7 +2,7 @@ import asyncio
 import inspect
 import json
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 from starlette.testclient import TestClient
 
 from app.main import create_app
@@ -108,7 +108,7 @@ def test_settings_load_ferry_gate(monkeypatch):
 
 
 def test_ferry_schedule_tool_stays_hidden_when_disabled():
-    server = FastMCP("ferry-gate-off")
+    server = MCPServer("ferry-gate-off")
 
     register_ferry_schedule_tool(server, False)
 
@@ -117,7 +117,7 @@ def test_ferry_schedule_tool_stays_hidden_when_disabled():
 
 
 def test_ferry_schedule_tool_registers_when_enabled():
-    server = FastMCP("ferry-gate-on")
+    server = MCPServer("ferry-gate-on")
 
     register_ferry_schedule_tool(server, True)
 

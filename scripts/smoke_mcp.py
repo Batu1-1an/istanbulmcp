@@ -23,6 +23,13 @@ def request(base: str, path: str, *, key: str | None = None, payload: dict | Non
         headers["authorization"] = "Bearer " + key
     if payload is not None:
         headers["content-type"] = "application/json"
+        params = payload.get("params", {})
+        version = params.get("_meta", {}).get("io.modelcontextprotocol/protocolVersion")
+        if version:
+            headers["mcp-protocol-version"] = version
+            headers["mcp-method"] = payload["method"]
+            if "name" in params or "uri" in params:
+                headers["mcp-name"] = params.get("name", params.get("uri"))
     message = urllib.request.Request(
         base + path, headers=headers,
         data=json.dumps(payload).encode() if payload is not None else None,
@@ -37,8 +44,14 @@ def request(base: str, path: str, *, key: str | None = None, payload: dict | Non
         return response.status, json.loads(response.read())
 
 
-def rpc(method: str, params: dict | None = None):
-    return {"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}}
+def rpc(method: str, params: dict | None = None, *, modern: bool = False):
+    params = dict(params or {})
+    if modern:
+        params["_meta"] = {
+            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientCapabilities": {},
+        }
+    return {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
 
 
 def tool_payload(response: dict):
@@ -119,6 +132,46 @@ def check_public_mode(directory: Path) -> list[str]:
         assert "istanbul_parking_nearby" not in names
         assert "istanbul_datastore_query" in names
         checks.append("public tools/list: 15 compact tools, no ferry/legacy")
+        structured = {tool["name"] for tool in listed["result"]["tools"] if "outputSchema" in tool}
+        assert structured == {
+            "istanbul_nearby", "istanbul_traffic_status", "istanbul_water_status",
+            "istanbul_transit_line", "istanbul_transport_disruptions",
+        }
+        checks.append("five public tools publish ResponseEnvelope output schemas")
+
+        status, discovered = request(server.base, "/mcp/", payload=rpc("server/discover", modern=True))
+        assert status == 200 and "2026-07-28" in discovered["result"]["supportedVersions"]
+        assert "istanbul://coverage" in discovered["result"]["instructions"]
+        status, modern_invalid = request(server.base, "/mcp/", payload=rpc(
+            "tools/call", {"name": "istanbul_nearby", "arguments": {}}, modern=True,
+        ))
+        assert status == 200 and tool_payload(modern_invalid)["data"][0]["field"] == "lat"
+        result = modern_invalid["result"]
+        assert result["structuredContent"] == json.loads(result["content"][0]["text"])
+        checks.append("modern server/discover and structured tools/call without initialize")
+
+        for modern in (False, True):
+            status, resources = request(server.base, "/mcp/", payload=rpc("resources/list", modern=modern))
+            expected_uris = {"istanbul://coverage", "istanbul://sources", "istanbul://schema/catalog"}
+            assert status == 200 and {row["uri"] for row in resources["result"]["resources"]} == expected_uris
+            for uri in sorted(expected_uris):
+                status, document = request(server.base, "/mcp/", payload=rpc(
+                    "resources/read", {"uri": uri}, modern=modern,
+                ))
+                assert status == 200
+                content = document["result"]["contents"][0]
+                assert content["mimeType"] == "application/json"
+                assert json.loads(content["text"])["ok"] is True
+            status, prompts = request(server.base, "/mcp/", payload=rpc("prompts/list", modern=modern))
+            assert status == 200 and {row["name"] for row in prompts["result"]["prompts"]} == {
+                "gunun_ozeti", "mahalle_ozeti", "veri_kesfi", "yolculuk_plani",
+            }
+            status, rendered = request(server.base, "/mcp/", payload=rpc(
+                "prompts/get", {"name": "veri_kesfi", "arguments": {"query": "kütüphane"}}, modern=modern,
+            ))
+            assert status == 200
+            assert "istanbul_get_resource_schema" in rendered["result"]["messages"][0]["content"]["text"]
+        checks.append("both protocol eras list/read 3 local resources and list/render 4 workflow prompts")
 
         status, health = request(server.base, "/mcp/", payload=rpc(
             "tools/call", {"name": "istanbul_health", "arguments": {}},
@@ -158,11 +211,12 @@ def check_keyed_mode(directory: Path) -> list[str]:
         status, invalid_geo = request(server.base, "/mcp/", key=key, payload=rpc(
             "tools/call", {"name": "istanbul_nearby",
                            "arguments": {"kind": "pharmacy", "lat": 41, "lon": 29,
-                                         "radius_m": 6000}},
+                                         "radius_m": 6000}}, modern=True,
         ))
         assert status == 200
         assert tool_payload(invalid_geo)["data"][0]["field"] == "radius_m"
-        checks.append("invalid geo rejected without upstream access")
+        assert invalid_geo["result"]["structuredContent"] == tool_payload(invalid_geo)
+        checks.append("keyed modern call: invalid geo rejected without upstream access")
 
         # Two authenticated attempts are already spent; the daily quota is five.
         statuses = [

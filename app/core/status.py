@@ -133,6 +133,13 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
                     + min(settings.social_facilities_stale_if_error_seconds, 604800)
                 ),
             },
+            "gtfs_stops": {
+                "max_bytes": settings.gtfs_stops_max_bytes,
+                "max_rows": settings.gtfs_stops_max_rows,
+                "load_timeout_seconds": settings.gtfs_stops_load_timeout_seconds,
+                "cache_ttl_seconds": settings.gtfs_stops_cache_ttl_seconds,
+                "stale_if_error_seconds": settings.gtfs_stops_stale_if_error_seconds,
+            },
             "source_cache_max_entries": settings.source_cache_max_entries,
             "source_rate_limits": {
                 "ckan": {
