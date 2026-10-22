@@ -86,7 +86,7 @@ ve arıza bilgisi ilgili **tool sonucundan** okunmalıdır.
   izin listesindeki kimlikler resource içeriğinde yayımlanmaz.
 - `ferry_timetables`: yalnız ayrı ferry bayrağı ve gerçek araç kaydıyla açılır.
   İptal-duyurusu relay'inin tarife desteği olduğu iddia edilmez.
-- GTFS durak kapsamı sınırlı olarak açıklanır; bu çalışma GTFS loader'ını onarmaz.
+- GTFS durak kapsamı `mixed_snapshots_and_static_locations` olarak ve statik konum uyarısıyla açıklanır; stale/unavailable durumu tool sonucundaki `coverage_status` alanından okunur. Ardından gelen değişiklik GTFS yükleyicisini onardı: ayrıntı ve sınırlar [GTFS durak katmanı](gtfs-stops.md) belgesindedir.
 
 Source directory yalnız canonical kamu referansları içerir. Deployment override
 adresleri, private relay URL'leri, token'lar, anahtarlar ve yerel dosya yolları
@@ -173,6 +173,7 @@ pip install -e ".[dev]"
 python -m pip check
 pytest tests/test_mcp_protocol.py tests/test_mcp_discovery.py tests/test_mcp_structured.py
 pytest tests/test_tool_evals.py
+pytest tests/test_gtfs.py tests/test_gtfs_regression.py
 python -m scripts.eval_tools
 python -m scripts.smoke_mcp
 pytest
@@ -184,7 +185,11 @@ prompts ile JSON/structuredContent davranışını kontrol eder. Ayrı anahtarl�
 legacy initialize, modern validation, günlük kota ve yeniden başlatma kontrolü yapar.
 Şehir veri API'lerine bağlanmaz. Canlı entegrasyon testleri ayrıca opt-in kalır.
 
-### Kaydedilen sonuçlar (2026-10-22)
+### Kaydedilen sonuçlar
+
+**Katman A teslimi (2026-10-22, GTFS onarımından önce).** Bu tablo o teslimin
+kaydıdır; test sayıları sonraki GTFS çalışmasıyla arttığı için güncel sayılar
+altındaki ikinci tablodadır.
 
 | Kontrol | Sonuç |
 |---|---|
@@ -196,10 +201,23 @@ legacy initialize, modern validation, günlük kota ve yeniden başlatma kontrol
 | Docker runtime | Non-root UID 1000, `--network none`; kurulu wheel'den SQLite readiness, modern discovery, 15 tool, coverage, Türkçe prompt ve structured validation geçti |
 | `git diff --check` | Temiz |
 
-23 atlanan test opt-in canlı veri kontrolleridir; dış kaynakların güncel erişimi
-bu sonuçlarla doğrulanmış sayılmaz. Container denemesi hiçbir host volume'u
-bağlamadı; yalnız denemeye ait geçici container/dosya durumu otomatik kaldırıldı.
-Docker doğrulama imajı yerelde bırakıldı. Railway deploy veya git commit yapılmadı.
+**GTFS onarımı sonrası güncel koşum (2026-10-22, yerel).**
+
+| Kontrol | Sonuç |
+|---|---|
+| Python 3.12, mevcut `.venv`, tüm suite | **811 passed, 24 skipped** |
+| `python -m pip check` | Bağımlılık uyuşmazlığı yok |
+| `python -m scripts.smoke_mcp` | 12 gerçek alt-süreç kontrolü geçti |
+| `python -m scripts.eval_tools` | 15 tool, 5 şemalı tool, 3 resource, 4 prompt; 10.522 + 17.825 UTF-8 byte |
+
+24 atlanan test opt-in canlı veri kontrolleridir; dış kaynakların güncel erişimi
+bu sonuçlarla doğrulanmış sayılmaz. Docker satırları ilk tablodaki koşumdan
+gelir; ikinci tabloda Docker ve Railway yeniden çalıştırılmamıştır. Container
+denemesi hiçbir host volume'u bağlamadı; yalnız denemeye ait geçici
+container/dosya durumu otomatik kaldırıldı ve doğrulama imajı yerelde bırakıldı.
+GTFS koşumunun ayrıntıları [GTFS durak katmanı](gtfs-stops.md) belgesindedir.
+Railway deploy yapılmadı; bu belge dahil tüm değişiklikler `202d1bf` commit'inde
+kaydedildi.
 
 ## 7. Kontrol edilen resmî kaynaklar
 

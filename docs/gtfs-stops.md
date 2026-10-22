@@ -84,7 +84,7 @@ RUN_LIVE_GTFS_TESTS=1 pytest -s tests/live/test_gtfs_source_live.py
 
 Yerel kabul gözleminde tam dosya **1.520.163 byte / 15.390 satır**dı; **15.386 durak** indekslendi, **4 bozuk kayıt** atlandı. Resource ID `2299bc82-983b-4bdf-8520-5cef8c555e29`; kaynak dosyası güncelleme zamanı **2026-03-17T12:25:15.191826**. ASGI MCP kabul koşumunda tek bir soğuk yükleme 4,582 saniye, cache'li sorgu 0,0086 saniye ölçüldü. Bunlar **tek gözlem**, p95/kapasite benchmark'ı veya Railway erişim garantisi değildir.
 
-Son offline tam koşum: Python 3.12 ve temiz Python 3.11 ortamında **811 passed, 24 skipped**; skip'ler opt-in canlı testlerdir. Gerçek yerel subprocess smoke'unda 12 kontrol başarılıdır; bu smoke dış şehir API çağrısı yapmaz. Canlı GTFS kabul testi ayrıca çalıştırılmıştır. Commit/deploy yapılmamıştır.
+Son offline tam koşum: Python 3.12 ve temiz Python 3.11 ortamında **811 passed, 24 skipped**; skip'ler opt-in canlı testlerdir. Gerçek yerel subprocess smoke'unda 12 kontrol başarılıdır; bu smoke dış şehir API çağrısı yapmaz. Canlı GTFS kabul testi ayrıca çalıştırılmıştır. Değişiklik `202d1bf` commit'inde kaydedildi; Railway deploy'u bu belgede doğrulanmış değildir.
 
 ## Kontrol edilen kaynaklar
 
