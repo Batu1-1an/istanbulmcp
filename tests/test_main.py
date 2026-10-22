@@ -86,13 +86,20 @@ def test_status_returns_tool_inventory(monkeypatch, tmp_path):
 
 def test_tool_source_map_matches_registered_tools():
     """Keep ``status.TOOL_SOURCES`` in sync with the registered tool surface."""
+    from app.core.settings import Settings
     from app.core.status import TOOL_SOURCES, _tool_inventory
+    from app.mcp.registry import DEFAULT_TOOL_NAMES, LEGACY_TOOL_NAMES, create_mcp_server
 
-    registered = {tool["name"] for tool in _tool_inventory()}
-    from app.mcp.registry import DEFAULT_TOOL_NAMES, LEGACY_TOOL_NAMES
+    tools = asyncio.run(create_mcp_server(Settings()).list_tools())
+    inventory = _tool_inventory(tools)
+    registered = {tool["name"] for tool in inventory}
 
     assert registered == set(DEFAULT_TOOL_NAMES)
     assert set(TOOL_SOURCES) == registered | set(LEGACY_TOOL_NAMES) | {"istanbul_ferry_schedules"}
+    # The inventory is built from the public tools/list result; the sync health
+    # handler must still be reported as sync.
+    assert {tool["name"]: tool["async"] for tool in inventory}["istanbul_health"] is False
+    assert {tool["name"]: tool["async"] for tool in inventory}["istanbul_nearby"] is True
 
 
 def test_settings_load_ferry_gate(monkeypatch):
@@ -400,10 +407,12 @@ def test_settings_metro_accessibility_defaults():
 def test_status_source_group_assigns_metro_accessibility():
     from app.core.settings import Settings
     from app.core.status import build_status
+    from app.mcp.registry import create_mcp_server
 
-    body = build_status(Settings())
-    tools = {tool["name"]: tool for tool in body["tools"]}
-    assert tools["istanbul_metro_accessibility_status"]["source"] == "metro_istanbul"
+    tools = asyncio.run(create_mcp_server(Settings()).list_tools())
+    body = build_status(Settings(), tools=tools)
+    by_name = {tool["name"]: tool for tool in body["tools"]}
+    assert by_name["istanbul_metro_accessibility_status"]["source"] == "metro_istanbul"
 
 
 def test_status_redacts_source_cache_keys():

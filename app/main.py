@@ -40,7 +40,8 @@ async def status(request):
         abuse_guard["rate_limit"] = request.app.state.mcp_rate_limiter.snapshot()
     if hasattr(request.app.state, "mcp_concurrency_limiter"):
         abuse_guard["concurrency"] = request.app.state.mcp_concurrency_limiter.snapshot()
-    return JSONResponse(build_status(request.app.state.settings, abuse_guard=abuse_guard, server=request.app.state.mcp_server))
+    tools = await request.app.state.mcp_server.list_tools()
+    return JSONResponse(build_status(request.app.state.settings, abuse_guard=abuse_guard, tools=tools))
 
 
 async def mcp_redirect(_request):

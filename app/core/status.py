@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from importlib import metadata
+import inspect
 from typing import Any
 
 from app.core.settings import Settings
 from app.core.source_cache import source_cache_snapshot
-from app.mcp.server import mcp
+import app.mcp.server as handlers
 from app.storage.db import public_readiness, readiness
 
 TOOL_SOURCES = {
@@ -45,8 +46,8 @@ TOOL_SOURCES = {
 }
 
 
-def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = None, server=None) -> dict[str, Any]:
-    tools = _tool_inventory(server)
+def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = None, tools=None) -> dict[str, Any]:
+    inventory = _tool_inventory(tools or [])
     return {
         "ok": True,
         "service": settings.app_name,
@@ -189,22 +190,25 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
         "abuse_guard": abuse_guard or {},
         "database": public_readiness(readiness(settings.database_path)),
         "source_cache": source_cache_snapshot(),
-        "tool_count": len(tools),
-        "tools": tools,
+        "tool_count": len(inventory),
+        "tools": inventory,
     }
 
 
-def _tool_inventory(server=None) -> list[dict[str, Any]]:
-    manager = getattr(server if server is not None else mcp, "_tool_manager", None)
-    registered = getattr(manager, "_tools", {}) if manager is not None else {}
+def _tool_inventory(tools) -> list[dict[str, Any]]:
+    """Build the inventory from the public tools/list result, never SDK internals.
+
+    ``async`` is derived from our own handler module, because the public Tool
+    model does not expose the callable.
+    """
     return [
         {
-            "name": name,
-            "source": TOOL_SOURCES.get(name, "unknown"),
+            "name": tool.name,
+            "source": TOOL_SOURCES.get(tool.name, "unknown"),
             "description": getattr(tool, "description", None),
-            "async": bool(getattr(tool, "is_async", False)),
+            "async": inspect.iscoroutinefunction(getattr(handlers, tool.name, None)),
         }
-        for name, tool in sorted(registered.items())
+        for tool in sorted(tools, key=lambda item: item.name)
     ]
 
 
