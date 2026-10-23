@@ -19,6 +19,7 @@ TOOL_SOURCES = {
     "istanbul_nearby": "mixed_city_open_data",
     "istanbul_water_status": "iski",
     "istanbul_transit_line": "iett",
+    "istanbul_next_departures": "gtfs_schedule",
     "istanbul_bbox_search": "sqlite",
     "istanbul_parking_nearby": "ispark",
     "istanbul_parking_by_district": "ispark",
@@ -133,6 +134,15 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
                     settings.social_facilities_cache_ttl_seconds
                     + min(settings.social_facilities_stale_if_error_seconds, 604800)
                 ),
+            },
+            "gtfs_schedule": {
+                "enabled": settings.gtfs_schedule_enabled,
+                "max_bytes": settings.gtfs_schedule_max_bytes,
+                "max_uncompressed_bytes": settings.gtfs_schedule_max_uncompressed_bytes,
+                "max_rows": settings.gtfs_schedule_max_rows,
+                "load_timeout_seconds": settings.gtfs_schedule_load_timeout_seconds,
+                "cache_ttl_seconds": settings.gtfs_schedule_cache_ttl_seconds,
+                "stale_if_error_seconds": settings.gtfs_schedule_stale_if_error_seconds,
             },
             "gtfs_stops": {
                 "max_bytes": settings.gtfs_stops_max_bytes,

@@ -2,7 +2,10 @@
 
 The default surface has **15 read-only tools**. Legacy names are opt-in via
 `MCP_LEGACY_TOOLS_ENABLED=true`; see the [migration table](tool-migration.md).
-The target count is a product decision, not a protocol limit.
+The target count is a product decision, not a protocol limit. The optional
+`istanbul_next_departures` adds one tool only with `GTFS_SCHEDULE_ENABLED=true`;
+its full-ZIP live acceptance is still pending. All registered tools have explicit
+human-readable titles and read-only annotations.
 
 All results preserve `ok`, `summary`, `data`, `freshness`, `sources`,
 `limits`, `warnings`, and optional `pagination`, `geojson`, `next_queries`.
@@ -75,6 +78,22 @@ The default allowlist is empty. This is **not** the unavailable upstream
 CTEs, windows, writes and arbitrary functions are not. Output limits are always
 enforced (20/100). Incomplete/oversized captures never produce partial totals.
 See [SQL setup, safety bounds and freshness](datastore-sql.md).
+
+## Scheduled stop departures (opt-in)
+
+`istanbul_next_departures(stop_id?,lat?,lon?,line?,at?,radius_m=500,limit?)`
+uses the full official GTFS `stop_times.zip` with agency/stops/routes/trips/calendar
+and optional calendar_dates. The preview CSV is never used. Default disabled
+pending full-source live acceptance. `stop_id` and coordinates are exclusive;
+coordinate mode selects at most five stops in a bounded radius. `line` matches
+`route_short_name`; `at` is an ISO datetime with an explicit UTC offset, or now
+in Europe/Istanbul. Results cover 24 hours, ordered by scheduled departure.
+Extended `25:xx` times retain their original service date. Calendar exceptions,
+untimed rows and no-pickup stops are respected. No interpolation, live ETA,
+cancellation detection or route planning. Invalid/outside-calendar/unavailable
+results do not establish no service. Structured/text envelopes match.
+
+See [GTFS schedule limits and acceptance](gtfs-schedule.md).
 
 ## Unified location search
 

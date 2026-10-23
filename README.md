@@ -224,6 +224,16 @@ Bunlar **statik durak konumlarıdır**; canlı varış, işletilme durumu veya y
 sayıları cevapta korunur. Ayrıntılar ve canlı kabul komutu:
 [GTFS durak katmanı](docs/gtfs-stops.md).
 
+### GTFS planlı durak kalkışları (opt-in)
+
+`istanbul_next_departures(stop_id? | lat/lon?, line?, at?, radius_m?, limit?)`
+uygulandı ancak **`GTFS_SCHEDULE_ENABLED=false` ile varsayılan kapalıdır**.
+Tam `stop_times.zip`, servis takvimi ve tarife dosyalarını kullanır;
+`stop_times.csv` yalnız önizleme olduğu için kabul edilmez. Servis günü, takvim
+istisnaları ve `25:xx` saatleri işlenir; canlı ETA veya rota planlayıcı değildir.
+Tam ZIP ile canlı kabul/deploy ölçümü yapılmadan açmayın. Açılırsa yüzey 16 tool
+olur; [kapsam, ayarlar ve kabul adımları](docs/gtfs-schedule.md).
+
 ## MCP Keşfi ve Promptlar
 
 Python MCP SDK **2.3+** ile aynı `/mcp/` endpoint'i hem eski `initialize`
@@ -422,6 +432,16 @@ Kontrol edilen resmi kaynaklar:
 - [Devin CLI MCP dokümanı](https://cli.devin.ai/docs/extensibility/mcp/configuration)
 - [Devin MCP dokümanı](https://docs.devin.ai/work-with-devin/devin-mcp)
 
+## Registry ve veri işleme
+
+[`server.json`](server.json) remote-only MCP Registry manifestidir; dosyanın
+bulunması yayımlandığı anlamına gelmez. Public/legacy/optional tool'ların tamamı
+`title` ve salt okunur annotation taşır. [Yayın öncesi kontrol ve komutlar](docs/registry.md).
+Registry yayını, Railway deploy ve Claude directory başvurusu ayrı adımlardır.
+
+[Veri işleme/gizlilik notu](docs/privacy.md) ·
+[Destek / sorun bildirimi](https://github.com/Batu1-1an/istanbulmcp/issues)
+
 ## HTTP Sağlık Kontrolleri
 
 ```bash
@@ -476,6 +496,12 @@ pytest tests/test_tool_evals.py
 python -m scripts.eval_tools
 # GTFS kaynak/CSV/byte-row-timeout/stale ve gerçek registry regresyonları (offline)
 pytest tests/test_gtfs.py tests/test_gtfs_regression.py tests/test_city_service.py tests/test_ckan_bounded.py
+# Tam GTFS tarife ZIP, takvim/geceyarısı, bütçe/rollback ve opt-in MCP testleri
+pytest tests/test_gtfs_schedule.py
+# Yalnız erişebilen ortamda, tam GTFS ZIP indirir (opt-in; geçici DB kullanır)
+RUN_LIVE_GTFS_SCHEDULE_TESTS=1 pytest -s tests/live/test_gtfs_schedule_source_live.py
+# Resmî pinned registry şeması ve tüm tool yüzeylerinde title/readOnlyHint
+pytest tests/test_registry_metadata.py
 # SQL güvenlik/tamlık ve bounded HTTP testleri
 pytest tests/test_guarded_sql.py tests/test_datastore_sql.py tests/test_ckan_bounded.py
 # Dış kaynağa bağlanmadan gerçek yerel süreç + auth/kota/restart smoke testi

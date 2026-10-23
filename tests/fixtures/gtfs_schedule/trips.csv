@@ -1,0 +1,8 @@
+trip_id;route_id;service_id;trip_headsign;direction_id
+W;R1;WK;Weekday;0
+B;R2;WK;Second line;1
+C;R3;WK;Third line;0
+N;R1;WK;Overnight;0
+A;R1;SA;Saturday;0
+U;R1;SU;Sunday;0
+X;R2;EX;Holiday addition;0

@@ -132,6 +132,9 @@ def check_public_mode(directory: Path) -> list[str]:
         assert "istanbul_parking_nearby" not in names
         assert "istanbul_datastore_query" in names
         checks.append("public tools/list: 15 compact tools, no ferry/legacy")
+        assert all(tool.get("title") and tool.get("annotations", {}).get("readOnlyHint") is True
+                   for tool in listed["result"]["tools"])
+        checks.append("public tools/list: every tool has title and readOnlyHint")
         structured = {tool["name"] for tool in listed["result"]["tools"] if "outputSchema" in tool}
         assert structured == {
             "istanbul_nearby", "istanbul_traffic_status", "istanbul_water_status",

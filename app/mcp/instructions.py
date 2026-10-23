@@ -12,6 +12,8 @@ Preserve envelope freshness, limits, warnings and uncertainty in the answer.
 Unavailable or partial coverage is not an empty result or proof of normal service.
 Cached/static locations are not live availability. IETT departures are planned
 main-terminal times, not intermediate-stop ETA; no route-planning or live-arrival guarantee.
+Optional istanbul_next_departures provides published GTFS stop times, not live ETA.
+Its calendar validity, approximate timepoints and stale warnings remain explicit.
 Metro equipment status is not an end-to-end accessibility guarantee. Neighborhood
 earthquake scenarios are historical, not individual-building safety assessments.
 For pharmacies show name, district, address, phone and clickable maps_url;

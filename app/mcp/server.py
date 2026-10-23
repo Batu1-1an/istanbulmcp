@@ -4,7 +4,7 @@ from typing import Literal
 
 from mcp.server import MCPServer
 
-from app.mcp.registry import READ_ONLY, create_mcp_server
+from app.mcp.registry import READ_ONLY, TOOL_TITLES, create_mcp_server
 from app.core.envelope import Freshness, Source, success_envelope
 from app.core.settings import get_settings
 from app.core.error_responses import validation_error_envelope
@@ -20,6 +20,7 @@ from app.services.social_facilities import SocialFacilitiesService
 from app.services.disruptions import TransportDisruptionService
 from app.services.ferry import FerryScheduleService
 from app.services.transit import TransitService
+from app.services.gtfs_schedule import GtfsScheduleService
 from app.services.metro_accessibility import MetroAccessibilityService
 from app.storage.db import public_readiness, readiness
 
@@ -78,7 +79,11 @@ async def istanbul_query_resource(
     filters: dict | None = None,
     limit: int | None = None,
 ) -> dict:
-    """Query a CKAN DataStore resource with guarded filters and limits."""
+    """Query IBB CKAN DataStore records with guarded filters and limits.
+
+    API reference: https://docs.ckan.org/en/latest/maintaining/datastore.html
+    Uses datastore_search, not SQL; field names come from the resource schema.
+    """
     return await CatalogService(settings=get_settings()).query_resource(
         resource_id=resource_id,
         filters=filters,
@@ -102,11 +107,10 @@ async def istanbul_nearby(
     bbox and types apply only to city_feature (parking, metro_station,
     air_quality_station, public_transport_stop, wifi). air_quality includes latest
     readings; city_feature has station locations only. District lists have no
-    distances. For pharmacies show name, district, address, phone and clickable
-    maps_url links; maps_search_url means address search, not a verified pin.
-    Show source/citation footers only when requested; preserve provenance metadata,
-    freshness and warnings. Advise calling first; no duty-end guarantee.
-    Card/social locations are not live operating status.
+    distances. Pharmacy records include name, district, address, phone, map links,
+    provenance and freshness; maps_search_url is address search, not a verified pin.
+    Pharmacy duty-end times are not guaranteed. Card/social locations are static,
+    not live operating status.
     """
     settings = get_settings()
     try:
@@ -204,16 +208,11 @@ async def istanbul_nobetci_eczane_nearby(
     radius_m: int = 1000,
     limit: int | None = None,
 ) -> dict:
-    """Find current on-duty pharmacies near coordinates; no duty-end guarantee.
+    """Find current on-duty pharmacies from the İBB roster near coordinates.
 
-    In the user-facing answer, include a clickable [Haritada aç](maps_url)
-    link for every pharmacy shown. If only maps_search_url is available,
-    use [Adresi haritada ara](maps_search_url) and describe it as an address
-    search, not a verified pin. Include name, district, address and phone.
-    Do not display the İBB source name, source URL or a source/citation footer
-    unless the user explicitly asks for sources. Sources are provenance metadata.
-    Preserve freshness, stale-data warnings, result limits and uncertainty;
-    do not invent duty hours, and advise calling before visiting.
+    Returns name, district, address, phone, map links, provenance and freshness.
+    maps_search_url is address search, not a verified pin. Duty-end times are
+    not guaranteed; this is not a general pharmacy directory or opening-hours API.
     """
     return await PharmacyService(settings=get_settings()).nearby(
         lat=lat,
@@ -227,16 +226,11 @@ async def istanbul_nobetci_eczane_by_district(
     district: str,
     limit: int | None = None,
 ) -> dict:
-    """List current on-duty pharmacies in a district; not hours or a general catalog.
+    """List current on-duty pharmacies in a district from the İBB roster.
 
-    In the user-facing answer, include a clickable [Haritada aç](maps_url)
-    link for every pharmacy shown. If only maps_search_url is available,
-    use [Adresi haritada ara](maps_search_url) and describe it as an address
-    search, not a verified pin. Include name, district, address and phone.
-    Do not display the İBB source name, source URL or a source/citation footer
-    unless the user explicitly asks for sources. Sources are provenance metadata.
-    Preserve freshness, stale-data warnings, result limits and uncertainty;
-    do not imply proximity ordering or invent duty hours. Advise calling before visiting.
+    Returns name, district, address, phone, map links, provenance and freshness.
+    No proximity ordering or duty-end guarantee. maps_search_url is an address
+    search, not a verified pin. This is not a general pharmacy catalog.
     """
     return await PharmacyService(settings=get_settings()).by_district(
         district=district,
@@ -442,7 +436,29 @@ def register_ferry_schedule_tool(server: MCPServer, enabled: bool) -> None:
     A relay configured for cancellation notices does not serve timetables.
     """
     if enabled:
-        server.add_tool(istanbul_ferry_schedules, annotations=READ_ONLY)
+        server.add_tool(istanbul_ferry_schedules, title=TOOL_TITLES["istanbul_ferry_schedules"], annotations=READ_ONLY)
+
+
+async def istanbul_next_departures(
+    stop_id: str | None = None,
+    lat: float | None = None,
+    lon: float | None = None,
+    line: str | None = None,
+    at: str | None = None,
+    radius_m: int = 500,
+    limit: int | None = None,
+) -> dict:
+    """Return published GTFS departures for a stop or up to five nearby stops.
+
+    at is an ISO datetime with a UTC offset; omitted means now in Europe/Istanbul.
+    The search covers 24 hours. stop_id and coordinates are mutually exclusive.
+    line matches the published route short name. Times are scheduled, never live
+    ETA, delays or proof of service. Outside-calendar queries are unavailable.
+    """
+    return await GtfsScheduleService(get_settings()).next_departures(
+        stop_id=stop_id, lat=lat, lon=lon, line=line, at=at,
+        radius_m=radius_m, limit=limit,
+    )
 
 
 async def istanbul_planned_departures(line_code: str, limit: int | None = None) -> dict:
@@ -476,8 +492,8 @@ async def istanbul_water_status(
     """Get ISKI active faults (district or fault_number) or dam occupancy.
 
     Dam filters apply only to dams; fault_number is exclusive with district.
-    For nearby faults use istanbul_nearby(kind="water_fault"). Preserve fallback
-    freshness and approximate fault-location warnings; no restoration guarantee.
+    Nearby faults are provided by istanbul_nearby(kind="water_fault"). Results
+    carry fallback freshness and approximate fault locations; no restoration guarantee.
     """
     try:
         if kind == "faults":
@@ -507,7 +523,7 @@ async def istanbul_transit_line(
     """Get IETT line info, ordered stops or planned main-terminal departures.
 
     limit applies only to departures. This is not live intermediate-stop ETA.
-    Use istanbul_transport_disruptions for service notices across operators.
+    Cross-operator service notices are provided by istanbul_transport_disruptions.
     """
     try:
         if action != "departures" and limit is not None:
@@ -532,7 +548,9 @@ async def istanbul_datastore_query(
     aggregates are supported; no writes, arbitrary functions or application DB.
     A complete bounded capture is required, never partial counts. The server
     enforces an outer result limit (default 20, max 100) even if SQL omits LIMIT.
-    Configure CKAN_SQL_ALLOWED_RESOURCE_IDS first.
+    Only resources configured in CKAN_SQL_ALLOWED_RESOURCE_IDS are available.
+    Local query syntax and bounds: https://github.com/Batu1-1an/istanbulmcp/blob/main/docs/datastore-sql.md
+    Source API: https://docs.ckan.org/en/latest/maintaining/datastore.html
     """
     return await DatastoreSqlService(settings=get_settings()).query(
         resource_id=resource_id, sql=sql, limit=limit,

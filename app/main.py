@@ -15,6 +15,7 @@ from app.core.api_auth import ApiKeyAuthMiddleware, ApiKeyQuotaMiddleware, valid
 from app.storage.quota import DailyQuota
 from app.services.datastore_sql import validate_sql_settings
 from app.connectors.gtfs import validate_gtfs_settings
+from app.connectors.gtfs_schedule import validate_schedule_settings
 from app.core.mcp_transport import McpJsonRpcGuard
 from app.core.settings import get_settings
 from app.core.status import build_status
@@ -52,6 +53,7 @@ def create_app() -> Starlette:
     settings = get_settings()
     validate_sql_settings(settings)
     validate_gtfs_settings(settings)
+    validate_schedule_settings(settings)
     auth_enabled = validate_auth_settings(settings)
     if not auth_enabled and settings.ckan_sql_allowed_resource_ids:
         logger.warning(

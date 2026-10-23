@@ -1,0 +1,4 @@
+stop_id;stop_name;stop_lat;stop_lon;
+S1;Fixture One;410.191.700.005.564;286.843.529.999.755;
+S2;Fixture Two;41.01920;28.68440;
+S3;Fixture Three;41.02000;28.68500;

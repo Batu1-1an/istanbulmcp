@@ -95,7 +95,9 @@ def test_tool_source_map_matches_registered_tools():
     registered = {tool["name"] for tool in inventory}
 
     assert registered == set(DEFAULT_TOOL_NAMES)
-    assert set(TOOL_SOURCES) == registered | set(LEGACY_TOOL_NAMES) | {"istanbul_ferry_schedules"}
+    assert set(TOOL_SOURCES) == registered | set(LEGACY_TOOL_NAMES) | {
+        "istanbul_ferry_schedules", "istanbul_next_departures",
+    }
     # The inventory is built from the public tools/list result; the sync health
     # handler must still be reported as sync.
     assert {tool["name"]: tool["async"] for tool in inventory}["istanbul_health"] is False

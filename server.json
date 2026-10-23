@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Batu1-1an/istanbul-mcp",
+  "title": "Istanbul MCP",
+  "description": "Read-only Istanbul open city data: transport, parking, water, nearby services and datasets.",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/Batu1-1an/istanbulmcp",
+    "source": "github"
+  },
+  "websiteUrl": "https://github.com/Batu1-1an/istanbulmcp#readme",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://istanbulmcp-production.up.railway.app/mcp/"
+    }
+  ]
+}

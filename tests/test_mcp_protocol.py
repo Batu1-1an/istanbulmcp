@@ -50,7 +50,7 @@ def test_legacy_initialize_keeps_identity_capabilities_and_stateless_mode(versio
     assert "mcp-session-id" not in response.headers
     result = response.json()["result"]
     assert result["protocolVersion"] == version
-    assert result["serverInfo"] == {"name": "istanbul-mcp", "version": "0.1.0"}
+    assert result["serverInfo"] == {"name": "istanbul-mcp", "title": "Istanbul MCP", "version": "0.1.0"}
     assert {"tools", "resources", "prompts"} <= result["capabilities"].keys()
 
 

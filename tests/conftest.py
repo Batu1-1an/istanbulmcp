@@ -5,6 +5,7 @@ import pytest
 
 # app.main creates its default ASGI app at import time, before fixtures run.
 os.environ["MCP_AUTH_REQUIRED"] = "false"
+os.environ["GTFS_SCHEDULE_ENABLED"] = "false"
 os.environ.pop("MCP_API_KEYS", None)
 os.environ.pop("FORWARDED_ALLOW_IPS", None)
 

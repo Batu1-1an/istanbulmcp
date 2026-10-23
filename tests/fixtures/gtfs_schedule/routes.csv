@@ -1,0 +1,4 @@
+route_id;route_short_name;route_long_name
+R1;500T;Synthetic first route
+R2;15B;Synthetic second route
+R3;30D;Synthetic third route
