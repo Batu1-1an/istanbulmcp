@@ -1,0 +1,22 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [29.0306, 40.9908]},
+      "properties": {
+        "DURAK_ADI": "Kadıköy Taksi Durağı",
+        "ILCE": "Kadıköy",
+        "ADRES": "İskele meydanı"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [29.0400, 41.0000]},
+      "properties": {
+        "DURAK_ADI": "Uzak Taksi Durağı",
+        "ILCE": "Kadıköy"
+      }
+    }
+  ]
+}

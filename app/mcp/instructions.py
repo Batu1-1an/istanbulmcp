@@ -10,7 +10,9 @@ then query with bounded filters. SQL is allowlisted SELECT over table records on
 Ask for missing location/line details; do not invent coordinates or call unknown places verified.
 Preserve envelope freshness, limits, warnings and uncertainty in the answer.
 Unavailable or partial coverage is not an empty result or proof of normal service.
-Cached/static locations are not live availability. IETT departures are planned
+Cached/static locations are not live availability. EV charging, taxi stands and
+weekly markets are published snapshots, not live operating status; market
+timetables can change on holidays. IETT departures are planned
 main-terminal times, not intermediate-stop ETA; no route-planning or live-arrival guarantee.
 Optional istanbul_next_departures provides published GTFS stop times, not live ETA.
 Its calendar validity, approximate timepoints and stale warnings remain explicit.

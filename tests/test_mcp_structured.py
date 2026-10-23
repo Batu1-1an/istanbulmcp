@@ -22,6 +22,7 @@ CASES = [
     ("istanbul_water_status", {}, "IskiService", "active_faults"),
     ("istanbul_transit_line", {"line_code": "500T"}, "TransitService", "line_info"),
     ("istanbul_transport_disruptions", {}, "TransportDisruptionService", "disruptions"),
+    ("istanbul_market_schedule", {"district": "Kadıköy"}, "MarketService", "schedule"),
     ("istanbul_nobetci_eczane_nearby", {"lat": 41, "lon": 29}, "PharmacyService", "nearby"),
     ("istanbul_nobetci_eczane_by_district", {"district": "Kadıköy"}, "PharmacyService", "by_district"),
 ]
@@ -34,7 +35,7 @@ async def test_only_selected_tools_publish_the_canonical_envelope_schema(legacy)
     tools = await server.list_tools()
     expected = STRUCTURED_TOOL_NAMES | (STRUCTURED_LEGACY_TOOL_NAMES if legacy else set())
     structured = {tool.name for tool in tools if tool.output_schema is not None}
-    assert len(STRUCTURED_TOOL_NAMES) == 5
+    assert len(STRUCTURED_TOOL_NAMES) == 6
     assert structured == expected
     for tool in tools:
         if tool.name in expected:

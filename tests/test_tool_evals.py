@@ -87,8 +87,8 @@ async def test_footprint_separates_output_schema_cost_and_discovery_primitives()
     from scripts.eval_tools import footprint
 
     result = await footprint(create_mcp_server(Settings()))
-    assert result["tool_count"] == len(result["tool_names"]) == 15
-    assert result["structured_tool_count"] == 5
+    assert result["tool_count"] == len(result["tool_names"]) == 16
+    assert result["structured_tool_count"] == 6
     assert result["resource_count"] == 3
     assert result["prompt_count"] == 4
     assert result["instructions_utf8_bytes"] > 0

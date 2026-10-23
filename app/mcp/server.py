@@ -21,6 +21,7 @@ from app.services.disruptions import TransportDisruptionService
 from app.services.ferry import FerryScheduleService
 from app.services.transit import TransitService
 from app.services.gtfs_schedule import GtfsScheduleService
+from app.services.markets import MarketService
 from app.services.metro_accessibility import MetroAccessibilityService
 from app.storage.db import public_readiness, readiness
 
@@ -105,9 +106,10 @@ async def istanbul_nearby(
     """Find city services by kind and coordinates, or parking/pharmacy by district.
 
     bbox and types apply only to city_feature (parking, metro_station,
-    air_quality_station, public_transport_stop, wifi). air_quality includes latest
-    readings; city_feature has station locations only. District lists have no
-    distances. Pharmacy records include name, district, address, phone, map links,
+    air_quality_station, public_transport_stop, wifi, ev_charging, taxi_stand,
+    market). air_quality includes latest readings; city_feature has station
+    locations only. Static layers return published locations, not live status.
+    District lists have no distances. Pharmacy records include name, district, address, phone, map links,
     provenance and freshness; maps_search_url is address search, not a verified pin.
     Pharmacy duty-end times are not guaranteed. Card/social locations are static,
     not live operating status.
@@ -120,9 +122,10 @@ async def istanbul_nearby(
         if limit is not None:
             validate_limit(limit, settings.max_limit)
         if types is not None:
-            if kind != "city_feature" or not types or len(types) > 5 or any(
+            if kind != "city_feature" or not types or len(types) > 8 or any(
                 value not in {"parking", "metro_station", "air_quality_station",
-                              "public_transport_stop", "wifi"} for value in types
+                              "public_transport_stop", "wifi", "ev_charging",
+                              "taxi_stand", "market"} for value in types
             ):
                 raise InputValidationError("types is only for supported city_feature types", field="types")
         if district is not None:
@@ -173,6 +176,22 @@ async def istanbul_bbox_search(
         bbox=bbox,
         types=types,
         limit=limit,
+    )
+
+
+async def istanbul_market_schedule(
+    district: str | None = None,
+    day: str | None = None,
+    limit: int | None = None,
+) -> dict:
+    """Return the published weekly İBB market schedule, optionally by district/day.
+
+    day accepts Turkish/English weekdays, today/yesterday/tomorrow, or an ISO
+    date. Results are a static weekly schedule, not proof a market is open today;
+    coordinates are source points and maps_url is a map search link.
+    """
+    return await MarketService(settings=get_settings()).schedule(
+        district=district, day=day, limit=limit,
     )
 
 

@@ -87,6 +87,8 @@ Bazı istemciler `url` yerine `serverUrl`, `"type": "remote"` veya `"transport":
 - İETT hat bilgisi ve hat duraklarını yönlerine göre sıralı döndürebilir.
 - Kütüphane kayıtlarında adres, telefon, çalışma saatleri ve harita arama linki verebilir.
 - Mahalle profillerini sosyal yardım, bina stoku ve deprem senaryosu açık verileriyle oluşturabilir.
+- Yakındaki EV şarj istasyonlarını, taksi duraklarını ve pazar yerlerini listeleyebilir.
+- İlçe ve güne göre haftalık pazar takvimini döndürebilir.
 
 Konum bilgisi olan kayıtlarda `maps_url` döner. Yalnızca adres bilgisi olan kayıtlarda `maps_search_url` ve `location_precision=address_search` kullanılabilir; bu kayıtlar kesin koordinat gibi sunulmaz.
 
@@ -124,6 +126,8 @@ Baraj doluluk oranları şu an nasıl? En dolu 5 barajı listele.
 Beşiktaş'ta hangi kütüphaneler var?
 Kadıköy Rıhtım çevresinde ulaşım seçenekleri neler?
 Kadıköy Caferağa mahalle profili nedir?
+Kadıköy'de yarın hangi pazar var?
+Levent yakınındaki EV şarj istasyonlarını listele.
 ```
 
 ## Örnek Çıktılar
@@ -151,12 +155,14 @@ Istanbul MCP şu kaynaklardan gelen verileri kullanır:
 - İBB Şehir Haritası nöbetçi eczane servisi (`cbsproxy.ibb.gov.tr/?eczanews&ilceID=all`)
 - İBB Açık Veri Portalı İstanbulkart dolum merkezi DataStore kaynağı (yıllık konum verisi)
 - İBB WiFi, kütüphane, hava kalitesi ve mahalle profili kaynakları
+- İBB EV şarj istasyonları ve taksi durakları GeoJSON katmanları
+- İBB haftalık pazar yerleri ve kültür merkezleri açık veri snapshot'ları
 
 Tüm araç sonuçları standart bir cevap modeliyle döner: `summary`, `data`, `freshness`, `sources`, `limits`, `warnings` ve gerektiğinde `next_queries`.
 
 ## MCP Araçları
 
-Varsayılan yüzey **15 salt okunur araçtır**; eski adlar
+Varsayılan yüzey **16 salt okunur araçtır**; eski adlar
 `MCP_LEGACY_TOOLS_ENABLED=true` ile ayrıca açılabilir. Yetenekler kaldırılmadı,
 yakınlık/ilçe sorguları, su verileri ve İETT hat işlemleri birleştirildi.
 [Geçiş tablosu](docs/tool-migration.md) eski → yeni çağrıları gösterir.
@@ -177,6 +183,7 @@ istanbul_neighborhood_profile
 istanbul_transit_line
 istanbul_transport_disruptions
 istanbul_metro_accessibility_status
+istanbul_market_schedule
 ```
 
 | Araç | İşlev ve örnek |
@@ -187,7 +194,8 @@ istanbul_metro_accessibility_status
 | `istanbul_get_resource_schema` | Resource kolonları. |
 | `istanbul_query_resource` | CKAN kayıtlarını güvenli filtre ve limitle getirir. |
 | `istanbul_datastore_query` | İzin verilen resource'un tam ve sınırlı kopyası üzerinde SELECT/GROUP BY. [SQL rehberi](docs/datastore-sql.md). |
-| `istanbul_nearby` | `kind=parking,pharmacy,istanbulkart,social_facility,metro_station,air_quality,water_fault,city_feature`. Koordinatla yakınlık; parking/pharmacy için ilçe; city_feature için bbox. |
+| `istanbul_nearby` | `kind=parking,pharmacy,istanbulkart,social_facility,metro_station,air_quality,water_fault,city_feature`. `city_feature` türleri: `parking, metro_station, air_quality_station, public_transport_stop, wifi, ev_charging, taxi_stand, market`. Koordinatla yakınlık; parking/pharmacy için ilçe; city_feature için bbox. |
+| `istanbul_market_schedule` | Haftalık pazar takvimi; `district`, `day` (Türkçe/İngilizce gün, bugün/yarın veya ISO tarih) ve `limit`. Statik haftalık tarife; canlı açılış durumu değildir. |
 | `istanbul_traffic_status` | Şehir geneli trafik indeksi; yol bazlı değildir. |
 | `istanbul_water_status` | `kind=faults`: ilçe veya arıza numarası; `kind=dams`: baraj dolulukları. |
 | `istanbul_mobility_nearby` | Bilinen yer veya koordinata göre ulaşım özeti. |
@@ -220,7 +228,8 @@ yükleme mevcut indeksi değiştirmez. Eski veri yalnız sınırlı stale pencer
 uyarıyla sunulur; kaynağa erişilememesi “yakında durak yok” anlamına gelmez.
 
 Bunlar **statik durak konumlarıdır**; canlı varış, işletilme durumu veya yeni bir
-`next_departures` özelliği değildir. Kaynak zamanı, alınan/kabul edilen/atlanan
+`next_departures` özelliği değildir. EV şarj, taksi durağı, haftalık pazar ve
+kültür merkezi katmanları için [statik şehir katmanları](docs/city-static-layers.md). Kaynak zamanı, alınan/kabul edilen/atlanan
 sayıları cevapta korunur. Ayrıntılar ve canlı kabul komutu:
 [GTFS durak katmanı](docs/gtfs-stops.md).
 
@@ -231,14 +240,14 @@ uygulandı ancak **`GTFS_SCHEDULE_ENABLED=false` ile varsayılan kapalıdır**.
 Tam `stop_times.zip`, servis takvimi ve tarife dosyalarını kullanır;
 `stop_times.csv` yalnız önizleme olduğu için kabul edilmez. Servis günü, takvim
 istisnaları ve `25:xx` saatleri işlenir; canlı ETA veya rota planlayıcı değildir.
-Tam ZIP ile canlı kabul/deploy ölçümü yapılmadan açmayın. Açılırsa yüzey 16 tool
+Tam ZIP ile canlı kabul/deploy ölçümü yapılmadan açmayın. Açılırsa yüzey 17 tool
 olur; [kapsam, ayarlar ve kabul adımları](docs/gtfs-schedule.md).
 
 ## MCP Keşfi ve Promptlar
 
 Python MCP SDK **2.3+** ile aynı `/mcp/` endpoint'i hem eski `initialize`
 istemiyle hem `2026-07-28` sürümündeki `server/discover` akışıyla çalışır.
-Varsayılan araç sayısı **15** olarak kalır. Sunucu talimatlarına ek olarak:
+Varsayılan araç sayısı **16**'dır; GTFS tarifesi açılırsa 17 olur. Sunucu talimatlarına ek olarak:
 
 | Resource URI | İçerik |
 |---|---|
@@ -498,6 +507,8 @@ python -m scripts.eval_tools
 pytest tests/test_gtfs.py tests/test_gtfs_regression.py tests/test_city_service.py tests/test_ckan_bounded.py
 # Tam GTFS tarife ZIP, takvim/geceyarısı, bütçe/rollback ve opt-in MCP testleri
 pytest tests/test_gtfs_schedule.py
+# EV/taksi/pazar/kültür statik katmanları ve pazar takvimi
+pytest tests/test_city_open_data.py tests/test_city_service.py
 # Yalnız erişebilen ortamda, tam GTFS ZIP indirir (opt-in; geçici DB kullanır)
 RUN_LIVE_GTFS_SCHEDULE_TESTS=1 pytest -s tests/live/test_gtfs_schedule_source_live.py
 # Resmî pinned registry şeması ve tüm tool yüzeylerinde title/readOnlyHint

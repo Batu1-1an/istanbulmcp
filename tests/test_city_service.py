@@ -6,12 +6,20 @@ import pytest
 from app.core.settings import Settings
 from app.core.source_cache import clear_source_cache, source_cache_snapshot
 from app.connectors.ckan import CkanError
+from app.connectors.city_open_data import OpenDataLayer
 from app.services.city import CityService, ISTANBUL_GTFS_BOUNDS
 from app.services.city import LIBRARY_LOCATIONS_RESOURCE_ID, WIFI_LOCATIONS_RESOURCE_ID
 from app.storage.geo import GeoRepository
 
 
 GTFS_FIXTURE_RESOURCE_ID = "fixture-active-stops"
+
+
+class FakeOpenData:
+    async def layer(self, kind):
+        return OpenDataLayer(kind=kind, rows=[], dataset_id=None, resource_id=None,
+                             source_url="https://data.ibb.gov.tr", reported_total=0,
+                             received_bytes=0, received_total=0)
 
 
 class FakeIspark:
@@ -281,6 +289,7 @@ def service(tmp_path):
         air_quality_client=FakeAir(),
         traffic_client=FakeTraffic(),
         ckan_client=FakeCkan(),
+        open_data_client=FakeOpenData(),
     )
 
 

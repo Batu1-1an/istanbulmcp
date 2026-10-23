@@ -17,6 +17,7 @@ TOOL_SOURCES = {
     "istanbul_query_resource": "ckan",
     "istanbul_datastore_query": "ckan",
     "istanbul_nearby": "mixed_city_open_data",
+    "istanbul_market_schedule": "ibb_open_data_market",
     "istanbul_water_status": "iski",
     "istanbul_transit_line": "iett",
     "istanbul_next_departures": "gtfs_schedule",
@@ -143,6 +144,12 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
                 "load_timeout_seconds": settings.gtfs_schedule_load_timeout_seconds,
                 "cache_ttl_seconds": settings.gtfs_schedule_cache_ttl_seconds,
                 "stale_if_error_seconds": settings.gtfs_schedule_stale_if_error_seconds,
+            },
+            "open_data_layers": {
+                "max_bytes": settings.open_data_layers_max_bytes,
+                "max_rows": settings.open_data_layers_max_rows,
+                "request_timeout_seconds": settings.open_data_layers_request_timeout_seconds,
+                "cache_ttl_seconds": settings.open_data_layers_cache_ttl_seconds,
             },
             "gtfs_stops": {
                 "max_bytes": settings.gtfs_stops_max_bytes,

@@ -127,11 +127,11 @@ def check_public_mode(directory: Path) -> list[str]:
 
         status, listed = request(server.base, "/mcp/", payload=rpc("tools/list"))
         names = {tool["name"] for tool in listed["result"]["tools"]}
-        assert status == 200 and len(names) == 15
+        assert status == 200 and len(names) == 16
         assert "istanbul_ferry_schedules" not in names
         assert "istanbul_parking_nearby" not in names
         assert "istanbul_datastore_query" in names
-        checks.append("public tools/list: 15 compact tools, no ferry/legacy")
+        checks.append("public tools/list: 16 compact tools, no ferry/legacy")
         assert all(tool.get("title") and tool.get("annotations", {}).get("readOnlyHint") is True
                    for tool in listed["result"]["tools"])
         checks.append("public tools/list: every tool has title and readOnlyHint")
@@ -139,8 +139,9 @@ def check_public_mode(directory: Path) -> list[str]:
         assert structured == {
             "istanbul_nearby", "istanbul_traffic_status", "istanbul_water_status",
             "istanbul_transit_line", "istanbul_transport_disruptions",
+            "istanbul_market_schedule",
         }
-        checks.append("five public tools publish ResponseEnvelope output schemas")
+        checks.append("six public tools publish ResponseEnvelope output schemas")
 
         status, discovered = request(server.base, "/mcp/", payload=rpc("server/discover", modern=True))
         assert status == 200 and "2026-07-28" in discovered["result"]["supportedVersions"]

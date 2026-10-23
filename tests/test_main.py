@@ -295,6 +295,7 @@ def test_mcp_initialize_endpoint():
         "istanbul_transit_line": ["line_code"],
         "istanbul_transport_disruptions": [],
         "istanbul_metro_accessibility_status": [],
+        "istanbul_market_schedule": [],
     }
     with TestClient(create_app(), base_url="http://localhost") as client:
         headers = {
@@ -326,7 +327,7 @@ def test_mcp_initialize_endpoint():
     assert listed.status_code == 200
     listed_tools = listed.json()["result"]["tools"]
     schemas = {tool["name"]: tool["inputSchema"] for tool in listed_tools}
-    assert len(listed_tools) == len(expected_required) == 15
+    assert len(listed_tools) == len(expected_required) == 16
     assert set(schemas) == set(expected_required)
     for name, required in expected_required.items():
         assert schemas[name].get("required", []) == required

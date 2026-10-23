@@ -1,0 +1,38 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [29.0305, 40.9910]},
+      "properties": {
+        "AD": "Kadıköy Şarj",
+        "ADRES": "Kadıköy test adresi",
+        "LATITUDE": "40.9910",
+        "LONGITUDE": "29.0305",
+        "İŞLETİCİ": "Test Operatör",
+        "LİSANS": "TEST-1"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [29.0310, 40.9920]},
+      "properties": {
+        "AD": "Moda Şarj",
+        "ADRES": "Moda test adresi",
+        "LATITUDE": "40.9920",
+        "LONGITUDE": "29.0310",
+        "İŞLETİCİ": "Test Operatör"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [2.3522, 48.8566]},
+      "properties": {
+        "AD": "Paris outside",
+        "ADRES": "Outside Istanbul",
+        "LATITUDE": "48.8566",
+        "LONGITUDE": "2.3522"
+      }
+    }
+  ]
+}

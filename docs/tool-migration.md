@@ -1,6 +1,7 @@
 # Kompakt MCP yüzeyine geçiş
 
-Varsayılan yüzey 15 araçtır (14 konsolide araç + `istanbul_datastore_query`).
+Varsayılan yüzey 16 araçtır (14 konsolide araç + `istanbul_datastore_query` +
+`istanbul_market_schedule`).
 Bu bir MCP protokol sınırı değildir. Amaç, aynı yeteneğin birden fazla adla
 sunulmasını azaltmaktır. Eski 30 araçtan yalnızca tarife kaynağı engellenen ferry
 ayrı bir opt-in kapısı arkasındadır. Diğer yetenekler servislerini, envelope
@@ -27,6 +28,7 @@ alanlarını, kaynaklarını, tazelik ve hata davranışlarını korur.
 | `istanbul_stops_for_line` | `istanbul_transit_line(line_code="34A", action="stops")` |
 | `istanbul_planned_departures` | `istanbul_transit_line(line_code="34A", action="departures", limit=...)` |
 | `istanbul_transit_disruptions` | `istanbul_transport_disruptions(operator="iett", line=...)` (birleşik kayıt şeması ve coverage metadata'sı) |
+| (yeni) | `istanbul_market_schedule(district=..., day=..., limit=...)` haftalık pazar takvimi |
 
 Mevcut `istanbul_nearby(lat,lon,types,...)` kullanımı korunur.
 `kind` verilmezse `city_feature` seçilir. Bu mod hava istasyonu konumunu getirir;
@@ -39,7 +41,8 @@ birbirini dışlayan argümanlar sessizce yok sayılmaz.
 MCP_LEGACY_TOOLS_ENABLED=true python -m app.main
 ```
 
-17 eski ad kompakt araçlara **ek olarak** yayımlanır (toplam 32; ferry açılırsa 33). İstemcilerin tool listesini
+17 eski ad kompakt araçlara **ek olarak** yayımlanır (toplam 33; ferry açılırsa 34;
+GTFS tarifesi açılırsa 35). İstemcilerin tool listesini
 yeniden keşfetmesi gerekir. İptal-duyurusu relay ayarı ferry tarifesini açmaz;
 `FERRY_SCHEDULES_ENABLED` ayrı ve varsayılan olarak kapalıdır.
 
@@ -61,9 +64,10 @@ kaydedildi: 29 tool, 13.796 UTF-8 byte. Byte ölçüsü **token değildir**; SDK
 şemalar ve açıklamalarla değişir. Bir model çağrısı yapılmadan seçim başarısı
 iyileşti iddiası kurulmaz.
 
-Katman A ile beş varsayılan araca output schema eklendi. Aynı 15 aracın input ve
-açıklama tanımları 10.522 byte; output şemaları dahil toplam 28.347 byte oldu
-(SDK 2.3.0). Bu maliyet saklanmaz: `scripts.eval_tools` output schema ek maliyetini,
+Katman A ile beş varsayılan araca output schema eklendi; pazar takvimiyle bu
+sayı altıya çıktı. Güncel input/açıklama ve şema byte maliyeti
+`python -m scripts.eval_tools` ile ölçülmeli; eski 10.522/28.347 byte değerleri
+tarihsel baseline'dır (SDK 2.3.0). Bu maliyet saklanmaz: `scripts.eval_tools` output schema ek maliyetini,
 resource/prompt sayılarını ve talimat byte boyutunu ayrı raporlar. Resources ve
 prompts yeni tool değildir. [MCP arayüzü](mcp-interface.md) protokol/SDK geçişini
 ve bare-dict Python uyumluluğunu açıklar.

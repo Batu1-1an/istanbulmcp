@@ -6,6 +6,7 @@ import hashlib
 from typing import Any
 
 from app.connectors.ckan import CkanClient
+from app.connectors.city_open_data import CityOpenDataClient, OpenDataLayer, OpenDataLayerError, parse_market_coordinate
 from app.connectors.gtfs import (
     GTFS_DATASET_ID, GROUPED_COORDINATE_RE, ISTANBUL_GTFS_BOUNDS,
     GtfsStopsClient, GtfsStopsError, is_gtfs_stops_resource, parse_gtfs_coordinate,
@@ -40,6 +41,14 @@ OPEN_DATA_SOURCE = Source(
 )
 
 GTFS_SOURCE_NAME = "IBB Open Data Portal - Public GTFS stops"
+OPEN_DATA_LAYER_TYPES = {"ev_charging", "taxi_stand", "market"}
+OPEN_DATA_SOURCE_NAMES = {
+    "ev_charging": "IBB Open Data Portal - EV charging stations",
+    "taxi_stand": "IBB Open Data Portal - Taxi stands",
+    "market": "IBB Open Data Portal - Weekly markets",
+    "cultural_centre": "IBB Open Data Portal - Cultural centres",
+}
+ISTANBUL_LAYER_BOUNDS = (40.70, 41.50, 27.80, 30.20)
 WIFI_LOCATIONS_RESOURCE_ID = "5d0a0b1e-9e56-4038-b966-7d3e7b46f882"
 LIBRARY_LOCATIONS_RESOURCE_ID = "2ee4476c-9984-43de-96de-7aeda4da9aee"
 CKAN_POINT_PREFETCH_LIMIT = 100
@@ -66,6 +75,7 @@ class CityService:
         traffic_client: TrafficClient | None = None,
         ckan_client: CkanClient | None = None,
         gtfs_client: GtfsStopsClient | None = None,
+        open_data_client: CityOpenDataClient | None = None,
     ):
         self.settings = settings
         self.geo = geo_repository or GeoRepository(settings.database_path)
@@ -75,6 +85,7 @@ class CityService:
         self.traffic = traffic_client or TrafficClient(timeout=settings.request_timeout_seconds)
         self.ckan = ckan_client or CkanClient(timeout=settings.request_timeout_seconds)
         self.gtfs = gtfs_client or GtfsStopsClient(settings=settings, ckan_client=self.ckan)
+        self.open_data = open_data_client or CityOpenDataClient(settings=settings)
 
     async def parking_nearby(self, *, lat: float, lon: float, radius_m: int = 1000, limit: int | None = None) -> dict:
         try:
@@ -367,6 +378,8 @@ class CityService:
         warnings: list[str] = []
         wifi: list[dict[str, Any]] = []
         libraries: list[dict[str, Any]] = []
+        cultural_centres: list[dict[str, Any]] = []
+        cultural_source: Source | None = None
         try:
             wifi = await self._wifi_nearby(lat=resolved.lat, lon=resolved.lon, radius_m=radius_m, limit=safe_limit)
         except Exception as exc:
@@ -377,9 +390,22 @@ class CityService:
                 warnings.append("Library results are district-level address records, not radius-precise coordinates.")
             except Exception as exc:
                 warnings.append(f"Library locations unavailable: {type(exc).__name__}.")
+            try:
+                cultural_centres, cultural_source = await self._cultural_centres_for_district(
+                    resolved.district, limit=safe_limit,
+                )
+                warnings.append("Cultural-centre results are address-search records, not verified coordinates.")
+            except Exception as exc:
+                warnings.append(f"Cultural-centre records unavailable: {type(exc).__name__}.")
         else:
-            warnings.append("Libraries require a known place with district metadata; coordinate-only queries return WiFi only.")
+            warnings.append("Libraries and cultural centres require a known place with district metadata; coordinate-only queries return WiFi only.")
 
+        sources = [
+            Source(name="IBB Open Data Portal - WiFi locations", resource_id=WIFI_LOCATIONS_RESOURCE_ID, url="https://data.ibb.gov.tr"),
+            Source(name="IBB Open Data Portal - Library locations", resource_id=LIBRARY_LOCATIONS_RESOURCE_ID, url="https://data.ibb.gov.tr"),
+        ]
+        if cultural_source is not None:
+            sources.append(cultural_source)
         return success_envelope(
             summary=f"City services near {resolved.name} within {radius_m} meters.",
             data=[
@@ -387,14 +413,12 @@ class CityService:
                     "query": self._resolved_payload(resolved),
                     "wifi_locations": wifi,
                     "libraries": libraries,
+                    "cultural_centres": cultural_centres,
                 }
             ],
-            sources=[
-                Source(name="IBB Open Data Portal - WiFi locations", resource_id=WIFI_LOCATIONS_RESOURCE_ID, url="https://data.ibb.gov.tr"),
-                Source(name="IBB Open Data Portal - Library locations", resource_id=LIBRARY_LOCATIONS_RESOURCE_ID, url="https://data.ibb.gov.tr"),
-            ],
+            sources=sources,
             freshness=Freshness(status="fresh", ttl_seconds=60 * 60 * 24),
-            limits=[f"radius_m={radius_m}", f"limit_per_section={safe_limit}", "libraries=district-level"],
+            limits=[f"radius_m={radius_m}", f"limit_per_section={safe_limit}", "libraries=district-level", "cultural_centres=address_search"],
             warnings=warnings,
         )
 
@@ -465,7 +489,12 @@ class CityService:
     def _city_freshness(self, refresh: _CityRefresh) -> Freshness:
         if refresh.gtfs is not None and refresh.types == ["public_transport_stop"] and refresh.status != "unknown":
             return self._gtfs_freshness(refresh.gtfs)
-        return Freshness(status=refresh.status, ttl_seconds=300)
+        ttl_seconds = (
+            self.settings.open_data_layers_cache_ttl_seconds
+            if refresh.types and all(kind in OPEN_DATA_LAYER_TYPES for kind in refresh.types)
+            else 300
+        )
+        return Freshness(status=refresh.status, ttl_seconds=ttl_seconds)
 
     def _validate_geo(self, lat: float, lon: float, radius_m: int, limit: int | None) -> int:
         validate_lat_lon(lat, lon)
@@ -518,6 +547,26 @@ class CityService:
                 self.geo.upsert_features([feature for row in wifi_locations if (feature := self._wifi_feature(row))])
             except Exception as exc:
                 failed("wifi", "WiFi", exc)
+        for layer in ("ev_charging", "taxi_stand", "market"):
+            if layer not in refresh.types:
+                continue
+            try:
+                payload = await self._open_data_layer(layer)
+                features = [
+                    feature for index, row in enumerate(payload.rows)
+                    if (feature := self._open_data_feature(layer, row, index))
+                ]
+                if not features:
+                    raise OpenDataLayerError(f"{layer} has no usable Istanbul coordinates")
+                self.geo.replace_features(
+                    source=f"ibb_open_data_{layer}", feature_type=layer, features=features,
+                )
+                refresh.sources.append(self._open_data_source(payload, accepted=len(features)))
+                refresh.warnings.append(
+                    f"{OPEN_DATA_SOURCE_NAMES[layer]} is a static published snapshot; not live operating status."
+                )
+            except Exception as exc:
+                failed(layer, OPEN_DATA_SOURCE_NAMES[layer], exc)
         return refresh
 
     async def _parks(self) -> list[dict[str, Any]]:
@@ -525,6 +574,28 @@ class CityService:
             "ispark.parks",
             ttl_seconds=self.settings.ispark_cache_ttl_seconds,
             loader=self.ispark.parks,
+        )
+
+    async def _open_data_layer(self, kind: str) -> OpenDataLayer:
+        loader = self.open_data.market if kind == "market" else lambda: self.open_data.layer(kind)
+        return await cached_source_data(
+            f"ibb_open_data.{kind}.v1",
+            ttl_seconds=self.settings.open_data_layers_cache_ttl_seconds,
+            loader=loader,
+        )
+
+    def _open_data_source(self, payload: OpenDataLayer, *, accepted: int) -> Source:
+        return Source(
+            name=OPEN_DATA_SOURCE_NAMES[payload.kind],
+            dataset_id=payload.dataset_id,
+            resource_id=payload.resource_id,
+            url=payload.source_url,
+            scope="complete_static_snapshot",
+            reported_total=payload.reported_total,
+            received_total=payload.received_total,
+            accepted_total=accepted,
+            skipped_total=payload.received_total - accepted,
+            last_successful_refresh_at=payload.fetched_at,
         )
 
     async def _metro_stations(self) -> list[dict[str, Any]]:
@@ -730,6 +801,35 @@ class CityService:
             matches.append(item)
         return matches[:limit]
 
+    async def _cultural_centres_for_district(
+        self, district: str, *, limit: int,
+    ) -> tuple[list[dict[str, Any]], Source]:
+        payload = await self._open_data_layer("cultural_centre")
+        wanted = self._normalize_text(district)
+        rows: list[dict[str, Any]] = []
+        for row in payload.rows:
+            address = self._property(row, ("ADRES", "Adres", "Address", "ADDRESS"))
+            row_district = self._property(row, ("ILCE", "Ilce", "İLÇE", "District"))
+            if not row_district:
+                row_district = district_from_text(str(address or ""))
+            if self._normalize_text(row_district) != wanted:
+                continue
+            name = self._property(row, ("KÜLTÜR MERKEZİ", "Kültür Merkezi", "KÜLTÜR MERKEZİ ADI", "Kültür Merkezi Adı", "AD", "Ad", "NAME", "Name"))
+            if not name:
+                continue
+            item = {
+                "name": str(name),
+                "district": row_district,
+                "address": address,
+                "opening_hours": self._property(row, ("AÇILIŞ-KAPANIŞ SAATLERİ", "Açılış-Kapanış Saatleri", "AÇILIŞ KAPANIŞ", "Çalışma Saatleri")),
+                "child_unit": self._property(row, ("ÇOCUK BİRİMİ", "Çocuk Birimi", "ÇOCUK BİRİMİ VAR MI")),
+                "location_precision": "address_search",
+            }
+            if maps_search_url := google_maps_search_url(name, address, row_district, "İstanbul"):
+                item["maps_search_url"] = maps_search_url
+            rows.append(item)
+        return rows[:limit], self._open_data_source(payload, accepted=len(rows))
+
     def _ispark_feature(self, park: dict[str, Any]) -> dict[str, Any]:
         return {
             "id": f"ispark:{park['parkID']}",
@@ -824,6 +924,108 @@ class CityService:
             "id": f"gtfs_stop:{stop_id}", "source": "gtfs", "feature_type": "public_transport_stop",
             "source_id": stop_id, "name": stop.get("stop_name") or stop_id,
             "lat": lat, "lon": lon, "properties": properties,
+        }
+
+    @staticmethod
+    def _property(props: dict[str, Any], names: tuple[str, ...]) -> Any:
+        folded = {str(key).casefold(): value for key, value in props.items()}
+        for name in names:
+            value = props.get(name, folded.get(name.casefold()))
+            if value is not None and str(value).strip() != "":
+                return value
+        return None
+
+    @staticmethod
+    def _layer_coordinate(lat: Any, lon: Any) -> tuple[float, float] | None:
+        try:
+            latitude, longitude = float(lat), float(lon)
+        except (TypeError, ValueError):
+            return None
+        if not (ISTANBUL_LAYER_BOUNDS[0] <= latitude <= ISTANBUL_LAYER_BOUNDS[1]
+                and ISTANBUL_LAYER_BOUNDS[2] <= longitude <= ISTANBUL_LAYER_BOUNDS[3]):
+            return None
+        return latitude, longitude
+
+    @classmethod
+    def _geojson_point(cls, feature: dict[str, Any]) -> tuple[float, float] | None:
+        props = feature.get("properties") if isinstance(feature.get("properties"), dict) else {}
+        lat = cls._property(props, ("LATITUDE", "Latitude", "lat", "ENLEM", "Enlem"))
+        lon = cls._property(props, ("LONGITUDE", "Longitude", "lon", "LNG", "BOYLAM", "Boylam"))
+        if lat is not None and lon is not None:
+            point = cls._layer_coordinate(lat, lon)
+            if point is not None:
+                return point
+        geometry = feature.get("geometry") if isinstance(feature.get("geometry"), dict) else {}
+        coordinates = geometry.get("coordinates")
+        if geometry.get("type") == "Point" and isinstance(coordinates, list) and len(coordinates) >= 2:
+            return cls._layer_coordinate(coordinates[1], coordinates[0])
+        return None
+
+    def _open_data_feature(self, kind: str, row: dict[str, Any], index: int) -> dict[str, Any] | None:
+        if kind == "market":
+            return self._market_feature(row, index)
+        point = self._geojson_point(row)
+        if point is None:
+            return None
+        props = row.get("properties") if isinstance(row.get("properties"), dict) else {}
+        if kind == "ev_charging":
+            name = self._property(props, ("AD", "Ad", "NAME", "Name", "İSTASYON_ADI", "Istasyon Adi"))
+            source_id = self._property(props, ("ID", "Id", "ISTASYON_NO", "İstasyon No", "Istasyon No")) or str(index)
+            details = {
+                "address": self._property(props, ("ADRES", "Adres", "ADDRESS", "Address")),
+                "operator": self._property(props, ("İŞLETİCİ", "Isletmeci", "OPERATOR", "Operator", "SARJ_ISLETMECISI", "Şarj İşletmecisi")),
+                "license": self._property(props, ("LISANS", "Lisans", "LICENSE", "License")),
+                "station_type": self._property(props, ("TIP", "Tip", "TYPE", "Type")),
+            }
+            feature_type = "ev_charging"
+        elif kind == "taxi_stand":
+            name = self._property(props, ("DURAK_ADI", "Durak Adi", "AD", "Ad", "NAME", "Name"))
+            source_id = self._property(props, ("ID", "Id", "DURAK_NO", "Durak No", "DURAK_ID", "Durak Id")) or str(index)
+            details = {
+                "address": self._property(props, ("ADRES", "Adres", "ADDRESS", "Address")),
+                "district": self._property(props, ("ILCE", "Ilce", "İLÇE", "District")),
+            }
+            feature_type = "taxi_stand"
+        else:
+            return None
+        lat, lon = point
+        return {
+            "id": f"{feature_type}:{source_id}",
+            "source": f"ibb_open_data_{feature_type}",
+            "feature_type": feature_type,
+            "source_id": str(source_id),
+            "name": str(name or f"{feature_type} {source_id}"),
+            "lat": lat,
+            "lon": lon,
+            "district": details.get("district"),
+            "properties": {key: value for key, value in details.items() if value not in (None, "")},
+        }
+
+    def _market_feature(self, row: dict[str, Any], index: int) -> dict[str, Any] | None:
+        point = parse_market_coordinate(row.get("Koordinat"))
+        if point is None:
+            return None
+        name = str(row.get("Pazar Adi") or "").strip()
+        if not name:
+            return None
+        lat, lon = point
+        source_id = str(row.get("_id") or index)
+        address = ", ".join(str(value).strip() for value in (row.get("Cadde"), row.get("Sokak")) if value)
+        return {
+            "id": f"market:{source_id}",
+            "source": "ibb_open_data_market",
+            "feature_type": "market",
+            "source_id": source_id,
+            "name": name,
+            "lat": lat,
+            "lon": lon,
+            "district": row.get("Ilce"),
+            "neighborhood": row.get("Mahalle"),
+            "properties": {
+                "day": row.get("Gun"),
+                "market_type": row.get("Pazar Tipi"),
+                "address": address or None,
+            },
         }
 
     def _wifi_feature(self, row: dict[str, Any]) -> dict[str, Any] | None:

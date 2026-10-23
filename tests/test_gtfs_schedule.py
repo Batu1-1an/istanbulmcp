@@ -241,7 +241,7 @@ async def test_feature_gate_and_discovery_surface(tmp_path):
     enabled = create_mcp_server(Settings(gtfs_schedule_enabled=True))
     assert "istanbul_next_departures" not in {t.name for t in await default.list_tools()}
     tools = {t.name: t for t in await enabled.list_tools()}
-    assert len(tools) == 16 and tools["istanbul_next_departures"].output_schema
+    assert len(tools) == 17 and tools["istanbul_next_departures"].output_schema
     f = feed(tmp_path, settings=Settings(database_path=tmp_path / "disabled.sqlite3"))
     async with f.http:
         result = await f.service.next_departures(stop_id="S1", at=AT)

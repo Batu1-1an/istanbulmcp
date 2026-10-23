@@ -1,8 +1,8 @@
 # GTFS planlı durak kalkışları — P0 uygulaması
 
 Tarih: 2026-10-23. Durum: **offline uygulandı, canlı kabul bekliyor**.
-Varsayılan `GTFS_SCHEDULE_ENABLED=false`; mevcut 15 araçlık yüzey korunur.
-Açılırsa `istanbul_next_departures` 16. tool olur. Railway deploy veya registry
+Varsayılan `GTFS_SCHEDULE_ENABLED=false`; mevcut 16 araçlık yüzey korunur.
+Açılırsa `istanbul_next_departures` 17. tool olur. Railway deploy veya registry
 publish bu çalışmada yapılmadı.
 
 ## Araştırma düzeltmesi: CSV tam tarife değil
@@ -143,8 +143,8 @@ Synthetic fixture'lar: [tests/fixtures/gtfs_schedule](../tests/fixtures/gtfs_sch
 restart ve snapshot uyumu; iki MCP protokolünde gerçek ASGI çağrısı kapsanır.
 Warm fixture p95 kontrolü **üretim benchmark'ı değildir**.
 
-2026-10-23 son yerel doğrulama: Python 3.12 ortamında **880 passed, 25 skipped**
-(63,96 saniye); skip'ler opt-in canlı testlerdir. Gerçek `python -m app.main`
+2026-10-23 son yerel doğrulama: Python 3.12 ortamında **902 passed, 25 skipped**
+(69,51 saniye); skip'ler opt-in canlı testlerdir. Gerçek `python -m app.main`
 subprocess smoke'u **13 kontrolü** geçti; dış veri API çağrısı yapmadı.
 `pip check`, Python compile kontrolü, yerel doküman linkleri ve `git diff --check`
 başarılı. Tam ZIP canlı testi, container build ve Railway deploy bu koşumun

@@ -102,6 +102,10 @@ class Settings:
     gtfs_stops_load_timeout_seconds: float = 20.0
     gtfs_stops_cache_ttl_seconds: int = 86400
     gtfs_stops_stale_if_error_seconds: int = 604800
+    open_data_layers_max_bytes: int = 8 * 1024 * 1024
+    open_data_layers_max_rows: int = 5000
+    open_data_layers_request_timeout_seconds: float = 5.0
+    open_data_layers_cache_ttl_seconds: int = 86400
     gtfs_schedule_enabled: bool = False
     gtfs_schedule_max_bytes: int = 64 * 1024 * 1024
     gtfs_schedule_max_uncompressed_bytes: int = 512 * 1024 * 1024
@@ -317,6 +321,10 @@ def get_settings() -> Settings:
         gtfs_stops_load_timeout_seconds=_float_env("GTFS_STOPS_LOAD_TIMEOUT_SECONDS", 20.0),
         gtfs_stops_cache_ttl_seconds=_int_env("GTFS_STOPS_CACHE_TTL_SECONDS", 86400),
         gtfs_stops_stale_if_error_seconds=_int_env("GTFS_STOPS_STALE_IF_ERROR_SECONDS", 604800),
+        open_data_layers_max_bytes=_int_env("OPEN_DATA_LAYERS_MAX_BYTES", 8 * 1024 * 1024),
+        open_data_layers_max_rows=_int_env("OPEN_DATA_LAYERS_MAX_ROWS", 5000),
+        open_data_layers_request_timeout_seconds=_float_env("OPEN_DATA_LAYERS_REQUEST_TIMEOUT_SECONDS", 5.0),
+        open_data_layers_cache_ttl_seconds=_int_env("OPEN_DATA_LAYERS_CACHE_TTL_SECONDS", 86400),
         gtfs_schedule_enabled=_bool_env("GTFS_SCHEDULE_ENABLED", False),
         gtfs_schedule_max_bytes=_int_env("GTFS_SCHEDULE_MAX_BYTES", 64 * 1024 * 1024),
         gtfs_schedule_max_uncompressed_bytes=_int_env("GTFS_SCHEDULE_MAX_UNCOMPRESSED_BYTES", 512 * 1024 * 1024),

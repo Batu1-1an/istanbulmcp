@@ -13,6 +13,7 @@ P = ParamSpec("P")
 STRUCTURED_TOOL_NAMES = frozenset({
     "istanbul_nearby", "istanbul_traffic_status", "istanbul_water_status",
     "istanbul_transit_line", "istanbul_transport_disruptions",
+    "istanbul_market_schedule",
 })
 STRUCTURED_LEGACY_TOOL_NAMES = frozenset({
     "istanbul_nobetci_eczane_nearby", "istanbul_nobetci_eczane_by_district",

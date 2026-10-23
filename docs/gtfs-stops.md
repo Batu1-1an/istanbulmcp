@@ -1,6 +1,6 @@
 # GTFS durak katmanı: onarım, sınırlar ve doğrulama
 
-Bu değişiklik yalnızca **statik durak konumlarını** onarır. Yeni tool, `next_departures`, canlı varış, tarife birleştirmesi veya A–B rota motoru eklemez. Varsayılan yüzey 15 araçtır.
+Bu değişiklik yalnızca **statik durak konumlarını** onarır. Yeni tool, `next_departures`, canlı varış, tarife birleştirmesi veya A–B rota motoru eklemez. Varsayılan yüzey 16 araçtır (pazar takvimi dahil).
 
 ## Kullanım
 

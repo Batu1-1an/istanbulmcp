@@ -51,7 +51,7 @@ def test_public_mode_is_the_default(monkeypatch, tmp_path):
         })
     assert status.status_code == 200
     assert status.json()["access"]["api_key_required"] is False
-    assert listed.status_code == 200 and len(listed.json()["result"]["tools"]) == 15
+    assert listed.status_code == 200 and len(listed.json()["result"]["tools"]) == 16
     assert called.status_code == 200 and not called.json()["result"].get("isError", False)
     # No key configured means no per-key daily quota is enforced.
     assert "x-ratelimit-limit" not in listed.headers

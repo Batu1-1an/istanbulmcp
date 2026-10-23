@@ -1,6 +1,6 @@
 # Istanbul MCP Tool Reference
 
-The default surface has **15 read-only tools**. Legacy names are opt-in via
+The default surface has **16 read-only tools**. Legacy names are opt-in via
 `MCP_LEGACY_TOOLS_ENABLED=true`; see the [migration table](tool-migration.md).
 The target count is a product decision, not a protocol limit. The optional
 `istanbul_next_departures` adds one tool only with `GTFS_SCHEDULE_ENABLED=true`;
@@ -46,13 +46,24 @@ not contact external data APIs or expose deployment secrets.
 tools; the travel workflow is not a route engine or live ETA. Arguments are
 bounded printable strings (1–200 characters per supplied value).
 
-Five default tools publish the canonical `ResponseEnvelope` output schema:
+Six default tools publish the canonical `ResponseEnvelope` output schema:
 `istanbul_nearby` (including pharmacy), `istanbul_traffic_status`,
-`istanbul_water_status`, `istanbul_transit_line`, `istanbul_transport_disruptions`.
+`istanbul_water_status`, `istanbul_transit_line`, `istanbul_transport_disruptions`
+and `istanbul_market_schedule`.
 Their `structuredContent` equals the backwards-compatible JSON text. Direct
 Python calls still return dictionaries; domain records inside `data` remain open
 objects. Expected `ok=false` envelopes are not MCP execution errors. When legacy
 names are enabled, the two pharmacy aliases also publish this schema.
+
+## Weekly market schedule
+
+`istanbul_market_schedule(district?, day?, limit?)` returns the published İBB
+weekly market snapshot. `day` accepts Turkish/English weekdays,
+`bugün/yarın/today/tomorrow`, or an ISO date. `district`
+is matched after Turkish-character normalization. Rows include district,
+neighborhood, day, market type, source coordinate, `maps_url` and source ID.
+Default limit is 50 (max 100). This is a weekly static schedule, not proof a
+market is open today; holidays, relocations and closures may differ.
 
 See [MCP interface and verification](mcp-interface.md) for protocol-era behavior,
 source-health caveats, output schema cost and official sources.
@@ -105,7 +116,7 @@ source access.
 
 | kind | Scope | Default radius |
 |---|---|---:|
-| `city_feature` (default) | Parking, metro station, AQ station locations, public transport stops, WiFi; filter with `types` | 1,000 m |
+| `city_feature` (default) | Parking, metro station, AQ station locations, public transport stops, WiFi, EV charging, taxi stands, weekly markets; filter with `types` | 1,000 m |
 | `parking` | ISPark capacity/availability; coordinates **or district** | 1,000 m |
 | `pharmacy` | Current on-duty İBB roster; coordinates **or district** | 1,000 m |
 | `istanbulkart` | Official static filling-center locations | 2,000 m |
@@ -120,7 +131,12 @@ validation error, never treated as "not supplied". Omitting `limit` (or sending
 `null`) selects the configured default. District lists never invent distances. `bbox` is
 `[min_lon,min_lat,max_lon,max_lat]`, available only with `kind="city_feature"`.
 `types` accepts `parking`, `metro_station`, `air_quality_station`,
-`public_transport_stop`, `wifi`; it does not apply to dedicated kinds.
+`public_transport_stop`, `wifi`, `ev_charging`, `taxi_stand`, `market`; it does
+not apply to dedicated kinds. EV/taxi/market rows are published static snapshots,
+not live operating status; market rows also carry the weekly `day` property.
+Cultural centres are address-only and are returned by
+`istanbul_city_services_nearby` as `address_search` records, not radius points.
+See [static city layers](city-static-layers.md) for source limits and provenance.
 
 Coordinates produce `maps_url`. Address-only results may have
 `maps_search_url` and `location_precision=address_search`, not a verified pin.

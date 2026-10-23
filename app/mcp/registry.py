@@ -21,6 +21,7 @@ DEFAULT_TOOL_NAMES = (
     "istanbul_city_services_nearby", "istanbul_neighborhood_profile",
     "istanbul_transit_line", "istanbul_transport_disruptions",
     "istanbul_metro_accessibility_status", "istanbul_datastore_query",
+    "istanbul_market_schedule",
 )
 
 LEGACY_TOOL_NAMES = (
@@ -43,6 +44,7 @@ TOOL_TITLES = {
     "istanbul_query_resource": "İBB kaynak kayıtları",
     "istanbul_datastore_query": "Sınırlı açık veri SQL sorgusu",
     "istanbul_nearby": "Yakındaki İstanbul hizmetleri",
+    "istanbul_market_schedule": "İstanbul pazar takvimi",
     "istanbul_traffic_status": "İstanbul trafik yoğunluğu",
     "istanbul_water_status": "İSKİ su ve baraj durumu",
     "istanbul_mobility_nearby": "Yakındaki ulaşım seçenekleri",
@@ -86,7 +88,9 @@ def create_mcp_server(settings: Settings) -> MCPServer:
         names += ("istanbul_next_departures",)
     for name in names:
         handler = getattr(handlers, name)
-        structured = name in STRUCTURED_TOOL_NAMES | STRUCTURED_LEGACY_TOOL_NAMES or name == "istanbul_next_departures"
+        structured = name in STRUCTURED_TOOL_NAMES | STRUCTURED_LEGACY_TOOL_NAMES or name in {
+            "istanbul_next_departures", "istanbul_market_schedule",
+        }
         if structured:
             handler = with_envelope_output(handler)
         server.add_tool(handler, title=TOOL_TITLES[name], annotations=READ_ONLY,

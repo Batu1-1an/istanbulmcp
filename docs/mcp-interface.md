@@ -152,14 +152,14 @@ tiplendiği veya şemanın veri doğruluğunu ispatladığı iddia edilmez.
 
 `python -m scripts.eval_tools` model çağırmadan gerçek kayıtlı yüzeyi ölçer:
 
-| Ölçü | Katman A |
+| Ölçü | Güncel yüzey (2026-10-23) |
 |---|---:|
-| Tool sayısı | 15 |
-| Şemalı varsayılan tool sayısı | 5 |
+| Tool sayısı | 16 |
+| Şemalı varsayılan tool sayısı | 6 |
 | Resource / prompt | 3 / 4 |
-| Output şemaları hariç tool tanımları | 10.522 UTF-8 byte |
-| Output şemaları dahil tool tanımları | 28.347 UTF-8 byte |
-| Output şemalarının ek maliyeti | 17.825 UTF-8 byte |
+| Output şemaları hariç tool tanımları | 12.356 UTF-8 byte |
+| Output şemaları dahil tool tanımları | 33.746 UTF-8 byte |
+| Output şemalarının ek maliyeti | 21.390 UTF-8 byte |
 
 A2 discovery kaynakları tool sayısını veya tools/list boyutunu artırmaz.
 A3 şemaları ise boyutu artırır; azaltılmış token maliyeti/iyileşmiş model başarısı
@@ -198,7 +198,7 @@ altındaki ikinci tablodadır.
 | `python -m pip check` | Bağımlılık uyuşmazlığı yok |
 | `python -m scripts.smoke_mcp` | 12 gerçek alt-süreç kontrolü geçti; public/keyed ve iki protokol dönemi |
 | Docker build | Başarılı, SDK 2.3.0 kuruldu |
-| Docker runtime | Non-root UID 1000, `--network none`; kurulu wheel'den SQLite readiness, modern discovery, 15 tool, coverage, Türkçe prompt ve structured validation geçti |
+| Docker runtime | Non-root UID 1000, `--network none`; o günkü 15 tool ile SQLite readiness, modern discovery, coverage, Türkçe prompt ve structured validation geçti |
 | `git diff --check` | Temiz |
 
 **GTFS onarımı sonrası güncel koşum (2026-10-22, yerel).**
@@ -208,7 +208,7 @@ altındaki ikinci tablodadır.
 | Python 3.12, mevcut `.venv`, tüm suite | **811 passed, 24 skipped** |
 | `python -m pip check` | Bağımlılık uyuşmazlığı yok |
 | `python -m scripts.smoke_mcp` | 12 gerçek alt-süreç kontrolü geçti |
-| `python -m scripts.eval_tools` | 15 tool, 5 şemalı tool, 3 resource, 4 prompt; 10.522 + 17.825 UTF-8 byte |
+| `python -m scripts.eval_tools` | O günkü 15 tool, 5 şemalı tool, 3 resource, 4 prompt; 10.522 + 17.825 UTF-8 byte |
 
 24 atlanan test opt-in canlı veri kontrolleridir; dış kaynakların güncel erişimi
 bu sonuçlarla doğrulanmış sayılmaz. Docker satırları ilk tablodaki koşumdan
