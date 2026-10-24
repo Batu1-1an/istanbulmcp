@@ -10,6 +10,7 @@ from app.services.neighborhood import (
     SOCIAL_ASSISTANCE_RESOURCE_ID,
     NeighborhoodService,
     normalize_neighborhood_text,
+    repair_neighborhood_name,
 )
 
 
@@ -105,12 +106,46 @@ async def test_neighborhood_profile_joins_sources_with_encoding_variants(tmp_pat
         "building_stock": True,
         "earthquake_scenario": True,
     }
-    assert profile["source_names"]["building_stock"] == "CAFERAÐA"
+    assert profile["source_names"]["building_stock"] == "CAFERAĞA"
+    assert profile["raw_source_names"]["building_stock"] == "CAFERAÐA"
     assert profile["indicators"]["social_assistance_households_2023"] == 13
     assert profile["indicators"]["buildings_by_age"]["before_1980"] == 100
     assert profile["indicators"]["earthquake_scenario"]["loss_of_life"] == 5
     assert profile["source_record_ids"]["building_stock_uavt"] == "12345"
     assert result["sources"][0]["resource_id"] == SOCIAL_ASSISTANCE_RESOURCE_ID
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("CAFERAÐA", "CAFERAĞA"),
+    ("HEYBELÝADA", "HEYBELİADA"),
+    ("PAÞABAHÇE", "PAŞABAHÇE"),
+    ("caferaða", "caferağa"),
+    ("ýþ", "ış"),
+    ("Caferağa", "Caferağa"),
+    ("19.May", "19.May"),
+])
+def test_repair_neighborhood_name_preserves_turkish_display_and_source_abbreviations(raw, expected):
+    assert repair_neighborhood_name(raw) == expected
+
+
+@pytest.mark.asyncio
+async def test_neighborhood_display_is_repaired_without_social_source(tmp_path):
+    class BuildingOnlyCkan(FakeCkan):
+        async def datastore_search(self, *, resource_id, **kwargs):
+            if resource_id != BUILDING_STOCK_RESOURCE_ID:
+                return {"records": [], "total": 0}
+            return await super().datastore_search(resource_id=resource_id, **kwargs)
+
+    svc = service(tmp_path)
+    svc.ckan = BuildingOnlyCkan()
+    profile = (await svc.profile(district="Kadıköy", neighborhood="Caferağa"))["data"][0]
+    district = await svc.profile(district="Kadıköy")
+
+    assert profile["neighborhood"] == "CAFERAĞA"
+    assert profile["source_names"]["building_stock"] == "CAFERAĞA"
+    assert profile["raw_source_names"]["building_stock"] == "CAFERAÐA"
+    assert profile["raw_source_names"]["social_assistance"] is None
+    assert "CAFERAĞA" in [row["neighborhood"] for row in district["data"]]
 
 
 @pytest.mark.asyncio

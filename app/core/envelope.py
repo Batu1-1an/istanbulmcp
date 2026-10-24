@@ -36,6 +36,8 @@ class Source(BaseModel):
     received_total: int | None = None
     accepted_total: int | None = None
     skipped_total: int | None = None
+    matched_total: int | None = None
+    returned_total: int | None = None
     license: str | None = "Istanbul Metropolitan Municipality Open Data License"
     url: str | None = None
 

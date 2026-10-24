@@ -143,3 +143,56 @@ async def test_adapter_retains_standard_source_error_envelope(monkeypatch):
     assert result.is_error is False
     assert result.structured_content == payload
     assert result.structured_content["freshness"]["status"] == "broken"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["legacy", "2026-07-28"])
+async def test_live_test_fixes_survive_real_service_and_mcp_serialization(mode, monkeypatch, tmp_path):
+    from app.connectors.city_open_data import OpenDataLayer
+    from app.core.source_cache import clear_source_cache
+    from app.services.city import CityService
+    from app.services.neighborhood import BUILDING_STOCK_RESOURCE_ID, NeighborhoodService
+
+    clear_source_cache()
+    settings = Settings(database_path=tmp_path / "live-test-fixes.sqlite3")
+    city = CityService(
+        settings=settings,
+        traffic_client=SimpleNamespace(index_history=AsyncMock(return_value=[{
+            "TrafficIndex": 33, "TrafficIndexDate": "2026-10-24T23:30:00",
+        }])),
+        ckan_client=SimpleNamespace(datastore_search=AsyncMock(return_value={"records": []})),
+        open_data_client=SimpleNamespace(layer=AsyncMock(return_value=OpenDataLayer(
+            kind="cultural_centre", rows=[{"Kültür Merkezi": "Beşiktaş Kültür", "İlçe": "Beşiktaş"}],
+            dataset_id="fixture", resource_id="fixture", source_url="https://example.test/culture",
+            reported_total=1, received_bytes=100, received_total=1,
+        ))),
+    )
+
+    async def neighborhood_rows(*, resource_id, **_kwargs):
+        rows = [{"ilce_adi": "KADIKÖY", "mahalle_adi": "CAFERAÐA"}] if resource_id == BUILDING_STOCK_RESOURCE_ID else []
+        return {"records": rows, "total": len(rows)}
+
+    neighborhood = NeighborhoodService(
+        settings=settings, ckan_client=SimpleNamespace(datastore_search=neighborhood_rows),
+    )
+    monkeypatch.setattr(handlers, "CityService", lambda **_kwargs: city)
+    monkeypatch.setattr(handlers, "NeighborhoodService", lambda **_kwargs: neighborhood)
+    async with Client(create_mcp_server(settings), mode=mode) as client:
+        traffic = await client.call_tool("istanbul_traffic_status", {})
+        assert not traffic.is_error
+        assert traffic.structured_content["data"][0]["measured_at"] == "2026-10-24T23:30:00+03:00"
+        assert json.loads(traffic.content[0].text) == traffic.structured_content
+
+        services = await client.call_tool("istanbul_city_services_nearby", {"place": "Kadıköy"})
+        assert not services.is_error
+        payload = json.loads(services.content[0].text)
+        source = next(s for s in payload["sources"] if s["resource_id"] == "fixture")
+        assert source["accepted_total"] == 1
+        assert source["skipped_total"] == source["matched_total"] == source["returned_total"] == 0
+        assert any("No cultural centre matched" in w for w in payload["warnings"])
+
+        profile = await client.call_tool("istanbul_neighborhood_profile", {"district": "Kadıköy", "neighborhood": "Caferağa"})
+        assert not profile.is_error
+        row = json.loads(profile.content[0].text)["data"][0]
+        assert row["neighborhood"] == row["source_names"]["building_stock"] == "CAFERAĞA"
+        assert row["raw_source_names"]["building_stock"] == "CAFERAÐA"

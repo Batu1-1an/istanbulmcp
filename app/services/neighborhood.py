@@ -318,6 +318,11 @@ class NeighborhoodService:
                 "earthquake_scenario": earthquake is not None,
             },
             "source_names": {
+                "social_assistance": repair_neighborhood_name(self._row_name(social, "MAHALLE")),
+                "building_stock": repair_neighborhood_name(self._row_name(building, "mahalle_adi")),
+                "earthquake_scenario": repair_neighborhood_name(self._row_name(earthquake, "mahalle_adi")),
+            },
+            "raw_source_names": {
                 "social_assistance": self._row_name(social, "MAHALLE"),
                 "building_stock": self._row_name(building, "mahalle_adi"),
                 "earthquake_scenario": self._row_name(earthquake, "mahalle_adi"),
@@ -397,8 +402,8 @@ class NeighborhoodService:
             if isinstance(row, dict):
                 value = row.get(key)
                 if value not in (None, ""):
-                    return str(value)
-        return fallback
+                    return repair_neighborhood_name(str(value))
+        return repair_neighborhood_name(fallback)
 
     def _row_name(self, row: dict[str, Any] | None, key: str) -> str | None:
         if not row:
@@ -413,8 +418,17 @@ class NeighborhoodService:
         ]
 
 
+def repair_neighborhood_name(value: str | None) -> str | None:
+    if value is None:
+        return None
+    # Turkish ISO-8859-9 characters decoded as ISO-8859-1 in these CKAN sources.
+    return unicodedata.normalize("NFKC", value).translate(str.maketrans({
+        "Ð": "Ğ", "ð": "ğ", "Ý": "İ", "ý": "ı", "Þ": "Ş", "þ": "ş",
+    }))
+
+
 def normalize_neighborhood_text(value: Any) -> str:
-    text = unicodedata.normalize("NFKC", str(value or "")).casefold()
+    text = repair_neighborhood_name(str(value or "")).casefold()
     text = text.translate(
         str.maketrans(
             {
@@ -424,12 +438,6 @@ def normalize_neighborhood_text(value: Any) -> str:
                 "ş": "s",
                 "ğ": "g",
                 "ç": "c",
-                "ý": "i",
-                "ð": "g",
-                "þ": "s",
-                "Ð": "g",
-                "Ý": "i",
-                "Þ": "s",
             }
         )
     )

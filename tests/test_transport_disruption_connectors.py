@@ -535,6 +535,60 @@ async def test_marmaray_client_accepts_official_api_empty_list():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("failure", [404, 410, 503, "timeout", "changed_markup"])
+async def test_marmaray_client_uses_configured_api_when_page_is_unavailable(failure):
+    requests = []
+
+    async def handler(request):
+        requests.append(request)
+        if request.url.path == "/page":
+            assert "authorization" not in request.headers
+            if failure == "timeout":
+                raise httpx.ConnectTimeout("page unavailable", request=request)
+            if failure == "changed_markup":
+                return httpx.Response(200, text=fixture_text("marmaray/urgent_notices_changed.html"))
+            return httpx.Response(failure)
+        assert request.url.host == "api.example.test"
+        assert request.headers["authorization"] == "Basic test-token"
+        return httpx.Response(200, json=json.loads(fixture_text("marmaray/urgent_notices_api_active.json")))
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        rows = await MarmarayClient(
+            url="https://page.example.test/page", api_url="https://api.example.test/api",
+            api_basic_token="test-token", http_client=http_client, rate_limiter=RecordingLimiter(),
+        ).urgent_notices()
+
+    assert len(rows) == 1
+    assert rows[0]["message"] == "Marmaray seferlerinde gecikme duyurusu"
+    assert sum(request.url.host == "api.example.test" for request in requests) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [401, 403, 429])
+async def test_marmaray_client_does_not_fallback_on_auth_or_quota_errors(status):
+    async with client_for("unavailable", url="https://example.test/page", status_code=status) as http_client:
+        with pytest.raises(httpx.HTTPStatusError) as error:
+            await MarmarayClient(
+                url="https://example.test/page", api_url="https://api.example.test/api",
+                api_basic_token="test-token", http_client=http_client, rate_limiter=RecordingLimiter(),
+            ).urgent_notices()
+    assert error.value.response.status_code == status
+
+
+@pytest.mark.asyncio
+async def test_marmaray_api_failure_is_not_reported_as_empty_success():
+    async def handler(request):
+        return httpx.Response(404)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        with pytest.raises(httpx.HTTPStatusError):
+            await MarmarayClient(
+                url="https://example.test/page", api_url="https://api.example.test/api",
+                api_basic_token="test-token", http_client=http_client, rate_limiter=RecordingLimiter(),
+            ).urgent_notices()
+
+
+@pytest.mark.asyncio
 async def test_marmaray_client_rejects_malformed_official_api_row():
     page_url = "https://example.test/marmaray/son-dakika"
     api_url = "https://example.test/api/MainPages/GetAnnouncementsByDateAndCategoryIdMarmarayAsync/1?year=2026&categoryid=1&pageSize=100&offset=0"

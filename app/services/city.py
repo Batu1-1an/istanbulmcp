@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from datetime import datetime
 import hashlib
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from app.connectors.ckan import CkanClient
 from app.connectors.city_open_data import CityOpenDataClient, OpenDataLayer, OpenDataLayerError, parse_market_coordinate
@@ -204,11 +206,15 @@ class CityService:
         except (TypeError, ValueError):
             numeric_index = None
         label = self._traffic_label(numeric_index)
+        measured_at = self._traffic_timestamp(latest.get("TrafficIndexDate"))
+        warnings = ["Traffic source does not provide crash or incident details."]
+        if measured_at is None:
+            warnings.append("Traffic source measurement timestamp is missing or invalid.")
         data = [
             {
                 "traffic_index": numeric_index,
                 "label": label,
-                "measured_at": latest.get("TrafficIndexDate"),
+                "measured_at": measured_at,
                 "capabilities": {
                     "supports": ["citywide traffic index"],
                     "does_not_support": ["road-level congestion", "incident details", "crash reports"],
@@ -219,10 +225,23 @@ class CityService:
             summary=f"Istanbul traffic index is {numeric_index} ({label})." if numeric_index is not None else "Traffic source returned no index.",
             data=data,
             sources=[CITY_SOURCE],
-            freshness=Freshness(status="fresh", source_updated_at=latest.get("TrafficIndexDate"), ttl_seconds=120),
+            freshness=Freshness(status="fresh", source_updated_at=measured_at, ttl_seconds=120),
             limits=["citywide traffic index", "no incident or road-level detail"],
-            warnings=["Traffic source does not provide crash or incident details."],
+            warnings=warnings,
         )
+
+    @staticmethod
+    def _traffic_timestamp(value: Any) -> str | None:
+        if not isinstance(value, str) or len(value.strip()) <= 10:
+            return None
+        try:
+            measured_at = datetime.fromisoformat(value.strip())
+        except ValueError:
+            return None
+        # IBB publishes naive TrafficIndexDate values in Istanbul local time.
+        if measured_at.tzinfo is None:
+            measured_at = measured_at.replace(tzinfo=ZoneInfo("Europe/Istanbul"))
+        return measured_at.isoformat()
 
     async def mobility_nearby(
         self,
@@ -396,6 +415,12 @@ class CityService:
                     resolved.district, limit=safe_limit,
                 )
                 warnings.append("Cultural-centre results are address-search records, not verified coordinates.")
+                if cultural_source.matched_total == 0:
+                    warnings.append(f"No cultural centre matched district {resolved.district} in the published dataset.")
+                if cultural_source.skipped_total:
+                    warnings.append(
+                        f"Skipped {cultural_source.skipped_total} cultural-centre row(s) with missing name or district."
+                    )
             except Exception as exc:
                 warnings.append(f"Cultural-centre records unavailable: {type(exc).__name__}.")
         else:
@@ -585,7 +610,10 @@ class CityService:
             loader=loader,
         )
 
-    def _open_data_source(self, payload: OpenDataLayer, *, accepted: int) -> Source:
+    def _open_data_source(
+        self, payload: OpenDataLayer, *, accepted: int,
+        matched: int | None = None, returned: int | None = None,
+    ) -> Source:
         return Source(
             name=OPEN_DATA_SOURCE_NAMES[payload.kind],
             dataset_id=payload.dataset_id,
@@ -596,6 +624,8 @@ class CityService:
             received_total=payload.received_total,
             accepted_total=accepted,
             skipped_total=payload.received_total - accepted,
+            matched_total=matched,
+            returned_total=returned,
             last_successful_refresh_at=payload.fetched_at,
         )
 
@@ -808,15 +838,17 @@ class CityService:
         payload = await self._open_data_layer("cultural_centre")
         wanted = self._normalize_text(district)
         rows: list[dict[str, Any]] = []
+        accepted = 0
         for row in payload.rows:
             address = self._property(row, ("ADRES", "Adres", "Address", "ADDRESS"))
             row_district = self._property(row, ("ILCE", "Ilce", "İLÇE", "District"))
             if not row_district:
                 row_district = district_from_text(str(address or ""))
-            if self._normalize_text(row_district) != wanted:
-                continue
             name = self._property(row, ("KÜLTÜR MERKEZİ", "Kültür Merkezi", "KÜLTÜR MERKEZİ ADI", "Kültür Merkezi Adı", "AD", "Ad", "NAME", "Name"))
-            if not name:
+            if not name or not row_district:
+                continue
+            accepted += 1
+            if self._normalize_text(row_district) != wanted:
                 continue
             item = {
                 "name": str(name),
@@ -829,7 +861,10 @@ class CityService:
             if maps_search_url := google_maps_search_url(name, address, row_district, "İstanbul"):
                 item["maps_search_url"] = maps_search_url
             rows.append(item)
-        return rows[:limit], self._open_data_source(payload, accepted=len(rows))
+        returned = rows[:limit]
+        return returned, self._open_data_source(
+            payload, accepted=accepted, matched=len(rows), returned=len(returned),
+        )
 
     def _ispark_feature(self, park: dict[str, Any]) -> dict[str, Any]:
         return {

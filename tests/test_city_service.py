@@ -338,6 +338,38 @@ async def test_traffic_status_returns_label(tmp_path):
     assert "road-level congestion" in result["data"][0]["capabilities"]["does_not_support"]
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("source_time", "expected"), [
+    ("2026-10-24T23:30:00", "2026-10-24T23:30:00+03:00"),
+    ("2026-10-24T23:30:00+03:00", "2026-10-24T23:30:00+03:00"),
+    ("2026-10-24T20:30:00Z", "2026-10-24T20:30:00+00:00"),
+    ("2026-10-24T20:30:00+00:00", "2026-10-24T20:30:00+00:00"),
+    (None, None),
+    ("not-a-date", None),
+    ("2026-10-24", None),
+])
+async def test_traffic_timestamps_are_timezone_aware_or_explicitly_missing(tmp_path, source_time, expected):
+    svc = service(tmp_path)
+
+    async def index_history():
+        return [{"TrafficIndex": 33, "TrafficIndexDate": source_time}]
+
+    svc.traffic.index_history = index_history
+    result = await svc.traffic_status()
+
+    assert result["data"][0]["measured_at"] == expected
+    assert result["freshness"]["source_updated_at"] == expected
+    if expected is None:
+        assert any("measurement timestamp" in warning for warning in result["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_mobility_summary_uses_timezone_aware_traffic_timestamp(tmp_path):
+    result = await service(tmp_path).mobility_nearby(place="Taksim", limit=5)
+
+    assert result["data"][0]["traffic"]["measured_at"] == "2026-06-12T15:05:00+03:00"
+
+
 class OldestFirstAir(FakeAir):
     def __init__(self, newest_has_aqi: bool):
         super().__init__()

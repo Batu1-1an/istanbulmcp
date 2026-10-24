@@ -139,14 +139,26 @@ class MarmarayClient:
         self._rate_limiter = rate_limiter or transport_notice_rate_limiter()
 
     async def urgent_notices(self) -> list[dict[str, Any]]:
+        try:
+            return await self._get_page_notices()
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            if not self.api_basic_token or not (status in {404, 410} or 500 <= status < 600):
+                raise
+        except (httpx.RequestError, MarmarayPayloadError):
+            if not self.api_basic_token:
+                raise
+        # Use only the existing configured official API. Do not treat a failed
+        # page (or failed API) as a checked-empty list of notices.
+        return await self._get_api_notices()
+
+    async def _get_page_notices(self) -> list[dict[str, Any]]:
         html = await self._get_html()
         parser = _UrgentNoticeParser()
         parser.feed(html)
         parser.close()
         if not parser.page_seen:
             if "<app-root" in html.lower():
-                if self.api_basic_token:
-                    return await self._get_api_notices()
                 raise MarmarayPayloadError(
                     "Marmaray page is an Angular shell without rendered urgent notices"
                 )

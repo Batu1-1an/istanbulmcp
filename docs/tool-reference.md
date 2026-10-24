@@ -203,13 +203,21 @@ publish station metadata with missing AQI/concentration values.
 `kind="city_feature", types=["air_quality_station"]` includes locations only.
 
 - `istanbul_traffic_status()`: citywide index, not road-level incidents.
+  `measured_at` and `freshness.source_updated_at` use timezone-aware ISO 8601.
+  Naive source timestamps are interpreted as `Europe/Istanbul`; existing offsets
+  are preserved. Missing/invalid timestamps are null and produce a warning.
 - `istanbul_mobility_nearby(place?,lat?,lon?,radius_m?,limit?)`: parking, metro,
   stops, station locations and traffic summary. Curated reference places such as
   Kadıköy Rıhtım/Taksim/Levent are accepted. District names yield district-wide
   parking without synthetic proximity.
 - `istanbul_city_services_nearby(place?,lat?,lon?,radius_m?,limit?)`: WiFi plus
-  district-level library addresses/hours. Libraries without coordinates are
-  marked as district-level and can have map-search links.
+  district-level library and cultural-centre addresses/hours. Libraries without
+  coordinates are marked as district-level and can have map-search links.
+  Cultural-centre source counts distinguish usable snapshot records
+  (`accepted_total`), invalid records (`skipped_total`), district matches before
+  the result limit (`matched_total`), and returned records (`returned_total`).
+  Records in other districts are not invalid. Zero district matches produce an
+  explicit warning; absence in this dataset is not proof no centre exists.
 
 ## Water
 
@@ -231,6 +239,9 @@ official 2023 social-assistance, building-stock and earthquake-scenario resource
 District only lists covered neighborhoods; neighborhood selects one joined
 profile. Matching tolerates Turkish characters, source mojibake and published
 abbreviations. Scenario records are **not real-time risk or emergency guidance**.
+Display names and `source_names` repair the known Turkish source-encoding variants
+(`CAFERAÐA` → `CAFERAĞA`). `raw_source_names` retains the original source spellings
+for provenance; numeric indicators and source record IDs are unchanged.
 
 ## Transit
 
@@ -259,8 +270,11 @@ taksi-dolmuş) remain explicit limits.
 
 The Şehir Hatları relay is for **cancellation notices only**. A dated general
 notice without a line identifier remains a global record. HTTP 403 becomes
-unavailable, not checked-empty. Marmaray can fall back from an Angular shell
-to the official frontend API using configured `MARMARAY_API_BASIC_TOKEN`.
+unavailable, not checked-empty. With configured `MARMARAY_API_BASIC_TOKEN`, Marmaray
+can fall back to the existing official frontend API when its page is an Angular
+shell, has unrecognized markup, returns HTTP 404/410/5xx, or has a transport
+failure. HTTP 401/403/429 do not trigger this fallback. API failures still become
+unavailable, not checked-empty; no token or new endpoint is inferred.
 
 ### Ferry timetable gate
 

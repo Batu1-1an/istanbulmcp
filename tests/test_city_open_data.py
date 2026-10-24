@@ -265,6 +265,51 @@ async def test_cultural_centres_are_address_search_not_radius_points(tmp_path):
     assert cultural[0]["maps_search_url"].startswith("https://www.google.com/maps/search/")
     assert "maps_url" not in cultural[0]
     assert any("address-search" in warning for warning in result["warnings"])
+    source = next(s for s in result["sources"] if s["resource_id"] == "r")
+    assert source["accepted_total"] == 2
+    assert source["skipped_total"] == 0
+    assert source["matched_total"] == source["returned_total"] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("limit", [1, 5])
+async def test_cultural_centres_separate_invalid_filtered_and_limited_rows(tmp_path, limit):
+    rows = [
+        {"Kültür Merkezi": "Kadıköy Kültür 1", "İlçe": "Kadıköy"},
+        {"Kültür Merkezi": "Kadıköy Kültür 2", "İlçe": "Kadıköy"},
+        {"Kültür Merkezi": "Beşiktaş Kültür", "İlçe": "Beşiktaş"},
+        {"Adres": "Kadıköy test", "İlçe": "Kadıköy"},
+        {"Kültür Merkezi": "Unknown district"},
+    ]
+    svc = geo_service(tmp_path, FakeOpenData({
+        "cultural_centre": payload("cultural_centre", rows, url=CULTURAL_URL, resource_id="r"),
+    }), FakeCkan())
+    result = await svc.city_services_nearby(place="Kadıköy", limit=limit)
+    source = next(s for s in result["sources"] if s["resource_id"] == "r")
+
+    assert source["received_total"] == 5
+    assert source["accepted_total"] == 3
+    assert source["skipped_total"] == 2
+    assert source["matched_total"] == 2
+    assert source["returned_total"] == min(limit, 2)
+    assert len(result["data"][0]["cultural_centres"]) == min(limit, 2)
+    assert any("2 cultural-centre row(s)" in warning for warning in result["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_cultural_centres_report_checked_empty_without_discarding_other_districts(tmp_path):
+    rows = [{"Kültür Merkezi": "Beşiktaş Kültür", "İlçe": "Beşiktaş"}]
+    svc = geo_service(tmp_path, FakeOpenData({
+        "cultural_centre": payload("cultural_centre", rows, url=CULTURAL_URL, resource_id="r"),
+    }), FakeCkan())
+    result = await svc.city_services_nearby(place="Kadıköy")
+    source = next(s for s in result["sources"] if s["resource_id"] == "r")
+
+    assert result["data"][0]["cultural_centres"] == []
+    assert source["accepted_total"] == 1
+    assert source["skipped_total"] == 0
+    assert source["matched_total"] == source["returned_total"] == 0
+    assert any("No cultural centre matched" in warning for warning in result["warnings"])
 
 
 @pytest.mark.asyncio
