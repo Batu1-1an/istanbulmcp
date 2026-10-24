@@ -55,12 +55,16 @@ class TransitService:
             }
             for row in rows
         ]
+        warnings = []
+        if not data:
+            warnings.append(f"IETT line code {safe_line_code} was not found in the published line list.")
         return success_envelope(
             summary=f"{len(data)} IETT line record(s) found for {safe_line_code}.",
             data=data,
             sources=[IETT_SOURCE],
             freshness=Freshness(status="fresh", ttl_seconds=60 * 60 * 6),
             limits=["IETT SOAP may be unavailable during nightly maintenance."],
+            warnings=warnings,
         )
 
     async def stops_for_line(self, line_code: str) -> dict[str, Any]:

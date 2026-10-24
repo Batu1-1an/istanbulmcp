@@ -3,7 +3,7 @@ import asyncio
 import httpx
 import pytest
 
-from app.connectors.ckan import CkanClient
+from app.connectors.ckan import CkanClient, CkanNotFoundError
 from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
 from app.core.source_cache import clear_source_cache
@@ -52,6 +52,17 @@ class FailingCkan:
 
     async def datastore_search(self, **_kwargs):
         raise RuntimeError("ckan down")
+
+
+class NotFoundCkan:
+    async def package_search(self, **_kwargs):
+        return {"count": 0, "results": []}
+
+    async def package_show(self, _dataset_id):
+        raise CkanNotFoundError("missing")
+
+    async def datastore_search(self, **_kwargs):
+        raise CkanNotFoundError("missing")
 
 
 class CountingCkan:
@@ -267,3 +278,58 @@ async def test_query_resource_names_valid_fields_for_unknown_filter(tmp_path):
 
     assert result["ok"] is False
     assert "day" in result["summary"] and "Gun" in result["summary"]
+
+
+@pytest.mark.asyncio
+async def test_get_dataset_not_found_is_not_a_source_outage(tmp_path):
+    clear_source_cache()
+    settings = Settings(database_path=tmp_path / "catalog.sqlite3")
+    service = CatalogService(
+        settings=settings,
+        client=NotFoundCkan(),
+        repository=CatalogRepository(settings.database_path),
+    )
+
+    result = await service.get_dataset("not-a-dataset")
+
+    assert result["ok"] is False
+    assert result["freshness"]["status"] == "unknown"
+    assert result["data"][0]["error_code"] == "not_found"
+    assert result["data"][0]["field"] == "dataset_id"
+    assert "not found" in result["summary"].casefold()
+
+
+@pytest.mark.asyncio
+async def test_get_resource_schema_not_found_is_not_a_source_outage(tmp_path):
+    clear_source_cache()
+    settings = Settings(database_path=tmp_path / "catalog.sqlite3")
+    service = CatalogService(
+        settings=settings,
+        client=NotFoundCkan(),
+        repository=CatalogRepository(settings.database_path),
+    )
+
+    result = await service.get_resource_schema("not-a-resource")
+
+    assert result["ok"] is False
+    assert result["freshness"]["status"] == "unknown"
+    assert result["data"][0]["error_code"] == "not_found"
+    assert result["data"][0]["field"] == "resource_id"
+
+
+@pytest.mark.asyncio
+async def test_query_resource_not_found_is_not_a_source_outage(tmp_path):
+    clear_source_cache()
+    settings = Settings(database_path=tmp_path / "catalog.sqlite3")
+    service = CatalogService(
+        settings=settings,
+        client=NotFoundCkan(),
+        repository=CatalogRepository(settings.database_path),
+    )
+
+    result = await service.query_resource(resource_id="not-a-resource", limit=3)
+
+    assert result["ok"] is False
+    assert result["freshness"]["status"] == "unknown"
+    assert result["data"][0]["error_code"] == "not_found"
+    assert result["data"][0]["field"] == "resource_id"

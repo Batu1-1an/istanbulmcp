@@ -15,6 +15,10 @@ class CkanError(RuntimeError):
     pass
 
 
+class CkanNotFoundError(CkanError):
+    """The CKAN action is reachable, but the requested ID does not exist."""
+
+
 class CkanClient:
     def __init__(
         self,
@@ -48,9 +52,22 @@ class CkanClient:
                 json=payload,
                 rate_limiter=self._rate_limiter,
             )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                raise CkanNotFoundError(f"CKAN {action} target not found") from exc
+            raise
         body = response.json()
         if not body.get("success", False):
+            error = body.get("error")
+            message = str(error.get("message", "")) if isinstance(error, dict) else str(error or "")
+            not_found_type = (
+                str(error.get("__type", "")).casefold() == "not found error"
+                if isinstance(error, dict) else False
+            )
+            if not_found_type or "not found" in message.casefold():
+                raise CkanNotFoundError(f"CKAN {action} target not found")
             raise CkanError(f"CKAN action failed: {action}")
         return body["result"]
 

@@ -35,6 +35,24 @@ def validation_error_envelope(
     )
 
 
+def not_found_envelope(
+    *,
+    summary: str,
+    warning: str,
+    field: str,
+    sources: list[Source] | None = None,
+    limits: list[str] | None = None,
+) -> dict[str, Any]:
+    return error_envelope(
+        summary=summary,
+        warning=warning,
+        sources=sources,
+        freshness_status="unknown",
+        data=[{"error_code": "not_found", "field": field, "message": warning}],
+        limits=limits or [f"field={field}"],
+    )
+
+
 def source_error_envelope(
     *,
     summary: str,

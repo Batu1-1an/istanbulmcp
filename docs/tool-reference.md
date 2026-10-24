@@ -80,6 +80,11 @@ Search results expose `relevance`, `datastore_active_count`, and
 scalar/scalar-list filters; this endpoint is **not SQL**. Metadata and record
 calls use TTL caches and source rate limits.
 
+An unknown dataset or resource ID returns a `not_found` error with
+`field=dataset_id` or `field=resource_id` and `freshness=unknown`. This means the
+identifier does not exist; it does **not** mean CKAN is unavailable. A reachable
+CKAN failure still returns `source_unavailable` with `freshness=broken`.
+
 ### Guarded local SQL
 
 `istanbul_datastore_query(resource_id,sql,limit?)` runs one SQLite SELECT over
@@ -251,6 +256,9 @@ for provenance; numeric indicators and source record IDs are unchanged.
 - `stops`: ordered stops with directions/maps links.
 - `departures`: planned **main-terminal** departures, not intermediate-stop ETA.
   Only this action accepts limit (20/100 by default).
+
+An empty `info` result is a checked-empty answer with a “line code not found”
+warning.
 
 IETT SOAP can be unavailable during maintenance; failures are structured.
 

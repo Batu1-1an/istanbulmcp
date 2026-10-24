@@ -96,6 +96,11 @@ class MalformedIett(FakeIett):
         ]
 
 
+class EmptyLineIett(FakeIett):
+    async def line_info(self, line_code):
+        return []
+
+
 class DuplicateIett(FakeIett):
     async def disruptions(self):
         rows = await super().disruptions()
@@ -135,6 +140,24 @@ async def test_line_info_returns_envelope(tmp_path):
 
     assert result["data"][0]["line_code"] == "34A"
     assert result["sources"][0]["name"] == "IETT SOAP Services"
+
+
+@pytest.mark.asyncio
+async def test_line_info_not_found_returns_checked_empty_with_warning(tmp_path):
+    clear_source_cache()
+    settings = Settings(database_path=tmp_path / "transit.sqlite3")
+    svc = TransitService(
+        settings=settings,
+        iett_client=EmptyLineIett(),
+        geo_repository=GeoRepository(settings.database_path),
+    )
+
+    result = await svc.line_info("ZZZ999")
+
+    assert result["ok"] is True
+    assert result["data"] == []
+    assert result["freshness"]["status"] == "fresh"
+    assert any("not found" in warning.casefold() for warning in result["warnings"])
 
 
 @pytest.mark.asyncio

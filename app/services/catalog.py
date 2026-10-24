@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from app.connectors.ckan import CkanClient
+from app.connectors.ckan import CkanClient, CkanNotFoundError
 from app.core.envelope import Freshness, Pagination, Source, error_envelope, success_envelope
-from app.core.error_responses import source_error_envelope, validation_error_envelope
+from app.core.error_responses import not_found_envelope, source_error_envelope, validation_error_envelope
 from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
 from app.core.source_cache import cached_source_data
@@ -76,6 +76,14 @@ class CatalogService:
             return validation_error_envelope(exc, sources=[IBB_SOURCE])
         try:
             dataset = await self._cached_package_show(safe_dataset_id)
+        except CkanNotFoundError:
+            return not_found_envelope(
+                summary=f"Dataset not found: {safe_dataset_id}.",
+                warning=f"No IBB dataset matches dataset_id={safe_dataset_id}.",
+                field="dataset_id",
+                sources=[IBB_SOURCE],
+                limits=["source=CKAN package_show"],
+            )
         except SourceRateLimitExceeded as exc:
             return self._rate_limited("CKAN package_show", exc)
         except Exception as exc:
@@ -96,6 +104,14 @@ class CatalogService:
             return validation_error_envelope(exc, sources=[IBB_SOURCE])
         try:
             result = await self._cached_datastore_search(resource_id=safe_resource_id, limit=0)
+        except CkanNotFoundError:
+            return not_found_envelope(
+                summary=f"Resource not found: {safe_resource_id}.",
+                warning=f"No IBB DataStore resource matches resource_id={safe_resource_id}.",
+                field="resource_id",
+                sources=[IBB_SOURCE],
+                limits=["source=CKAN datastore_search"],
+            )
         except SourceRateLimitExceeded as exc:
             return self._rate_limited("CKAN datastore_search", exc)
         except Exception as exc:
@@ -136,6 +152,14 @@ class CatalogService:
                 resource_id=safe_resource_id,
                 filters=safe_filters,
                 limit=safe_limit,
+            )
+        except CkanNotFoundError:
+            return not_found_envelope(
+                summary=f"Resource not found: {safe_resource_id}.",
+                warning=f"No IBB DataStore resource matches resource_id={safe_resource_id}.",
+                field="resource_id",
+                sources=[IBB_SOURCE],
+                limits=["source=CKAN datastore_search"],
             )
         except SourceRateLimitExceeded as exc:
             return self._rate_limited("CKAN datastore_search", exc)
