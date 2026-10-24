@@ -1,5 +1,7 @@
 """Both protocol eras share the guarded, stateless HTTP endpoint."""
 import json
+import tomllib
+from pathlib import Path
 
 import pytest
 from starlette.testclient import TestClient
@@ -50,7 +52,8 @@ def test_legacy_initialize_keeps_identity_capabilities_and_stateless_mode(versio
     assert "mcp-session-id" not in response.headers
     result = response.json()["result"]
     assert result["protocolVersion"] == version
-    assert result["serverInfo"] == {"name": "istanbul-mcp", "title": "Istanbul MCP", "version": "0.1.0"}
+    project_version = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text())["project"]["version"]
+    assert result["serverInfo"] == {"name": "istanbul-mcp", "title": "Istanbul MCP", "version": project_version}
     assert {"tools", "resources", "prompts"} <= result["capabilities"].keys()
 
 
