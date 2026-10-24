@@ -692,7 +692,7 @@ async def test_mobility_nearby_returns_district_parking_for_uncurated_district_t
 
 @pytest.mark.asyncio
 async def test_city_services_nearby_filters_wifi_and_returns_district_libraries(tmp_path):
-    result = await service(tmp_path).city_services_nearby(place="Kadıköy", radius_m=600, limit=5)
+    result = await service(tmp_path).city_services_nearby(place="Kadıköy Rıhtım", radius_m=600, limit=5)
 
     payload = result["data"][0]
     assert result["ok"] is True

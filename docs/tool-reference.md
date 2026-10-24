@@ -114,6 +114,29 @@ Structured/text envelopes match.
 
 See [GTFS schedule limits and acceptance](gtfs-schedule.md).
 
+## Named-place and district summaries
+
+`istanbul_mobility_nearby(place?,lat?,lon?,radius_m=1500,limit?,district?)`
+and `istanbul_city_services_nearby(place?,lat?,lon?,radius_m=1500,limit?,district?)`
+accept all 39 Istanbul districts (Turkish/ASCII names). Explicit `district` is
+exclusive with `place` and coordinates. District-only `place` requests, including
+`Pendik merkez`, use the same mode. They never invent a district centroid:
+
+- Mobility returns district parking only; other mobility components are not checked.
+- City services return district library/cultural-centre addresses; WiFi is not checked.
+- District mode does not apply radius or show distances; the per-section limit applies.
+
+Point mode supports the existing curated names plus Bostancı, Karaköy, Nişantaşı
+and district-qualified Acıbadem. Bare Acıbadem returns `ambiguous_place`; specify
+`Acıbadem, Kadıköy` or `Acıbadem, Üsküdar`. New points carry Wikidata CC0 source
+revisions. These are area reference points, not full address geocoding, official
+boundaries or exact user locations. Unrecognized addresses fail validation;
+mentioning a district inside an address does not resolve it.
+
+City-service source failures remain explicit: partial results have unknown
+freshness; total failure returns `ok=false`, not a fresh empty result.
+See [place resolution](place-resolution.md).
+
 ## Unified location search
 
 `istanbul_nearby(lat?, lon?, types?, radius_m?, limit?, kind?, district?, bbox?)`

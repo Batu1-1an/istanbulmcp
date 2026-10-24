@@ -3,7 +3,7 @@
   "name": "io.github.Batu1-1an/istanbul-mcp",
   "title": "Istanbul MCP",
   "description": "Read-only Istanbul open city data: transport, parking, water, nearby services and datasets.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "repository": {
     "url": "https://github.com/Batu1-1an/istanbulmcp",
     "source": "github"

@@ -26,7 +26,10 @@ from app.core.validation import (
     InputValidationError, resolve_limit, validate_bbox, validate_lat_lon, validate_radius,
     validate_text,
 )
-from app.services.places import ResolvedPlace, district_from_text, is_district_place, known_place_names, normalize_place, resolve_place
+from app.services.places import (
+    ResolvedPlace, district_from_text, known_place_names, normalize_place,
+    place_candidates, resolve_district, resolve_place,
+)
 from app.storage.geo import GeoRepository
 
 
@@ -251,28 +254,20 @@ class CityService:
         lon: float | None = None,
         radius_m: int = 1500,
         limit: int | None = None,
+        district: str | None = None,
     ) -> dict:
-        if place and lat is None and lon is None:
-            try:
-                place = validate_text(place, field="place", max_length=120)
-            except InputValidationError as exc:
-                return validation_error_envelope(exc, sources=[CITY_SOURCE, OPEN_DATA_SOURCE])
-            resolved_place = resolve_place(place)
-            if resolved_place and is_district_place(resolved_place):
-                district = district_from_text(place) or resolved_place.district or resolved_place.name
-                return await self._district_parking_fallback(district=district, limit=limit)
-            if resolved_place is None:
-                district = district_from_text(place)
-                if district:
-                    return await self._district_parking_fallback(district=district, limit=limit)
-
         try:
+            district_name = self._district_request(place=place, lat=lat, lon=lon, district=district)
+            validate_radius(radius_m, self.settings.max_radius_m)
+            safe_limit = resolve_limit(limit, self.settings.default_limit, self.settings.max_limit)
+            if district_name is not None:
+                return await self._district_parking_fallback(district=district_name, limit=safe_limit)
             resolved = self._resolve_location(place=place, lat=lat, lon=lon)
             safe_limit = self._validate_geo(resolved.lat, resolved.lon, radius_m, limit)
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[CITY_SOURCE, OPEN_DATA_SOURCE])
 
-        warnings: list[str] = []
+        warnings: list[str] = self._place_warnings(resolved)
         gtfs_source = self._unavailable_gtfs_source()
         gtfs_cached: CachedSourceData | None = None
         air_failed = False
@@ -342,6 +337,7 @@ class CityService:
             sources=[
                 CITY_SOURCE,
                 gtfs_source,
+                *self._place_sources(resolved),
             ],
             freshness=Freshness(status="unknown" if partial else "stale" if stale else "fresh", ttl_seconds=300),
             limits=[f"radius_m={radius_m}", f"limit_per_section={safe_limit}", "traffic=citywide", *self._gtfs_limits()],
@@ -376,7 +372,8 @@ class CityService:
             sources=[CITY_SOURCE],
             freshness=Freshness(status="fresh", ttl_seconds=self.settings.ispark_cache_ttl_seconds),
             limits=parking.get("limits", []),
-            warnings=parking.get("warnings", []),
+            warnings=[*parking.get("warnings", []),
+                      "Only district-wide parking was checked. Metro, bus stops, air quality and traffic were not checked; radius_m is not applied."],
             next_queries=["Mesafe önemliyse net bir yer adı, durak, meydan veya koordinat verin."],
         )
 
@@ -388,63 +385,94 @@ class CityService:
         lon: float | None = None,
         radius_m: int = 1500,
         limit: int | None = None,
+        district: str | None = None,
     ) -> dict:
         try:
-            resolved = self._resolve_location(place=place, lat=lat, lon=lon)
-            safe_limit = self._validate_geo(resolved.lat, resolved.lon, radius_m, limit)
+            district_name = self._district_request(place=place, lat=lat, lon=lon, district=district)
+            safe_limit = resolve_limit(limit, self.settings.default_limit, self.settings.max_limit)
+            validate_radius(radius_m, self.settings.max_radius_m)
+            resolved = None if district_name else self._resolve_location(place=place, lat=lat, lon=lon)
+            if resolved is not None:
+                district_name = resolved.district
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[OPEN_DATA_SOURCE])
 
-        warnings: list[str] = []
+        warnings = self._place_warnings(resolved) if resolved is not None else [
+            "District-wide address records only; no reference coordinates or distances were invented. WiFi was not checked; radius_m is not applied."
+        ]
+        failed = False
         wifi: list[dict[str, Any]] = []
         libraries: list[dict[str, Any]] = []
         cultural_centres: list[dict[str, Any]] = []
         cultural_source: Source | None = None
-        try:
-            wifi = await self._wifi_nearby(lat=resolved.lat, lon=resolved.lon, radius_m=radius_m, limit=safe_limit)
-        except Exception as exc:
-            warnings.append(f"WiFi locations unavailable: {type(exc).__name__}.")
-        if resolved.district:
+        wifi_source = Source(name="IBB Open Data Portal - WiFi locations", resource_id=WIFI_LOCATIONS_RESOURCE_ID,
+                             url="https://data.ibb.gov.tr", scope="radius", coverage_status="unavailable")
+        library_source = Source(name="IBB Open Data Portal - Library locations", resource_id=LIBRARY_LOCATIONS_RESOURCE_ID,
+                                url="https://data.ibb.gov.tr", scope="district", coverage_status="unavailable")
+        if resolved is not None:
             try:
-                libraries = await self._libraries_for_district(resolved.district, limit=safe_limit)
+                wifi = await self._wifi_nearby(lat=resolved.lat, lon=resolved.lon, radius_m=radius_m, limit=safe_limit)
+                wifi_source.coverage_status = "checked"
+            except Exception as exc:
+                failed = True
+                warnings.append(f"WiFi locations unavailable: {type(exc).__name__}.")
+        if district_name:
+            try:
+                libraries = await self._libraries_for_district(district_name, limit=safe_limit)
+                library_source.coverage_status = "checked"
                 warnings.append("Library results are district-level address records, not radius-precise coordinates.")
             except Exception as exc:
+                failed = True
                 warnings.append(f"Library locations unavailable: {type(exc).__name__}.")
             try:
                 cultural_centres, cultural_source = await self._cultural_centres_for_district(
-                    resolved.district, limit=safe_limit,
+                    district_name, limit=safe_limit,
                 )
+                cultural_source.coverage_status = "checked"
                 warnings.append("Cultural-centre results are address-search records, not verified coordinates.")
                 if cultural_source.matched_total == 0:
-                    warnings.append(f"No cultural centre matched district {resolved.district} in the published dataset.")
+                    warnings.append(f"No cultural centre matched district {district_name} in the published dataset.")
                 if cultural_source.skipped_total:
                     warnings.append(
                         f"Skipped {cultural_source.skipped_total} cultural-centre row(s) with missing name or district."
                     )
             except Exception as exc:
+                failed = True
+                cultural_source = Source(name="IBB Open Data Portal - Cultural centres", url="https://data.ibb.gov.tr",
+                                         scope="district", coverage_status="unavailable")
                 warnings.append(f"Cultural-centre records unavailable: {type(exc).__name__}.")
         else:
             warnings.append("Libraries and cultural centres require a known place with district metadata; coordinate-only queries return WiFi only.")
 
-        sources = [
-            Source(name="IBB Open Data Portal - WiFi locations", resource_id=WIFI_LOCATIONS_RESOURCE_ID, url="https://data.ibb.gov.tr"),
-            Source(name="IBB Open Data Portal - Library locations", resource_id=LIBRARY_LOCATIONS_RESOURCE_ID, url="https://data.ibb.gov.tr"),
-        ]
+        sources = ([wifi_source] if resolved is not None else []) + ([library_source] if district_name else [])
+        if resolved is not None:
+            sources.extend(self._place_sources(resolved))
         if cultural_source is not None:
             sources.append(cultural_source)
+        if failed and not any(source.coverage_status == "checked" for source in sources):
+            return error_envelope(
+                summary="City-service sources are unavailable; no services were verified.",
+                warning=" ".join(warnings), sources=sources,
+                data=[{"error_code": "source_unavailable"}],
+                limits=[f"limit_per_section={safe_limit}", "No service availability was established."],
+            )
         return success_envelope(
-            summary=f"City services near {resolved.name} within {radius_m} meters.",
+            summary=(f"City services near reference point {resolved.name} within {radius_m} meters."
+                     if resolved is not None else f"City services in {district_name} district; no distances or WiFi lookup."),
             data=[
                 {
-                    "query": self._resolved_payload(resolved),
+                    "query": self._resolved_payload(resolved) if resolved is not None else {
+                        "district": district_name, "scope": "district", "distance_included": False,
+                    },
                     "wifi_locations": wifi,
                     "libraries": libraries,
                     "cultural_centres": cultural_centres,
                 }
             ],
             sources=sources,
-            freshness=Freshness(status="fresh", ttl_seconds=60 * 60 * 24),
-            limits=[f"radius_m={radius_m}", f"limit_per_section={safe_limit}", "libraries=district-level", "cultural_centres=address_search"],
+            freshness=Freshness(status="unknown" if failed else "fresh", ttl_seconds=60 * 60 * 24),
+            limits=[f"radius_m={radius_m}" if resolved is not None else "district-wide; radius_m not applied",
+                    f"limit_per_section={safe_limit}", "libraries=district-level", "cultural_centres=address_search"],
             warnings=warnings,
         )
 
@@ -1101,6 +1129,12 @@ class CityService:
             place = validate_text(place, field="place", max_length=120)
             resolved = resolve_place(place)
             if resolved is None:
+                candidates = place_candidates(place)
+                if len(candidates) > 1:
+                    raise InputValidationError(
+                        f"Ambiguous place. Specify one of: {', '.join(candidate.name for candidate in candidates)}",
+                        field="place", code="ambiguous_place",
+                    )
                 raise InputValidationError(
                     f"Unknown place. Known examples: {', '.join(known_place_names()[:8])}",
                     field="place",
@@ -1112,6 +1146,35 @@ class CityService:
         validate_lat_lon(lat, lon)
         return ResolvedPlace("coordinates", "coordinates", float(lat), float(lon), confidence="coordinate")
 
+    def _district_request(self, *, place: str | None, lat: float | None, lon: float | None,
+                          district: str | None) -> str | None:
+        if district is not None:
+            if place is not None or lat is not None or lon is not None:
+                raise InputValidationError("district cannot be mixed with place or coordinates.", field="district")
+            district = validate_text(district, field="district", max_length=80)
+            name = resolve_district(district)
+            if name is None:
+                raise InputValidationError("Unknown Istanbul district; provide one of the 39 district names.", field="district")
+            return name
+        if place is not None and lat is None and lon is None:
+            return resolve_district(validate_text(place, field="place", max_length=120))
+        return None
+
+    @staticmethod
+    def _place_warnings(resolved: ResolvedPlace) -> list[str]:
+        if resolved.confidence == "coordinate":
+            return []
+        return ["Place names use a static area reference point, not an exact address or verified boundary centroid. Distances are from that point."]
+
+    @staticmethod
+    def _place_sources(resolved: ResolvedPlace) -> list[Source]:
+        if resolved.source_url is None:
+            return []
+        entity = resolved.source_url.rsplit("/", 1)[-1]
+        return [Source(name=f"Wikidata - {resolved.name}", publisher="Wikidata contributors",
+                       license="CC0-1.0", scope="static_place_reference",
+                       url=f"https://www.wikidata.org/w/index.php?title={entity}&oldid={resolved.source_revision}")]
+
     def _resolved_payload(self, resolved: ResolvedPlace) -> dict[str, Any]:
         return {
             "name": resolved.name,
@@ -1120,6 +1183,9 @@ class CityService:
             "district": resolved.district,
             "neighborhood": resolved.neighborhood,
             "confidence": resolved.confidence,
+            **({"source_url": resolved.source_url, "source_revision": resolved.source_revision,
+                "source_checked_on": "2026-10-25", "coordinate_scope": "area_reference_point"}
+               if resolved.source_url is not None else {}),
         }
 
     def _float_or_none(self, value: Any) -> float | None:

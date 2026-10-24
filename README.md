@@ -199,8 +199,8 @@ istanbul_market_schedule
 | `istanbul_market_schedule` | Haftalık pazar takvimi; `district`, `day` (Türkçe/İngilizce gün, bugün/yarın veya ISO tarih) ve `limit`. Statik haftalık tarife; canlı açılış durumu değildir. |
 | `istanbul_traffic_status` | Şehir geneli trafik indeksi; yol bazlı değildir. |
 | `istanbul_water_status` | `kind=faults`: ilçe veya arıza numarası; `kind=dams`: baraj dolulukları. |
-| `istanbul_mobility_nearby` | Bilinen yer veya koordinata göre ulaşım özeti. |
-| `istanbul_city_services_nearby` | WiFi ve ilçe düzeyinde kütüphaneler. |
+| `istanbul_mobility_nearby` | Yer/koordinat için ulaşım özeti; 39 ilçede mesafesiz otopark listesi. |
+| `istanbul_city_services_nearby` | Nokta çevresinde WiFi; 39 ilçede kütüphane ve kültür merkezi adresleri. |
 | `istanbul_neighborhood_profile` | Sosyal yardım, bina stoku, deprem **senaryosu**; anlık risk değildir. |
 | `istanbul_transit_line` | `action=info,stops,departures`; planlı kalkışlar ana durak içindir, ETA değildir. |
 | `istanbul_transport_disruptions` | Desteklenen işletmelerin güncel durumları ve resmî duyuruları. |
@@ -233,6 +233,23 @@ Bunlar **statik durak konumlarıdır**; canlı varış, işletilme durumu veya y
 kültür merkezi katmanları için [statik şehir katmanları](docs/city-static-layers.md). Kaynak zamanı, alınan/kabul edilen/atlanan
 sayıları cevapta korunur. Ayrıntılar ve canlı kabul komutu:
 [GTFS durak katmanı](docs/gtfs-stops.md).
+
+### Yer ve ilçe çözümleme
+
+İki özet aracı da `district="Pendik"` gibi **39 ilçe** adını kabul eder.
+`district`, `place` ve koordinatlarla birlikte kullanılamaz. Yalnız ilçe adı
+verilen `place="Pendik"` sorgusu da ilçe moduna girer:
+
+- Mobilite: yalnız ilçe geneli otopark; mesafe veya diğer ulaşım bileşenleri yok.
+- Şehir hizmetleri: kütüphane ve kültür merkezi adresleri; WiFi sorgulanmaz.
+- İlçe modunda `radius_m` uygulanmaz; sonuç limiti uygulanır.
+
+`Bostancı`, `Karaköy`, `Nişantaşı`, `Acıbadem, Kadıköy` ve `Acıbadem, Üsküdar`
+artık kaynak sürümü belirtilen statik referans noktalarıyla çözülür. Tek başına
+`Acıbadem`, `error_code=ambiguous_place` döndürür; araç ilçe seçmez.
+Mesafeler verilen adresin değil, referans noktasının çevresindedir. Tam sokak/bina
+adresi çözümleme ve tüm mahalleleri kapsama henüz yoktur.
+[Kaynak, lisans ve kapsam](docs/place-resolution.md).
 
 ### GTFS planlı durak kalkışları
 

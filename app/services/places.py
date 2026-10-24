@@ -13,6 +13,8 @@ class ResolvedPlace:
     district: str | None = None
     neighborhood: str | None = None
     confidence: str = "curated"
+    source_url: str | None = None
+    source_revision: str | None = None
 
 
 _PLACES: tuple[ResolvedPlace, ...] = (
@@ -31,6 +33,18 @@ _PLACES: tuple[ResolvedPlace, ...] = (
     ResolvedPlace("atasehir", "Atasehir", 40.9923, 29.1244, "Atasehir"),
     ResolvedPlace("sariyer", "Sariyer", 41.1663, 29.0500, "Sariyer"),
     ResolvedPlace("kartal", "Kartal", 40.8998, 29.1936, "Kartal"),
+    # CC0 structured statements P625/P131, checked 2026-10-25. These
+    # are area reference points, not geocoded addresses or boundary centroids.
+    ResolvedPlace("bostanci", "Bostancı", 40.95833333, 29.09555556, "Kadıköy", "Bostancı",
+                  "wikidata_reference", "https://www.wikidata.org/wiki/Q3564169", "2522641156"),
+    ResolvedPlace("karakoy", "Karaköy", 41.022777777778, 28.975, "Beyoğlu", None,
+                  "wikidata_reference", "https://www.wikidata.org/wiki/Q2706262", "2553343183"),
+    ResolvedPlace("nisantasi", "Nişantaşı", 41.051666666667, 28.991388888889, "Şişli", None,
+                  "wikidata_reference", "https://www.wikidata.org/wiki/Q251601", "2556915721"),
+    ResolvedPlace("acibadem kadikoy", "Acıbadem, Kadıköy", 41.001667, 29.038611, "Kadıköy", "Acıbadem",
+                  "wikidata_reference", "https://www.wikidata.org/wiki/Q2823844", "2522640416"),
+    ResolvedPlace("acibadem uskudar", "Acıbadem, Üsküdar", 41.0073, 29.0533, "Üsküdar", "Acıbadem",
+                  "wikidata_reference", "https://www.wikidata.org/wiki/Q2756264", "2522640408"),
 )
 
 _DISTRICT_DISPLAY_NAMES = {
@@ -75,17 +89,7 @@ _DISTRICT_DISPLAY_NAMES = {
     "zeytinburnu": "Zeytinburnu",
 }
 
-DISTRICT_PLACE_QUERIES = {
-    "atasehir",
-    "bakirkoy",
-    "besiktas",
-    "fatih",
-    "kadikoy",
-    "kartal",
-    "sariyer",
-    "sisli",
-    "uskudar",
-}
+DISTRICT_PLACE_QUERIES = frozenset(_DISTRICT_DISPLAY_NAMES)
 
 _ALIASES = {
     "kadıkoy": "kadikoy",
@@ -111,7 +115,41 @@ _INDEX = {place.query: place for place in _PLACES}
 
 def resolve_place(place: str) -> ResolvedPlace | None:
     key = normalize_place(place)
-    return _INDEX.get(_ALIASES.get(key, key))
+    match = _INDEX.get(_ALIASES.get(key, key))
+    if match is not None:
+        return match
+    candidates = place_candidates(place)
+    return candidates[0] if len(candidates) == 1 else None
+
+
+def place_candidates(value: str) -> list[ResolvedPlace]:
+    """Exact, optionally district-qualified names; never substring geocoding."""
+    key = normalize_place(value)
+    matches = []
+    for place in _PLACES:
+        if place.source_url is None:
+            continue
+        name = normalize_place(place.neighborhood or place.name)
+        district = normalize_place(place.district or "")
+        names = {name, f"{name} mahallesi", f"{name} mah"} if place.neighborhood else {name}
+        aliases = {alias for name in names for alias in (name, f"{name} {district}", f"{district} {name}")}
+        if key in aliases:
+            matches.append(place)
+    return matches
+
+
+def district_names() -> list[str]:
+    return list(_DISTRICT_DISPLAY_NAMES.values())
+
+
+def resolve_district(value: str) -> str | None:
+    """Recognize district-only requests, not an address mentioning a district."""
+    key = normalize_place(value)
+    for suffix in (" merkez", " ilcesi", " ilce"):
+        if key.endswith(suffix):
+            key = key[:-len(suffix)]
+            break
+    return _DISTRICT_DISPLAY_NAMES.get(key)
 
 
 def known_place_names() -> list[str]:

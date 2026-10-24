@@ -372,14 +372,21 @@ async def istanbul_mobility_nearby(
     lon: float | None = None,
     radius_m: int = 1500,
     limit: int | None = None,
+    district: str | None = None,
 ) -> dict:
-    """Summarize nearby mobility options for a known Istanbul place or coordinate."""
+    """Summarize mobility near a static place reference or coordinates.
+
+    district (all 39 Istanbul districts) is exclusive with place/coordinates and
+    returns parking only, without distances. District-only place names do the same.
+    For Acıbadem specify 'Acıbadem, Kadıköy' or 'Acıbadem, Üsküdar'. Not address geocoding.
+    """
     return await CityService(settings=get_settings()).mobility_nearby(
         place=place,
         lat=lat,
         lon=lon,
         radius_m=radius_m,
         limit=limit,
+        district=district,
     )
 
 
@@ -389,14 +396,22 @@ async def istanbul_city_services_nearby(
     lon: float | None = None,
     radius_m: int = 1500,
     limit: int | None = None,
+    district: str | None = None,
 ) -> dict:
-    """Summarize nearby WiFi and district-level library services."""
+    """Summarize WiFi near a static reference point and district-level libraries/culture.
+
+    district (all 39 Istanbul districts) is exclusive with place/coordinates;
+    district-only place names also return district address lists, without WiFi or
+    invented distances. Radius applies only to WiFi with a point. For Acıbadem,
+    specify 'Acıbadem, Kadıköy' or 'Acıbadem, Üsküdar'. Not full address geocoding.
+    """
     return await CityService(settings=get_settings()).city_services_nearby(
         place=place,
         lat=lat,
         lon=lon,
         radius_m=radius_m,
         limit=limit,
+        district=district,
     )
 
 
