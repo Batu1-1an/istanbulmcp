@@ -40,7 +40,8 @@ istanbul_next_departures(
 - `calendar` servis günü, isteğe bağlı `calendar_dates` ekleme/çıkarma istisnaları
   ve geceyarısı sonrası **25:xx / 48:xx** saatleri işlenir. Desteklenen üst GTFS
   saati **71:59:59**; önceki iki servis günü de kontrol edilir.
-- Takvim geçerliliği dışı sorgu `ok=false`, unavailable döner; “sefer yok” denmez.
+- Takvim geçerliliği dışı sorgu `ok=false`, `error_code=outside_calendar`,
+  `field=at` döner; “sefer yok” denmez.
 - `timepoint=0` yayımlanmış yaklaşık saattir; `scheduled_approximate` etiketi taşır.
   Eksik saat interpolasyonu yapılmaz. Saati olmayan ara durak kayıtları saklanır
   ama kalkış listesine alınmaz. `pickup_type=1` (biniş yok) elenir; 2/3 koşulları

@@ -210,6 +210,8 @@ async def test_outside_calendar_is_unavailable_not_no_departures(tmp_path):
         result = await f.service.next_departures(stop_id="S1", at="2027-01-05T08:00:00+03:00")
     assert not result["ok"] and result["freshness"]["status"] == "broken"
     assert result["sources"][0]["coverage_status"] == "unavailable"
+    assert result["data"][0]["error_code"] == "outside_calendar"
+    assert result["data"][0]["field"] == "at"
 
 
 def test_resolver_requires_full_zip_and_rejects_preview_csv(tmp_path):

@@ -166,7 +166,8 @@ class GtfsScheduleService:
         except ScheduleValidityError:
             return error_envelope(summary="Requested time is outside the published GTFS calendar.",
                                   warning="No timetable covers this time. Obtain an updated feed; do not infer no service.",
-                                  sources=[unavailable], limits=limits)
+                                  sources=[unavailable], limits=limits,
+                                  data=[{"error_code": "outside_calendar", "field": "at"}])
         except Exception as exc:
             # Never leak source text, local paths, SQL or credentials.
             return error_envelope(summary="GTFS timetable is unavailable; no departures were verified.",
