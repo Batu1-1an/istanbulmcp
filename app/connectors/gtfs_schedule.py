@@ -27,6 +27,7 @@ from app.connectors.gtfs import GTFS_DATASET_ID, GTFS_METADATA_MAX_BYTES, parse_
 from app.core.settings import Settings
 from app.core.source_limits import ckan_rate_limiter
 from app.storage.gtfs_schedule import SCHEMA, publish_schedule
+from app.connectors.ibb_relay import ibb_http_client
 
 KINDS = ("agency", "calendar", "routes", "stops", "trips", "stop_times")
 REQUIRED = {
@@ -180,7 +181,7 @@ class GtfsScheduleClient:
                 try:
                     conn.executescript(SCHEMA)
                     counts, downloaded, expanded = {}, 0, 0
-                    async with httpx.AsyncClient(timeout=settings.request_timeout_seconds) as owned:
+                    async with ibb_http_client(timeout=settings.request_timeout_seconds) as owned:
                         client = self._client or owned
                         for kind, resource in resources.items():
                             path = Path(directory) / kind

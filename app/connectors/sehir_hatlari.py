@@ -11,6 +11,7 @@ import httpx
 from app.connectors.http_retry import request_with_retries
 from app.core.rate_limit import RateLimiter
 from app.core.source_limits import transport_notice_rate_limiter
+from app.connectors.ibb_relay import ibb_http_client
 
 
 class SehirHatlariPayloadError(RuntimeError):
@@ -520,7 +521,7 @@ class SehirHatlariClient:
 
     async def _request(self, url: str, headers: dict[str, str]) -> httpx.Response:
         if self._client is None:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with ibb_http_client(timeout=self.timeout) as client:
                 return await request_with_retries(
                     client,
                     "GET",

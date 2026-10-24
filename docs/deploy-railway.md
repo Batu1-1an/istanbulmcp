@@ -165,6 +165,27 @@ Abuse and cache guard variables can be tuned per Railway environment:
 - `AIR_QUALITY_RATE_REFILL_PER_SECOND`
 - `AIR_QUALITY_RATE_MAX_WAIT_SECONDS`
 
+## İBB Relay (Bunny Magic Containers)
+
+Since 2026-10-23 İBB group hosts (`api.ibb.gov.tr`, `data.ibb.gov.tr`, `cbsproxy.ibb.gov.tr`, `tesislerimiz.ibb.istanbul`, `tesislerrezervasyon.ibb.istanbul`, `www.metro.istanbul`, İSKİ and Şehir Hatları) and the TCDD Marmaray hosts refuse connections from outside Türkiye, including Railway EU and every Cloudflare location. `relays/ibb_relay/server.py` is a standard-library relay that runs in Bunny Magic Containers' single `TR` (Istanbul) region on the stock `python:3.12-alpine` image.
+
+- Requests are `/{host}/{path}?{query}` with an `X-Relay-Token` header; hosts outside the fixed allowlist return `404`, missing or wrong tokens return `401`.
+- Only `GET`, `HEAD` and `POST` are forwarded; request bodies are capped at 1 MiB and responses at 128 MiB (32 MiB without `Content-Length`).
+- Upstream connect failures return `X-Relay-Error: connect_timeout|connect_error` and read timeouts `read_timeout`; the app maps them back to the matching `httpx` errors so the unreachable-host cooldown still applies.
+- Every response carries `Cache-Control: no-store`, and the endpoint's pull zone has Smart Cache off, a cache max-age override of `0` and query strings kept in the cache key.
+- Logs contain only method, host, status and duration.
+
+Deploy or update the relay with the `bunny` CLI (`bunny login` first). The token stays in a local file and is piped, never passed as an argument:
+
+```bash
+mkdir -p ~/.config/istanbulmcp && (umask 077 && python -c "import secrets; print(secrets.token_urlsafe(48))" > ~/.config/istanbulmcp/ibb_relay_token)
+python -m relays.ibb_relay.bunny_container --token-file ~/.config/istanbulmcp/ibb_relay_token \
+  | bunny api PATCH /mc/apps/<app-id>/containers/<container-id>
+bunny api GET /mc/apps/<app-id>
+```
+
+Set `IBB_RELAY_BASE_URL` to the app's `*.bunny.run` endpoint and `IBB_RELAY_TOKEN` to the same token on Railway, then redeploy. `/status` reports `limits.ibb_relay_enabled`.
+
 ## Health Checks
 
 - `/healthz` confirms the process is up.

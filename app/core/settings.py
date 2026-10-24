@@ -127,6 +127,8 @@ class Settings:
     marmaray_api_basic_token: str | None = None
     sehir_hatlari_relay_url: str | None = None
     sehir_hatlari_relay_token: str | None = None
+    ibb_relay_base_url: str | None = None
+    ibb_relay_token: str | None = field(default=None, repr=False)
     source_cache_max_entries: int = 1024
     mcp_auth_required: bool = False
     mcp_api_keys: tuple[str, ...] = field(default=(), repr=False)
@@ -346,6 +348,8 @@ def get_settings() -> Settings:
         marmaray_api_basic_token=_str_env("MARMARAY_API_BASIC_TOKEN"),
         sehir_hatlari_relay_url=_str_env("SEHIR_HATLARI_RELAY_URL"),
         sehir_hatlari_relay_token=_str_env("SEHIR_HATLARI_RELAY_TOKEN"),
+        ibb_relay_base_url=_str_env("IBB_RELAY_BASE_URL"),
+        ibb_relay_token=_str_env("IBB_RELAY_TOKEN"),
         source_cache_max_entries=_int_env("SOURCE_CACHE_MAX_ENTRIES", 1024),
         mcp_auth_required=_bool_env("MCP_AUTH_REQUIRED", False),
         forwarded_allow_ips=_str_env("FORWARDED_ALLOW_IPS", "127.0.0.1"),

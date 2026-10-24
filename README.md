@@ -482,6 +482,7 @@ Sunucu salt okunur çalışır. Otopark rezervasyonu yapmaz, kamu verisini deği
 - Hava kalitesi kaynağı bazı istasyonlarda son okuma zamanı verdiği halde AQI veya concentration değerini boş döndürebilir.
 - İETT SOAP servisleri bakım saatlerinde veya kaynak kesintilerinde geçici olarak yanıt vermeyebilir.
 - İSKİ canlı kaynakları bazı Railway çıkışlarından zaman aşımına düşebilir. Üretim kurulumu bu trafiği sabit hedefli ve kimlik doğrulamalı Cloudflare Worker relay üzerinden geçirir. Relay, resmi e-Devlet tablolarını ve İSKİ JSON kaynaklarını kullanır; başarılı yanıtları Workers KV'de global olarak paylaşır ve stale-while-revalidate ile yeniler. Relay ve doğrudan kaynaklar kullanılamazsa yalnızca capture zamanı bulunan ve azami yaş sınırını aşmamış snapshot döndürülebilir.
+- 2026-10-23 itibarıyla `api.ibb.gov.tr`, `data.ibb.gov.tr`, `cbsproxy.ibb.gov.tr`, `tesislerimiz.ibb.istanbul`, `www.metro.istanbul` ve İSKİ host'ları Türkiye dışındaki çıkışlardan (Railway EU, Cloudflare, Avrupa/ABD ev internetleri) TCP bağlantısını kabul etmiyor; Türkiye'deki ölçüm noktalarından erişilebiliyor. Üretimde bu trafik `IBB_RELAY_*` ile İstanbul'daki relay'den çıkar. Kaynak bağlantıları en fazla 5 saniye bekler, bağlantı zaman aşımında yeniden denenmez ve aynı host 60 saniye boyunca hızlıca `unavailable` döner.
 - İSKİ arıza mesafeleri adres noktası değil, kaynak geometrinin yaklaşık merkezi üzerinden hesaplanır.
 - Tam rota planlama, gerçek zamanlı varış tahmini ve harita UI bu sürümün kapsamı dışındadır.
 - Kütüphane gibi bazı kayıtlar koordinat değil adres içerir; bu durumda kesin koordinat yerine harita arama linki döner.
@@ -577,6 +578,7 @@ RUN_LIVE_GTFS_TESTS=1 pytest -s tests/live/test_gtfs_source_live.py
 - `FERRY_SCHEDULES_ENABLED` — varsayılan `false`; yalnızca deploy ortamından tarife erişimi doğrulandıktan sonra açın. Mevcut iptal-duyurusu relay'i tarife desteği sağlamaz.
 - `SEHIR_HATLARI_RELAY_URL`
 - `SEHIR_HATLARI_RELAY_TOKEN`
+- `IBB_RELAY_BASE_URL`, `IBB_RELAY_TOKEN` — ikisi birlikte verilirse İBB, Metro İstanbul, İSKİ, Şehir Hatları ve TCDD Marmaray host'larına giden istekler Türkiye'deki relay üzerinden çıkar; URL `https` olmalı, token en az 32 karakter. Kurulum: [docs/deploy-railway.md](docs/deploy-railway.md) içindeki "İBB Relay" bölümü.
 
 Herkese açık MCP koruma limitleri:
 

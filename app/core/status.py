@@ -78,6 +78,7 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
             "sehir_hatlari_relay_enabled": bool(
                 settings.sehir_hatlari_relay_url and settings.sehir_hatlari_relay_token
             ),
+            "ibb_relay_enabled": bool(settings.ibb_relay_base_url and settings.ibb_relay_token),
             "iski_snapshot_fallback_enabled": {
                 "faults": bool(settings.iski_faults_snapshot_json),
                 "dams": bool(settings.iski_dams_snapshot_json),

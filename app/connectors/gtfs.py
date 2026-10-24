@@ -16,6 +16,7 @@ from app.connectors.ckan import CkanClient, CkanError
 from app.core.rate_limit import RateLimiter
 from app.core.settings import Settings
 from app.core.source_limits import ckan_rate_limiter
+from app.connectors.ibb_relay import ibb_http_client
 
 GTFS_DATASET_ID = "iett-gtfs-verisi"
 ISTANBUL_GTFS_BOUNDS = (40.70, 41.50, 27.80, 30.20)
@@ -194,7 +195,7 @@ class GtfsStopsClient:
 
         if self._client is not None:
             return await read(self._client)
-        async with httpx.AsyncClient(timeout=self.settings.request_timeout_seconds) as client:
+        async with ibb_http_client(timeout=self.settings.request_timeout_seconds) as client:
             return await read(client)
 
     def _parse_csv(self, body: bytes) -> list[dict[str, Any]]:

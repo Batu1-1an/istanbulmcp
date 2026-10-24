@@ -5,6 +5,7 @@ import httpx
 from app.connectors.http_retry import request_with_retries
 from app.core.rate_limit import RateLimiter
 from app.core.source_limits import ispark_rate_limiter
+from app.connectors.ibb_relay import ibb_http_client
 
 
 class IsparkPayloadError(RuntimeError):
@@ -27,7 +28,7 @@ class IsparkClient:
     async def parks(self) -> list[dict]:
         await self._rate_limiter.acquire("ispark")
         if self._client is None:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with ibb_http_client(timeout=self.timeout) as client:
                 response = await request_with_retries(
                     client,
                     "GET",

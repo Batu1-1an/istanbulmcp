@@ -10,6 +10,7 @@ import httpx
 from app.connectors.http_retry import request_with_retries
 from app.core.rate_limit import RateLimiter
 from app.core.source_limits import iett_rate_limiter
+from app.connectors.ibb_relay import ibb_http_client
 
 
 class IettSoapError(RuntimeError):
@@ -96,7 +97,7 @@ class IettClient:
         }
         await self._rate_limiter.acquire("iett")
         if self._client is None:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with ibb_http_client(timeout=self.timeout) as client:
                 response = await request_with_retries(
                     client,
                     "POST",

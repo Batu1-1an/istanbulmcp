@@ -22,6 +22,7 @@ from app.connectors.xlsx import read_first_sheet_rows
 from app.core.rate_limit import RateLimiter
 from app.core.settings import Settings
 from app.core.source_limits import ckan_rate_limiter
+from app.connectors.ibb_relay import ibb_http_client
 
 EV_DATASET_ID = "79b0e26e-e923-498b-a675-453382274178"
 EV_RESOURCE_ID = "726e9d82-37f7-4142-8fa0-4f70a5530188"
@@ -252,7 +253,7 @@ class CityOpenDataClient:
 
         if self._client is not None:
             return await read(self._client)
-        async with httpx.AsyncClient(timeout=self.settings.open_data_layers_request_timeout_seconds) as client:
+        async with ibb_http_client(timeout=self.settings.open_data_layers_request_timeout_seconds) as client:
             return await read(client)
 
 

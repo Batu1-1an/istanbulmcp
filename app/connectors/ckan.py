@@ -8,6 +8,7 @@ import httpx
 from app.connectors.http_retry import request_with_retries
 from app.core.rate_limit import RateLimiter
 from app.core.source_limits import ckan_rate_limiter
+from app.connectors.ibb_relay import ibb_http_client
 
 
 class CkanError(RuntimeError):
@@ -31,7 +32,7 @@ class CkanClient:
         url = f"{self.base_url}/{action}"
         await self._rate_limiter.acquire("ckan")
         if self._client is None:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with ibb_http_client(timeout=self.timeout) as client:
                 response = await request_with_retries(
                     client,
                     "POST",
@@ -98,7 +99,7 @@ class CkanClient:
 
         if self._client is not None:
             return await read_response(self._client)
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        async with ibb_http_client(timeout=self.timeout) as client:
             return await read_response(client)
 
     async def package_search(

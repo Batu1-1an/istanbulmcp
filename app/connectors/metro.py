@@ -8,6 +8,7 @@ import httpx
 from app.connectors.http_retry import request_with_retries
 from app.core.rate_limit import RateLimiter
 from app.core.source_limits import metro_rate_limiter
+from app.connectors.ibb_relay import ibb_http_client
 
 
 def _normalize_token(value: str) -> str:
@@ -49,7 +50,7 @@ class MetroClient:
     async def stations(self) -> list[dict]:
         await self._rate_limiter.acquire("metro")
         if self._client is None:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with ibb_http_client(timeout=self.timeout) as client:
                 response = await request_with_retries(
                     client,
                     "GET",
@@ -378,7 +379,7 @@ class MetroClient:
     async def _get_text_url(self, url: str) -> str:
         await self._rate_limiter.acquire("metro")
         if self._client is None:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with ibb_http_client(timeout=self.timeout) as client:
                 response = await self._request_text(client, "GET", url)
         else:
             response = await self._request_text(self._client, "GET", url)
@@ -519,7 +520,7 @@ class MetroClient:
     async def _get_json_url(self, url: str) -> Any:
         await self._rate_limiter.acquire("metro")
         if self._client is None:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with ibb_http_client(timeout=self.timeout) as client:
                 response = await request_with_retries(
                     client,
                     "GET",

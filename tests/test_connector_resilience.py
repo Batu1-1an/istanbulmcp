@@ -3,6 +3,7 @@ import pytest
 import json
 from datetime import datetime, timezone
 
+from app.connectors import http_retry
 from app.connectors.http_retry import request_with_retries, retry_after_seconds
 from app.connectors.iski import IskiClient, IskiPayloadError
 from app.connectors.ispark import IsparkClient
@@ -67,6 +68,66 @@ async def test_retry_helper_retries_transient_transport_failure() -> None:
 
     assert response.json() == {"ok": True}
     assert calls == 2
+
+
+@pytest.mark.asyncio
+async def test_retry_helper_fails_fast_on_connect_timeout_and_skips_host_during_cooldown() -> None:
+    hosts: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        hosts.append(request.url.host)
+        if request.url.host == "blocked.test":
+            raise httpx.ConnectTimeout("connect timed out", request=request)
+        return httpx.Response(200, json={"ok": True})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        with pytest.raises(httpx.ConnectTimeout):
+            await request_with_retries(http_client, "GET", "https://blocked.test/a", attempts=3, sleep=no_sleep)
+        with pytest.raises(httpx.ConnectTimeout, match="blocked.test"):
+            await request_with_retries(http_client, "GET", "https://blocked.test/b", attempts=3, sleep=no_sleep)
+        response = await request_with_retries(http_client, "GET", "https://open.test/c", sleep=no_sleep)
+
+    assert response.status_code == 200
+    assert hosts == ["blocked.test", "open.test"]
+
+
+@pytest.mark.asyncio
+async def test_retry_helper_retries_unreachable_host_after_cooldown(monkeypatch) -> None:
+    now = 1000.0
+    monkeypatch.setattr(http_retry, "_clock", lambda: now)
+    calls = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise httpx.ConnectTimeout("connect timed out", request=request)
+        return httpx.Response(200, json={"ok": True})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        with pytest.raises(httpx.ConnectTimeout):
+            await request_with_retries(http_client, "GET", "https://flaky.test/", sleep=no_sleep)
+        now += http_retry.UNREACHABLE_HOST_COOLDOWN_SECONDS + 1
+        response = await request_with_retries(http_client, "GET", "https://flaky.test/", sleep=no_sleep)
+
+    assert response.status_code == 200
+    assert calls == 2
+
+
+@pytest.mark.asyncio
+async def test_retry_helper_caps_connect_timeout_but_keeps_read_timeout() -> None:
+    seen: list[dict] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.extensions["timeout"])
+        return httpx.Response(200)
+
+    async with httpx.AsyncClient(timeout=15.0, transport=httpx.MockTransport(handler)) as http_client:
+        await request_with_retries(http_client, "GET", "https://example.test/default")
+        await request_with_retries(http_client, "GET", "https://example.test/explicit", timeout=30.0)
+
+    assert [t["connect"] for t in seen] == [http_retry.CONNECT_TIMEOUT_SECONDS] * 2
+    assert [t["read"] for t in seen] == [15.0, 30.0]
 
 
 @pytest.mark.asyncio
@@ -197,8 +258,8 @@ async def test_iski_dams_fall_back_to_official_api_when_map_source_times_out() -
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
         iski = IskiClient(
-            base_url="https://example.test/map",
-            api_base_url="https://example.test/api",
+            base_url="https://map.example.test/map",
+            api_base_url="https://api.example.test/api",
             api_bearer_token="token",
             attempts=1,
             http_client=http_client,

@@ -18,6 +18,7 @@ from app.core.settings import Settings, get_settings
 from app.core.source_limits import social_facilities_rate_limiter
 from app.core.geo import haversine_m
 from app.services.places import district_from_text, normalize_place
+from app.connectors.ibb_relay import ibb_http_client
 
 
 class SocialFacilitiesError(RuntimeError):
@@ -303,7 +304,7 @@ class SocialFacilitiesClient:
 
     async def fetch(self) -> SocialFacilitiesPayload:
         own_client = self._http_client is None
-        client = self._http_client or httpx.AsyncClient(
+        client = self._http_client or ibb_http_client(
             timeout=self.settings.social_facilities_request_timeout_seconds,
             follow_redirects=True,
         )

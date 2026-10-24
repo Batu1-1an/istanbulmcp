@@ -9,6 +9,7 @@ import httpx
 from app.connectors.http_retry import request_with_retries
 from app.core.rate_limit import RateLimiter
 from app.core.source_limits import ibb_pharmacy_rate_limiter
+from app.connectors.ibb_relay import ibb_http_client
 
 
 IBB_PHARMACY_BASE_URL = "https://cbsproxy.ibb.gov.tr/?eczanews"
@@ -62,7 +63,7 @@ class IbbPharmacyClient:
         if self._client is not None:
             return await self._roster_with_client(self._client)
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        async with ibb_http_client(timeout=self.timeout) as client:
             return await self._roster_with_client(client)
 
     async def _roster_with_client(self, client: httpx.AsyncClient) -> list[dict[str, Any]]:
