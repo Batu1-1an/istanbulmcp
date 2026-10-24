@@ -344,3 +344,25 @@ async def test_transport_disruptions_excludes_equipment_faults_and_keeps_contrac
         assert "equipment_summary" not in row
         assert "faults" not in row
         assert "line_code" in row
+
+
+@pytest.mark.asyncio
+async def test_source_failure_serves_last_good_result_as_stale(tmp_path):
+    clear_source_cache()
+    marmaray = FakeMarmaray()
+    disruptions = TransportDisruptionService(
+        settings=Settings(database_path=tmp_path / "transport.sqlite3", transport_disruptions_cache_ttl_seconds=0),
+        iett_client=FakeIett(),
+        metro_client=FakeMetro(),
+        sehir_hatlari_client=FakeSehirHatlari(),
+        marmaray_client=marmaray,
+    )
+    first = await disruptions.disruptions(operator="marmaray")
+    marmaray.error = httpx.ConnectTimeout("challenge")
+    second = await disruptions.disruptions(operator="marmaray")
+
+    assert second["ok"] is True
+    assert second["data"] == first["data"]
+    assert second["freshness"]["status"] == "stale"
+    assert second["sources"][0]["coverage_status"] == "checked"
+    assert any("son başarılı" in warning for warning in second["warnings"])

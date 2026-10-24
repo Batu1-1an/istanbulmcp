@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import httpx
@@ -598,3 +599,20 @@ async def test_marmaray_client_passes_tcdd_cookie_challenge_redirects():
 
     assert rows == []
     assert challenged == ["/marmaray/son-dakika"]
+
+
+@pytest.mark.asyncio
+async def test_marmaray_client_logs_challenge_redirects_without_secrets(caplog):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if "Ref=challenge" not in request.headers.get("cookie", ""):
+            return httpx.Response(302, headers={"Location": request.url.raw_path.decode(), "Set-Cookie": "Ref=challenge; Path=/"})
+        return httpx.Response(404, text="openresty")
+
+    caplog.set_level("WARNING", logger="istanbul_mcp.connectors.marmaray")
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        with pytest.raises(httpx.HTTPStatusError):
+            await MarmarayClient(url="https://example.test/marmaray/son-dakika", http_client=http_client, rate_limiter=RecordingLimiter()).urgent_notices()
+
+    event = json.loads(caplog.records[-1].getMessage())
+    assert event == {"event": "marmaray_response", "step": "page", "status": 404, "redirects": [302], "challenge_cookie": True, "sent_cookie": True}
+    assert "challenge;" not in caplog.text

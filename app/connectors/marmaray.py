@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import logging
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from typing import Any
@@ -21,6 +23,22 @@ OFFICIAL_PAGE_HEADERS = {
     "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8",
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36",
 }
+
+logger = logging.getLogger("istanbul_mcp.connectors.marmaray")
+
+
+def _log_response(step: str, response: httpx.Response) -> None:
+    if not response.history and response.status_code < 400:
+        return
+    hops = [*response.history, response]
+    logger.warning(json.dumps({
+        "event": "marmaray_response",
+        "step": step,
+        "status": response.status_code,
+        "redirects": [hop.status_code for hop in response.history],
+        "challenge_cookie": any("ref=" in hop.headers.get("set-cookie", "").lower() for hop in hops),
+        "sent_cookie": "cookie" in response.request.headers,
+    }, separators=(",", ":")))
 
 
 class _UrgentNoticeParser(HTMLParser):
@@ -167,6 +185,7 @@ class MarmarayClient:
                 headers=headers,
                 follow_redirects=True,
             )
+        _log_response("api", response)
         response.raise_for_status()
         try:
             payload = response.json()
@@ -232,5 +251,6 @@ class MarmarayClient:
                 headers=OFFICIAL_PAGE_HEADERS,
                 follow_redirects=True,
             )
+        _log_response("page", response)
         response.raise_for_status()
         return response.text

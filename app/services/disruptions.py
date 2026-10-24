@@ -89,7 +89,8 @@ class TransportDisruptionService:
         sources = [result[0] for result in results]
         warnings = [result[1] for result in results if result[1] is not None]
         checked_count = sum(1 for source in sources if source.coverage_status == "checked")
-        data = [row for _, _, rows in results for row in rows]
+        served_stale = any(result[3] for result in results)
+        data = [row for _, _, rows, _ in results for row in rows]
         data = self._filter_and_sort(data, mode=safe_mode, operator=safe_operator, line=safe_line)
         data = data[:safe_limit]
 
@@ -102,10 +103,10 @@ class TransportDisruptionService:
             freshness_status = "unknown"
         elif data:
             summary = f"{len(data)} güncel ulaşım aksaklığı kaydı bulundu."
-            freshness_status = "fresh"
+            freshness_status = "stale" if served_stale else "fresh"
         else:
             summary = "kontrol edilen resmî kaynaklarda güncel ulaşım aksaklığı kaydı yok."
-            freshness_status = "fresh"
+            freshness_status = "stale" if served_stale else "fresh"
 
         response = success_envelope(
             summary=summary,
@@ -210,7 +211,7 @@ class TransportDisruptionService:
     async def _read_source(
         self,
         spec: _SourceSpec,
-    ) -> tuple[Source, str | None, list[dict[str, Any]]]:
+    ) -> tuple[Source, str | None, list[dict[str, Any]], bool]:
         checked_at = utc_now_iso()
 
         async def load() -> list[dict[str, Any]]:
@@ -222,24 +223,35 @@ class TransportDisruptionService:
                 f"transport_disruptions.{spec.key}",
                 ttl_seconds=self.settings.transport_disruptions_cache_ttl_seconds,
                 loader=load,
+                stale_if_error_seconds=self.settings.transport_disruptions_stale_if_error_seconds,
             )
             source = self._source(
                 spec,
                 coverage_status="checked",
                 last_checked_at=cached.refreshed_at_iso or checked_at,
             )
-            return source, None, list(cached.value)
+            warning = None
+            if cached.is_stale:
+                warning = (
+                    f"{spec.operator} kaynağı şu an yanıt vermiyor ({self._error_detail(cached.error)}); "
+                    f"{cached.refreshed_at_iso} tarihli son başarılı sonuç gösteriliyor."
+                )
+            return source, warning, list(cached.value), cached.is_stale
         except Exception as exc:
             source = self._source(
                 spec,
                 coverage_status="unavailable",
                 last_checked_at=checked_at,
             )
-            detail = type(exc).__name__
-            if isinstance(exc, httpx.HTTPStatusError):
-                detail = f"{detail} (HTTP {exc.response.status_code})"
-            warning = f"{spec.operator} kaynağı kullanılamadı: {detail}."
-            return source, warning, []
+            warning = f"{spec.operator} kaynağı kullanılamadı: {self._error_detail(exc)}."
+            return source, warning, [], False
+
+    @staticmethod
+    def _error_detail(exc: Exception | None) -> str:
+        detail = type(exc).__name__
+        if isinstance(exc, httpx.HTTPStatusError):
+            detail = f"{detail} (HTTP {exc.response.status_code})"
+        return detail
 
     @staticmethod
     def _source(

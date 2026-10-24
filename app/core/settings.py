@@ -114,6 +114,7 @@ class Settings:
     gtfs_schedule_cache_ttl_seconds: int = 86400
     gtfs_schedule_stale_if_error_seconds: int = 604800
     transport_disruptions_cache_ttl_seconds: int = 120
+    transport_disruptions_stale_if_error_seconds: int = 900
     metro_accessibility_cache_ttl_seconds: int = 120
     metro_accessibility_stale_if_error_seconds: int = 900
     mcp_legacy_tools_enabled: bool = False
@@ -335,6 +336,7 @@ def get_settings() -> Settings:
         gtfs_schedule_cache_ttl_seconds=_int_env("GTFS_SCHEDULE_CACHE_TTL_SECONDS", 86400),
         gtfs_schedule_stale_if_error_seconds=_int_env("GTFS_SCHEDULE_STALE_IF_ERROR_SECONDS", 604800),
         transport_disruptions_cache_ttl_seconds=_int_env("TRANSPORT_DISRUPTIONS_CACHE_TTL_SECONDS", 120),
+        transport_disruptions_stale_if_error_seconds=_int_env("TRANSPORT_DISRUPTIONS_STALE_IF_ERROR_SECONDS", 900),
         metro_accessibility_cache_ttl_seconds=_int_env("METRO_ACCESSIBILITY_CACHE_TTL_SECONDS", 120),
         metro_accessibility_stale_if_error_seconds=_int_env("METRO_ACCESSIBILITY_STALE_IF_ERROR_SECONDS", 900),
         mcp_legacy_tools_enabled=_bool_env("MCP_LEGACY_TOOLS_ENABLED", False),
