@@ -21,8 +21,9 @@ kalıcı volume'a işaret etmelidir. Bu değişiklik kendi başına Railway volu
 oluşturmaz; IaC apply veya deploy yapılmadan önce ayrıca karar verin.
 Birbirinden bağımsız replica diskleri ortak kota oluşturmaz.
 
-Kompakt varsayılan yüzeye geçerken istemcilerin tool listesini yenileyin;
-geçişte gerekirse `MCP_LEGACY_TOOLS_ENABLED=true` kullanın. Ferry tarifesi
+Eski araç adları gizli takma ad olarak çağrılabilir kalır; istemcilerin listeyi
+yenilemesi yalnız yeni araçları görmek için gerekir. Eski adları listede de
+göstermek için `MCP_LEGACY_TOOLS_ENABLED=true` kullanın. Ferry tarifesi
 ayrı, varsayılan kapalıdır. Bu geliştirme üretime uygulanmış gibi varsayılmamalıdır.
 
 ## Plan-only verification

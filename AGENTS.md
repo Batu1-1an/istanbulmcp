@@ -40,6 +40,8 @@ Use Python 3.11+. Prefer small modules by data source/domain, for example `app/c
 
 Use `snake_case` for files, functions, variables, and tool names. MCP tools keep the `istanbul_` prefix, such as `istanbul_traffic_status`.
 
+Never remove or rename a published MCP tool. Clients cache `tools/list`, so keep the old name callable as a hidden alias, add every newly published name to `PUBLISHED_TOOL_NAMES` in `tests/test_tool_compatibility.py`, and bump the version in `pyproject.toml` and `server.json`.
+
 Every tool result should include source, freshness, limits, and relevant warnings.
 
 ## Testing Guidelines

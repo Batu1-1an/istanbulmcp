@@ -35,16 +35,28 @@ Mevcut `istanbul_nearby(lat,lon,types,...)` kullanımı korunur.
 **son okumalar** için `kind="air_quality"` kullanın. Bilinmeyen türler ve
 birbirini dışlayan argümanlar sessizce yok sayılmaz.
 
+## Gizli takma adlar
+
+İstemciler `tools/list` sonucunu saklar ve sunucu güncellendiğinde her zaman
+yenilemez. Bu yüzden üretimde bir kez listelenmiş her ad, varsayılan listede
+görünmese de **çağrılabilir kalır**: 17 eski ad ve kapalı ferry aracı gizli takma
+ad olarak kayıtlıdır. Listede olmayan bir ad çağrılırsa hata mesajı istemciden
+`tools/list` çağrısını yenilemesini ister ve güncel araçları sayar.
+
+Kural: bir aracı yeniden adlandırırken ya da kaldırırken eski adı gizli takma ad
+olarak bırakın, `server.json` ve `pyproject.toml` sürümünü artırın.
+`tests/test_tool_compatibility.py` içindeki `PUBLISHED_TOOL_NAMES` listesinden ad
+silinmez; ad kaybolursa test başarısız olur.
+
 ## Uyumluluk modu
 
 ```bash
 MCP_LEGACY_TOOLS_ENABLED=true python -m app.main
 ```
 
-17 eski ad kompakt araçlara **ek olarak** yayımlanır (toplam 33; ferry açılırsa 34;
-GTFS tarifesi açılırsa 35). İstemcilerin tool listesini
-yeniden keşfetmesi gerekir. İptal-duyurusu relay ayarı ferry tarifesini açmaz;
-`FERRY_SCHEDULES_ENABLED` ayrı ve varsayılan olarak kapalıdır.
+17 eski ad kompakt araçlara **ek olarak** listede de yayımlanır (toplam 33; ferry
+açılırsa 34; GTFS tarifesi açılırsa 35). İptal-duyurusu relay ayarı ferry
+tarifesini açmaz; `FERRY_SCHEDULES_ENABLED` ayrı ve varsayılan olarak kapalıdır.
 
 ## Ölçüm
 

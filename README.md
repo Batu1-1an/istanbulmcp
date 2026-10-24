@@ -162,8 +162,9 @@ Tüm araç sonuçları standart bir cevap modeliyle döner: `summary`, `data`, `
 
 ## MCP Araçları
 
-Varsayılan yüzey **16 salt okunur araçtır**; eski adlar
-`MCP_LEGACY_TOOLS_ENABLED=true` ile ayrıca açılabilir. Yetenekler kaldırılmadı,
+Varsayılan yüzey **16 salt okunur araçtır**. Daha önce yayımlanmış her araç adı
+listede görünmese de çağrılabilir kalır; `MCP_LEGACY_TOOLS_ENABLED=true` eski
+adları listede de yayımlar. Yetenekler kaldırılmadı,
 yakınlık/ilçe sorguları, su verileri ve İETT hat işlemleri birleştirildi.
 [Geçiş tablosu](docs/tool-migration.md) eski → yeni çağrıları gösterir.
 
@@ -587,7 +588,7 @@ Herkese açık MCP koruma limitleri:
 - `MCP_API_KEYS` — virgülle ayrılmış rastgele Bearer anahtarları; doldurulduğunda doğrulama tek başına etkinleşir.
 - `MCP_API_KEY_DAILY_QUOTA` — auth etkinken anahtar başına UTC günlük kota; varsayılan `10000`, SQLite ile kalıcı.
 - `FORWARDED_ALLOW_IPS` — istemci IP'sinin okunacağı güvenilir proxy'ler; imajda `*`, dışarıdan çalıştırırken varsayılan `127.0.0.1`.
-- `MCP_LEGACY_TOOLS_ENABLED` — eski araç adlarını ayrıca yayımlar; varsayılan `false`.
+- `MCP_LEGACY_TOOLS_ENABLED` — eski araç adlarını `tools/list` içinde de yayımlar; varsayılan `false`. Eski adlar bu ayardan bağımsız olarak her zaman çağrılabilir.
 - `MCP_MAX_BODY_BYTES`
 - `MCP_RATE_LIMIT_CAPACITY`
 - `MCP_RATE_LIMIT_REFILL_PER_SECOND`

@@ -1,8 +1,12 @@
 """Build the compact surface without deleting legacy Python entry points."""
 from __future__ import annotations
 
+from importlib import metadata
+from typing import Any
+
 from mcp.server import MCPServer
-from mcp.types import ToolAnnotations
+from mcp.server.mcpserver.exceptions import ToolError
+from mcp.types import Tool as MCPTool, ToolAnnotations
 
 from app.core.settings import Settings
 from app.mcp.instructions import SERVER_INSTRUCTIONS
@@ -75,15 +79,44 @@ TOOL_TITLES = {
 }
 
 
+def package_version() -> str:
+    try:
+        return metadata.version("istanbul-mcp")
+    except metadata.PackageNotFoundError:
+        return "0.0.0-local"
+
+
+class IstanbulMCPServer(MCPServer):
+    hidden_tools: frozenset[str] = frozenset()
+
+    async def list_tools(self) -> list[MCPTool]:
+        return [tool for tool in await super().list_tools() if tool.name not in self.hidden_tools]
+
+    def callable_tool_names(self) -> set[str]:
+        return {tool.name for tool in self._tool_manager.list_tools()}
+
+    async def call_tool(self, name: str, arguments: dict[str, Any], context: Any = None) -> Any:
+        try:
+            return await super().call_tool(name, arguments, context)
+        except ToolError as exc:
+            if str(exc) != f"Unknown tool: {name}":
+                raise
+            listed = ", ".join(tool.name for tool in await self.list_tools())
+            raise ToolError(
+                f"Unknown tool: {name}. The tool list may be outdated; call tools/list again. Available tools: {listed}"
+            ) from None
+
+
 def create_mcp_server(settings: Settings) -> MCPServer:
     # Lazy import avoids a cycle: the module's compatibility singleton is built
     # only after its functions have been defined.
     from app.mcp import server as handlers
 
-    server = MCPServer("istanbul-mcp", title="Istanbul MCP", version="0.1.0", instructions=SERVER_INSTRUCTIONS)
-    names = DEFAULT_TOOL_NAMES
-    if settings.mcp_legacy_tools_enabled:
-        names += LEGACY_TOOL_NAMES
+    server = IstanbulMCPServer("istanbul-mcp", title="Istanbul MCP", version=package_version(), instructions=SERVER_INSTRUCTIONS)
+    names = DEFAULT_TOOL_NAMES + LEGACY_TOOL_NAMES
+    hidden = set() if settings.mcp_legacy_tools_enabled else set(LEGACY_TOOL_NAMES)
+    if not settings.ferry_schedules_enabled:
+        hidden.add("istanbul_ferry_schedules")
     if settings.gtfs_schedule_enabled:
         names += ("istanbul_next_departures",)
     for name in names:
@@ -95,7 +128,8 @@ def create_mcp_server(settings: Settings) -> MCPServer:
             handler = with_envelope_output(handler)
         server.add_tool(handler, title=TOOL_TITLES[name], annotations=READ_ONLY,
                         structured_output=True if structured else None)
-    handlers.register_ferry_schedule_tool(server, settings.ferry_schedules_enabled)
+    handlers.register_ferry_schedule_tool(server, True)
+    server.hidden_tools = frozenset(hidden)
     register_resources(server, settings)
     register_prompts(server)
     return server
