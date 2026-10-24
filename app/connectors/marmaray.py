@@ -156,6 +156,7 @@ class MarmarayClient:
                     api_url,
                     rate_limiter=self._rate_limiter,
                     headers=headers,
+                    follow_redirects=True,
                 )
         else:
             response = await request_with_retries(
@@ -164,6 +165,7 @@ class MarmarayClient:
                 api_url,
                 rate_limiter=self._rate_limiter,
                 headers=headers,
+                follow_redirects=True,
             )
         response.raise_for_status()
         try:
@@ -219,6 +221,7 @@ class MarmarayClient:
                     self.url,
                     rate_limiter=self._rate_limiter,
                     headers=OFFICIAL_PAGE_HEADERS,
+                    follow_redirects=True,
                 )
         else:
             response = await request_with_retries(
@@ -227,6 +230,7 @@ class MarmarayClient:
                 self.url,
                 rate_limiter=self._rate_limiter,
                 headers=OFFICIAL_PAGE_HEADERS,
+                follow_redirects=True,
             )
         response.raise_for_status()
         return response.text

@@ -570,3 +570,31 @@ async def test_marmaray_client_preserves_duplicate_rows_without_fabricating_fiel
     assert len(rows) == 2
     assert rows[0]["line_code"] == "MARMARAY"
     assert rows[0]["updated_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_marmaray_client_passes_tcdd_cookie_challenge_redirects():
+    page_url = "https://example.test/marmaray/son-dakika"
+    api_url = "https://example.test/api/MainPages/GetAnnouncementsByDateAndCategoryIdMarmarayAsync/1?year=2026&categoryid=1&pageSize=100&offset=0"
+    challenged: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if "Ref=challenge" not in request.headers.get("cookie", ""):
+            challenged.append(request.url.path)
+            return httpx.Response(302, headers={"Location": request.url.raw_path.decode(), "Set-Cookie": "Ref=challenge; Path=/; HttpOnly"})
+        if str(request.url) == page_url:
+            return httpx.Response(200, text=fixture_text("marmaray/angular_shell.html"))
+        assert str(request.url) == api_url
+        return httpx.Response(200, text=fixture_text("marmaray/urgent_notices_api_empty.json"))
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        rows = await MarmarayClient(
+            url=page_url,
+            api_url="https://example.test/api",
+            api_basic_token="test-token",
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        ).urgent_notices()
+
+    assert rows == []
+    assert challenged == ["/marmaray/son-dakika"]
