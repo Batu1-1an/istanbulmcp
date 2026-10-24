@@ -338,6 +338,47 @@ async def test_traffic_status_returns_label(tmp_path):
     assert "road-level congestion" in result["data"][0]["capabilities"]["does_not_support"]
 
 
+class OldestFirstAir(FakeAir):
+    def __init__(self, newest_has_aqi: bool):
+        super().__init__()
+        self.newest_has_aqi = newest_has_aqi
+
+    async def readings(self, station_id):
+        return [
+            {"ReadTime": "2026-09-24T19:00:00+03:00", "AQI": {"AQIIndex": 30}, "Concentration": None},
+            {"ReadTime": "2026-10-24T18:00:00+03:00", "AQI": {"AQIIndex": 55} if self.newest_has_aqi else None, "Concentration": None},
+            {"ReadTime": "2026-10-24T19:00:00+03:00", "AQI": None, "Concentration": None},
+        ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("newest_has_aqi", "read_time", "has_aqi"), [
+    (True, "2026-10-24T18:00:00+03:00", True),
+    (False, "2026-09-24T19:00:00+03:00", True),
+])
+async def test_air_quality_uses_newest_reading_with_values(tmp_path, newest_has_aqi, read_time, has_aqi):
+    city = service(tmp_path)
+    city.air_quality = OldestFirstAir(newest_has_aqi)
+    result = await city.air_quality_nearby(lat=40.9909, lon=29.0303, radius_m=500, limit=1)
+
+    quality = result["data"][0]["latest_reading_quality"]
+    assert (quality["read_time"], quality["has_aqi"]) == (read_time, has_aqi)
+
+
+@pytest.mark.asyncio
+async def test_air_quality_reports_newest_reading_time_when_no_values(tmp_path):
+    class EmptyAir(FakeAir):
+        async def readings(self, station_id):
+            return [{"ReadTime": f"2026-10-{day:02d}T19:00:00+03:00", "AQI": None, "Concentration": None} for day in range(1, 25)]
+
+    city = service(tmp_path)
+    city.air_quality = EmptyAir()
+    result = await city.air_quality_nearby(lat=40.9909, lon=29.0303, radius_m=500, limit=1)
+
+    assert result["data"][0]["latest_reading_quality"]["read_time"] == "2026-10-24T19:00:00+03:00"
+    assert any("no AQI" in warning for warning in result["warnings"])
+
+
 @pytest.mark.asyncio
 async def test_air_quality_warns_on_missing_aqi(tmp_path):
     result = await service(tmp_path).air_quality_nearby(lat=40.9909, lon=29.0303, radius_m=500, limit=1)

@@ -172,7 +172,8 @@ class CityService:
             except Exception as exc:
                 readings = []
                 warnings.append(f"Air quality readings are unavailable for {station['name']}: {type(exc).__name__}.")
-            latest = readings[0] if readings else {}
+            with_values = [row for row in readings if row.get("AQI") is not None or row.get("Concentration") is not None]
+            latest = max(with_values or readings, key=lambda row: str(row.get("ReadTime") or ""), default={})
             station["latest_reading"] = latest
             station["latest_reading_quality"] = {
                 "has_reading": bool(latest),
