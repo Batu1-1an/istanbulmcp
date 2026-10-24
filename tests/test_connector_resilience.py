@@ -234,11 +234,13 @@ async def test_retry_helper_raises_final_retryable_status_after_attempt_cap() ->
 
 
 @pytest.mark.asyncio
-async def test_iski_dams_fall_back_to_official_api_when_map_source_times_out() -> None:
+async def test_iski_dams_prefer_official_api_over_map_source() -> None:
     limiter = RecordingLimiter()
+    map_requests: list[str] = []
 
     async def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/baraj.json"):
+            map_requests.append(request.url.path)
             raise httpx.ConnectTimeout("map source unavailable", request=request)
         if request.url.path.endswith("/iski/baraj/listesi/v2"):
             assert request.headers["authorization"] == "Bearer token"
@@ -269,7 +271,9 @@ async def test_iski_dams_fall_back_to_official_api_when_map_source_times_out() -
         dams = await iski.dams()
 
     assert dams == [{"kaynakAdi": "Omerli", "baslikAdi": "Ömerli", "dolulukOrani": "89.16"}]
-    assert limiter.acquired == ["iski", "iski"]
+    assert iski.last_dams_source == "official_api"
+    assert limiter.acquired == ["iski"]
+    assert map_requests == []
 
 
 @pytest.mark.asyncio

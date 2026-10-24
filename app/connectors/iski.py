@@ -97,16 +97,6 @@ class IskiClient:
             if error:
                 errors.append(error)
 
-        body, error = await self._try_json_source(
-            "direct_faults",
-            self._validated_faults(self._get_json("mahallelerKesinti.geojson")),
-        )
-        if body is not None:
-            self.last_faults_source = "live_geojson"
-            return body
-        if error:
-            errors.append(error)
-
         if self.api_bearer_token:
             body, error = await self._try_json_source(
                 "official_faults_api",
@@ -117,6 +107,16 @@ class IskiClient:
                 return body
             if error:
                 errors.append(error)
+
+        body, error = await self._try_json_source(
+            "direct_faults",
+            self._validated_faults(self._get_json("mahallelerKesinti.geojson")),
+        )
+        if body is not None:
+            self.last_faults_source = "live_geojson"
+            return body
+        if error:
+            errors.append(error)
 
         if stale_relay is not None:
             self.last_faults_source = "relay_edevlet" if stale_relay.get("relay_source") == "edevlet" else "relay_geojson"
@@ -164,6 +164,8 @@ class IskiClient:
                     ),
                 )
             )
+        if self.api_bearer_token:
+            sources.append(("official_dams_api", "official_api", self._official_dams))
         sources.append(("direct_dams", "live_json", lambda: self._validated_dams(self._get_json("baraj.json"))))
 
         stale_relay: tuple[list[dict], str, str | None] | None = None
@@ -177,14 +179,6 @@ class IskiClient:
                     continue
                 self.last_dams_source = mode
                 self.last_dams_source_updated_at = cached_at
-                return rows
-            if error:
-                errors.append(error)
-
-        if self.api_bearer_token:
-            rows, error = await self._try_json_source("official_dams_api", self._dams_from_api())
-            if rows is not None:
-                self.last_dams_source = "official_api"
                 return rows
             if error:
                 errors.append(error)
@@ -239,6 +233,9 @@ class IskiClient:
                 raise IskiPayloadError("ISKI fault detail payload must include a data list")
             features.extend(self._api_fault_feature(row) for row in rows if isinstance(row, dict))
         return {"type": "FeatureCollection", "features": features}
+
+    async def _official_dams(self) -> tuple[list[dict], None, None, bool]:
+        return await self._dams_from_api(), None, None, False
 
     async def _dams_from_api(self) -> list[dict]:
         body = await self._get_json(
