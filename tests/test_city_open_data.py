@@ -268,6 +268,23 @@ async def test_cultural_centres_are_address_search_not_radius_points(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_cultural_centres_match_published_xlsx_headers_and_address_suffix(tmp_path):
+    rows = [
+        {"KÜLTÜR MERKEZİ ADI": "CEMAL REŞİT REY KONSER SALONU", "ADRES": "Harbiye Mh. Darülbedayi Cd. No:6 Şişli/İstanbul", "AÇILIŞ_KAPANIŞ SAATİ": "08:30-22.00", "ÇOCUK BİRİMİ": "YOK"},
+        {"KÜLTÜR MERKEZİ ADI": "ESENLER KÜLTÜR MERKEZİ", "ADRES": "Fevzi Çakmak Cd. No:2 Esenler/İstanbul", "AÇILIŞ_KAPANIŞ SAATİ": "08:30-22.00", "ÇOCUK BİRİMİ": "VAR"},
+    ]
+    service = geo_service(tmp_path, FakeOpenData({"cultural_centre": payload("cultural_centre", rows, url=CULTURAL_URL, dataset_id="d", resource_id="r")}), FakeCkan(
+        wifi=[{"location": "Şişli WiFi", "latitude": 41.06, "longitude": 28.987, "location_code": "w1"}],
+        libraries=[],
+    ))
+    result = await service.city_services_nearby(place="Şişli", radius_m=600, limit=5)
+    cultural = result["data"][0]["cultural_centres"]
+    assert [(row["name"], row["district"], row["opening_hours"], row["child_unit"]) for row in cultural] == [
+        ("CEMAL REŞİT REY KONSER SALONU", "Şişli", "08:30-22.00", "YOK"),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_static_layer_failure_does_not_remove_previous_geo_rows(tmp_path):
     service = geo_service(tmp_path, FakeOpenData({
         "ev_charging": payload("ev_charging", json.loads((FIXTURES / "ev_charging.geojson").read_text())["features"], url=EV_URL),

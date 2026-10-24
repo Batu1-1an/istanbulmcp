@@ -20,3 +20,9 @@ def test_district_from_text_detects_exact_and_loose_district_mentions():
     assert district_from_text("Kadıköy") == "Kadıköy"
     assert district_from_text("Başakşehir merkez") == "Başakşehir"
     assert district_from_text("Kadıköy Rıhtım") == "Kadıköy"
+
+
+def test_district_from_text_reads_slash_and_parenthesized_address_suffixes():
+    assert district_from_text("Harbiye Mh. Darülbedayi Cd. No:6 Şişli/İstanbul") == "Şişli"
+    assert district_from_text("Yavuz Selim Mh. Fevzi Çakmak Cd. No:2 Esenler/İstanbul") == "Esenler"
+    assert district_from_text("Cumhuriyet Cd. No:12 (Beyoğlu)") == "Beyoğlu"

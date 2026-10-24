@@ -821,7 +821,7 @@ class CityService:
                 "name": str(name),
                 "district": row_district,
                 "address": address,
-                "opening_hours": self._property(row, ("AÇILIŞ-KAPANIŞ SAATLERİ", "Açılış-Kapanış Saatleri", "AÇILIŞ KAPANIŞ", "Çalışma Saatleri")),
+                "opening_hours": self._property(row, ("AÇILIŞ-KAPANIŞ SAATLERİ", "Açılış-Kapanış Saatleri", "AÇILIŞ_KAPANIŞ SAATİ", "AÇILIŞ KAPANIŞ", "Çalışma Saatleri")),
                 "child_unit": self._property(row, ("ÇOCUK BİRİMİ", "Çocuk Birimi", "ÇOCUK BİRİMİ VAR MI")),
                 "location_precision": "address_search",
             }

@@ -147,6 +147,9 @@ def normalize_place(value: str) -> str:
             "İ": "i",
             ",": " ",
             ".": " ",
+            "/": " ",
+            "(": " ",
+            ")": " ",
         }
     )
     translated = normalize("NFKD", normalized.translate(replacements))
