@@ -456,6 +456,40 @@ async def test_iski_stale_relay_faults_do_not_shadow_fresh_official_api() -> Non
     assert (iski.last_faults_source, iski.last_faults_source_stale) == ("official_api", False)
 
 
+def no_fault_api_handler(listing: dict):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "relay.example":
+            return httpx.Response(200, json={**STALE_RELAY_FAULTS, "features": [{"type": "Feature", "properties": {"ILCE_ADI": "B.ÇEKMECE"}, "geometry": None}]})
+        if request.url.path.endswith("/bolgeselAriza/listesi"):
+            return httpx.Response(200, json=listing)
+        return httpx.Response(404)
+
+    return handler
+
+
+@pytest.mark.asyncio
+async def test_iski_official_no_fault_message_is_a_checked_empty_result() -> None:
+    # Live response when ISKI has no active faults: data is an object, not a list.
+    listing = {"data": {"description": "Sistemlerimizde ariza ya da kesinti bulunmamaktadır."}}
+    async with httpx.AsyncClient(transport=httpx.MockTransport(no_fault_api_handler(listing))) as http_client:
+        iski = stale_relay_iski(http_client)
+        faults = await iski.active_faults()
+
+    assert faults == {"type": "FeatureCollection", "features": []}
+    assert (iski.last_faults_source, iski.last_faults_source_stale) == ("official_api", False)
+
+
+@pytest.mark.asyncio
+async def test_iski_unrecognized_fault_message_is_not_treated_as_no_faults() -> None:
+    listing = {"data": {"description": "Yetkisiz erişim."}}
+    async with httpx.AsyncClient(transport=httpx.MockTransport(no_fault_api_handler(listing))) as http_client:
+        iski = stale_relay_iski(http_client)
+        faults = await iski.active_faults()
+
+    assert [feature["properties"]["ILCE_ADI"] for feature in faults["features"]] == ["B.ÇEKMECE"]
+    assert (iski.last_faults_source, iski.last_faults_source_stale) == ("relay_edevlet", True)
+
+
 @pytest.mark.asyncio
 async def test_iski_falls_back_to_stale_relay_when_fresher_sources_fail() -> None:
     async with httpx.AsyncClient(transport=httpx.MockTransport(stale_relay_then_api_handler(STALE_RELAY_DAMS, api_status=503))) as http_client:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+import unicodedata
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from typing import Any
@@ -15,6 +16,15 @@ from app.core.source_limits import iski_rate_limiter
 from app.connectors.ibb_relay import ibb_http_client
 
 logger = logging.getLogger("istanbul_mcp.connectors.iski")
+
+
+def _is_no_fault_message(data: Any) -> bool:
+    """Match ISKI's checked-empty reply, e.g. "...ariza ya da kesinti bulunmamaktadır."."""
+    if not isinstance(data, dict) or not isinstance(data.get("description"), str):
+        return False
+    text = unicodedata.normalize("NFKD", data["description"].replace("ı", "i").replace("I", "i")).casefold()
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    return "bulunmamaktadir" in text and ("ariza" in text or "kesinti" in text)
 
 
 class IskiPayloadError(RuntimeError):
@@ -213,6 +223,8 @@ class IskiClient:
             headers=headers,
         )
         districts = body.get("data") if isinstance(body, dict) else None
+        if _is_no_fault_message(districts):
+            return {"type": "FeatureCollection", "features": []}
         if not isinstance(districts, list):
             raise IskiPayloadError("ISKI faults API payload must include a data list")
 
@@ -229,6 +241,8 @@ class IskiClient:
                 params={"ilceKodu": str(district_code)},
             )
             rows = detail.get("data") if isinstance(detail, dict) else None
+            if _is_no_fault_message(rows):
+                continue
             if not isinstance(rows, list):
                 raise IskiPayloadError("ISKI fault detail payload must include a data list")
             features.extend(self._api_fault_feature(row) for row in rows if isinstance(row, dict))
