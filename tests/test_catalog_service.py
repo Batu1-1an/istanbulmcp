@@ -249,4 +249,21 @@ async def test_query_resource_cache_collapses_concurrent_requests(tmp_path):
     )
 
     assert all(result["ok"] is True for result in results)
-    assert fake.datastore_search_calls == 1
+    assert fake.datastore_search_calls == 2
+
+
+@pytest.mark.asyncio
+async def test_query_resource_names_valid_fields_for_unknown_filter(tmp_path):
+    clear_source_cache()
+
+    class SchemaCkan:
+        async def datastore_search(self, *, resource_id, limit, filters=None, offset=0):
+            assert not filters, "unknown filters must not reach CKAN"
+            return {"fields": [{"id": "_id"}, {"id": "Gun"}, {"id": "Ilce"}], "records": [], "total": 0}
+
+    settings = Settings(database_path=tmp_path / "catalog.sqlite3")
+    service = CatalogService(settings=settings, client=SchemaCkan(), repository=CatalogRepository(settings.database_path))
+    result = await service.query_resource(resource_id="resource-1", filters={"day": "Cumartesi"}, limit=5)
+
+    assert result["ok"] is False
+    assert "day" in result["summary"] and "Gun" in result["summary"]

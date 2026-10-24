@@ -123,6 +123,15 @@ class CatalogService:
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[IBB_SOURCE])
         try:
+            if safe_filters:
+                schema = await self._cached_datastore_search(resource_id=safe_resource_id, limit=0)
+                known = [field.get("id") for field in schema.get("fields", []) if isinstance(field, dict)]
+                unknown = sorted(set(safe_filters) - set(known))
+                if known and unknown:
+                    return validation_error_envelope(InputValidationError(
+                        f"Unknown filter field(s): {', '.join(unknown)}. Valid fields: {', '.join(map(str, known))}",
+                        field="filters",
+                    ), sources=[IBB_SOURCE])
             result = await self._cached_datastore_search(
                 resource_id=safe_resource_id,
                 filters=safe_filters,
