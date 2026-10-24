@@ -234,21 +234,23 @@ kültür merkezi katmanları için [statik şehir katmanları](docs/city-static-
 sayıları cevapta korunur. Ayrıntılar ve canlı kabul komutu:
 [GTFS durak katmanı](docs/gtfs-stops.md).
 
-### GTFS planlı durak kalkışları (opt-in)
+### GTFS planlı durak kalkışları
 
 `istanbul_next_departures(stop_id? | lat/lon?, line?, at?, radius_m?, limit?)`
-uygulandı ancak **`GTFS_SCHEDULE_ENABLED=false` ile varsayılan kapalıdır**.
+uygulandı ve 2026-10-25 canlı kabulünden sonra production'da açıldı. Kaynak
+varsayılanı `GTFS_SCHEDULE_ENABLED=false`; canlı deployment `true` kullanır.
 Tam `stop_times.zip`, servis takvimi ve tarife dosyalarını kullanır;
 `stop_times.csv` yalnız önizleme olduğu için kabul edilmez. Servis günü, takvim
 istisnaları ve `25:xx` saatleri işlenir; canlı ETA veya rota planlayıcı değildir.
-Tam ZIP ile canlı kabul/deploy ölçümü yapılmadan açmayın. Açılırsa yüzey 17 tool
-olur; [kapsam, ayarlar ve kabul adımları](docs/gtfs-schedule.md).
+Açılışta arka plan ön ısıtma çalışır. Isınma sırasında araç `warming_up`
+döndürür; ilk yükleme yaklaşık iki dakika sürer. Açıkken yüzey 17 araçtır;
+[kapsam, ayarlar ve kabul adımları](docs/gtfs-schedule.md).
 
 ## MCP Keşfi ve Promptlar
 
 Python MCP SDK **2.3+** ile aynı `/mcp/` endpoint'i hem eski `initialize`
 istemiyle hem `2026-07-28` sürümündeki `server/discover` akışıyla çalışır.
-Varsayılan araç sayısı **16**'dır; GTFS tarifesi açılırsa 17 olur. Sunucu talimatlarına ek olarak:
+Canlı yüzey **17** araçtır; kaynak varsayılanı GTFS tarifesi kapalıyken 16'dır. Sunucu talimatlarına ek olarak:
 
 | Resource URI | İçerik |
 |---|---|

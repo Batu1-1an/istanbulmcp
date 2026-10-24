@@ -62,6 +62,63 @@ def clear_cache():
 
 
 @pytest.mark.asyncio
+async def test_next_departures_reports_warmup_without_blocking(tmp_path, monkeypatch):
+    import app.services.gtfs_schedule as schedule
+
+    monkeypatch.setattr(schedule, "_warmup_active", True)
+    f = feed(tmp_path)
+
+    result = await f.service.next_departures(stop_id="S1", at=AT)
+
+    assert result["ok"] is False
+    assert result["data"][0]["error_code"] == "warming_up"
+    assert result["data"][0]["retry_after_seconds"] == 60
+    assert result["freshness"]["status"] == "unknown"
+    assert not f.requests
+
+
+def test_warmup_can_start_only_once():
+    from app.services.gtfs_schedule import begin_warmup, reset_warmup_state
+
+    reset_warmup_state()
+    try:
+        assert begin_warmup() is True
+        assert begin_warmup() is False
+    finally:
+        reset_warmup_state()
+
+
+@pytest.mark.asyncio
+async def test_duplicate_stop_time_keys_are_ignored_with_warning(tmp_path):
+    stop_times = (FIXTURES / "stop_times.csv").read_bytes() + b"W;S3;4;;;0;0\n"
+    f = feed(tmp_path, changes={"stop_times": stop_times})
+    async with f.http:
+        result = await f.service.next_departures(stop_id="S1", at=AT, limit=3)
+
+    assert result["ok"], result
+    source = next(s for s in result["sources"] if s["resource_id"] == "id-stop-times")
+    assert source["received_total"] == 24
+    assert source["accepted_total"] == 23
+    assert source["skipped_total"] == 1
+    assert any("duplicate" in warning for warning in result["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_blank_route_id_rows_are_excluded_without_dropping_referenced_routes(tmp_path):
+    routes = (FIXTURES / "routes.csv").read_bytes() + b"\n;KM43_G_D2081;\n"
+    f = feed(tmp_path, changes={"routes": routes})
+    async with f.http:
+        result = await f.service.next_departures(stop_id="S1", at=AT, limit=3)
+
+    assert result["ok"], result
+    source = next(s for s in result["sources"] if s["resource_id"] == "id-routes")
+    assert source["received_total"] == 4
+    assert source["accepted_total"] == 3
+    assert source["skipped_total"] == 1
+    assert any("without route_id" in warning for warning in result["warnings"])
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("stop,minutes", [("S1", [10, 12, 14]), ("S2", [15, 17, 19]), ("S3", [20, 22, 24])])
 async def test_three_stops_and_three_lines_match_published_rows(tmp_path, stop, minutes):
     f = feed(tmp_path)
@@ -255,6 +312,7 @@ def test_real_mcp_call_returns_matching_structured_and_text_envelopes(tmp_path, 
     monkeypatch.setenv("GTFS_SCHEDULE_ENABLED", "true")
     monkeypatch.setenv("DATABASE_PATH", str(f.service.settings.database_path))
     monkeypatch.setattr("app.mcp.server.GtfsScheduleService", lambda _: f.service)
+    monkeypatch.setattr("app.main.begin_warmup", lambda: False)
     params = {"name": "istanbul_next_departures", "arguments": {"stop_id": "S1", "at": AT, "limit": 3}}
     headers = {"accept": "application/json, text/event-stream"}
     if modern:

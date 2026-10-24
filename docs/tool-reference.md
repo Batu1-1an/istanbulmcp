@@ -95,19 +95,22 @@ CTEs, windows, writes and arbitrary functions are not. Output limits are always
 enforced (20/100). Incomplete/oversized captures never produce partial totals.
 See [SQL setup, safety bounds and freshness](datastore-sql.md).
 
-## Scheduled stop departures (opt-in)
+## Scheduled stop departures
 
 `istanbul_next_departures(stop_id?,lat?,lon?,line?,at?,radius_m=500,limit?)`
 uses the full official GTFS `stop_times.zip` with agency/stops/routes/trips/calendar
-and optional calendar_dates. The preview CSV is never used. Default disabled
-pending full-source live acceptance. `stop_id` and coordinates are exclusive;
-coordinate mode selects at most five stops in a bounded radius. `line` matches
-`route_short_name`; `at` is an ISO datetime with an explicit UTC offset, or now
-in Europe/Istanbul. Results cover 24 hours, ordered by scheduled departure.
-Extended `25:xx` times retain their original service date. Calendar exceptions,
-untimed rows and no-pickup stops are respected. No interpolation, live ETA,
-cancellation detection or route planning. Invalid/outside-calendar/unavailable
-results do not establish no service. Structured/text envelopes match.
+and optional calendar_dates. The preview CSV is never used. Enabled in production
+after the 2026-10-25 live acceptance; the source default remains disabled.
+A startup warm-up loads the timetable in the background. During warm-up the tool
+returns `error_code=warming_up` with `retry_after_seconds=60` instead of blocking.
+`stop_id` and coordinates are exclusive; coordinate mode selects at most five stops
+in a bounded radius. `line` matches `route_short_name`; `at` is an ISO datetime
+with an explicit UTC offset, or now in Europe/Istanbul. Results cover 24 hours,
+ordered by scheduled departure. Extended `25:xx` times retain their original
+service date. Calendar exceptions, untimed rows and no-pickup stops are respected.
+No interpolation, live ETA, cancellation detection or route planning.
+Invalid/outside-calendar/unavailable results do not establish no service.
+Structured/text envelopes match.
 
 See [GTFS schedule limits and acceptance](gtfs-schedule.md).
 

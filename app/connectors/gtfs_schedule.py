@@ -180,7 +180,7 @@ class GtfsScheduleClient:
                 conn = sqlite3.connect(stage_path)
                 try:
                     conn.executescript(SCHEMA)
-                    counts, downloaded, expanded = {}, 0, 0
+                    counts, skipped, downloaded, expanded = {}, {}, 0, 0
                     async with ibb_http_client(timeout=settings.request_timeout_seconds) as owned:
                         client = self._client or owned
                         for kind, resource in resources.items():
@@ -198,12 +198,12 @@ class GtfsScheduleClient:
                                             raise GtfsScheduleError("Encrypted/over-budget GTFS ZIP")
                                         expanded += member.file_size
                                         with archive.open(member) as data:
-                                            counts[kind] = await self._ingest(conn, data, kind, settings.gtfs_schedule_max_rows - sum(counts.values()), deadline)
+                                            counts[kind], skipped[kind] = await self._ingest(conn, data, kind, settings.gtfs_schedule_max_rows - sum(counts.values()) - sum(skipped.values()), deadline)
                                 else:
                                     expanded += size
                                     if expanded > settings.gtfs_schedule_max_uncompressed_bytes:
                                         raise GtfsScheduleError("GTFS uncompressed byte budget exceeded")
-                                    counts[kind] = await self._ingest(conn, stream, kind, settings.gtfs_schedule_max_rows - sum(counts.values()), deadline)
+                                    counts[kind], skipped[kind] = await self._ingest(conn, stream, kind, settings.gtfs_schedule_max_rows - sum(counts.values()) - sum(skipped.values()), deadline)
                             path.unlink()
                     self._validate_relations(conn)
                     max_seconds = conn.execute("SELECT MAX(departure_seconds) FROM gtfs_schedule_stop_times").fetchone()[0]
@@ -219,7 +219,7 @@ class GtfsScheduleClient:
                     raise TimeoutError("GTFS schedule load deadline exceeded")
                 snapshot_id = uuid.uuid4().hex
                 publish_schedule(settings.database_path, stage_path, snapshot_id=snapshot_id, profile=profile)
-                return {"snapshot_id": snapshot_id, "counts": counts, "received_bytes": downloaded,
+                return {"snapshot_id": snapshot_id, "counts": counts, "skipped": skipped, "received_bytes": downloaded,
                         "uncompressed_bytes": expanded, "max_departure_seconds": max_seconds, "untimed_total": untimed,
                         "invalid_coordinate_total": invalid_coords, "resources": list(resources.values())}
 
@@ -253,7 +253,7 @@ class GtfsScheduleClient:
                 raise GtfsScheduleError("GTFS download is incomplete or differs from catalog size")
             return received
 
-    async def _ingest(self, conn: sqlite3.Connection, stream: BinaryIO, kind: str, remaining: int, deadline: float) -> int:
+    async def _ingest(self, conn: sqlite3.Connection, stream: BinaryIO, kind: str, remaining: int, deadline: float) -> tuple[int, int]:
         # TextIOWrapper streams the CSV and ZIP member. csv.field_size_limit's
         # default also bounds individual fields. No list of source rows is kept.
         text = io.TextIOWrapper(stream, encoding="utf-8-sig", newline="")
@@ -269,33 +269,54 @@ class GtfsScheduleClient:
                 raise GtfsScheduleError(f"Invalid {kind} schema")
             remaining = min(remaining, TABLE_ROW_CAPS[kind])
             count = 0
+            skipped = 0
+            scanned = 0
             batch = []
             for values in csv.reader(text, delimiter=delimiter, strict=True):
                 if not values:
                     continue
-                if len(values) != len(fields) or count >= remaining:
+                scanned += 1
+                if len(values) != len(fields) or scanned > remaining:
                     raise GtfsScheduleError("GTFS row width or aggregate row budget exceeded")
                 row = {field: value for field, value in zip(fields, values) if field}
+                if kind == "routes" and not _text(row, "route_id", required=False):
+                    # The published feed contains a few unusable route rows with
+                    # a blank primary key. No trip references them; keep them out
+                    # of the schedule and report the count instead of aborting.
+                    skipped += 1
+                    continue
                 batch.append(self._values(kind, row))
-                count += 1
                 if len(batch) >= 1000:
-                    self._insert(conn, kind, batch)
+                    inserted = self._insert(conn, kind, batch)
+                    count += inserted
+                    skipped += len(batch) - inserted
                     batch.clear()
                     await asyncio.sleep(0)
                     if asyncio.get_running_loop().time() >= deadline:
                         raise TimeoutError("GTFS parsing exceeded deadline")
-            self._insert(conn, kind, batch)
+            if batch:
+                inserted = self._insert(conn, kind, batch)
+                count += inserted
+                skipped += len(batch) - inserted
             if not count:
                 raise GtfsScheduleError(f"Empty {kind} table")
-            return count
+            return count, skipped
         finally:
             text.detach()  # The caller owns the binary stream.
 
     @staticmethod
     def _insert(conn, kind, batch):
-        if kind != "agency" and batch:
-            marks = ",".join("?" for _ in batch[0])
-            conn.executemany(f"INSERT INTO gtfs_schedule_{kind} VALUES ({marks})", batch)
+        if not batch:
+            return 0
+        if kind == "agency":
+            return len(batch)
+        marks = ",".join("?" for _ in batch[0])
+        if kind == "stop_times":
+            before = conn.total_changes
+            conn.executemany(f"INSERT OR IGNORE INTO gtfs_schedule_{kind} VALUES ({marks})", batch)
+            return conn.total_changes - before
+        conn.executemany(f"INSERT INTO gtfs_schedule_{kind} VALUES ({marks})", batch)
+        return len(batch)
 
     @staticmethod
     def _values(kind, row):

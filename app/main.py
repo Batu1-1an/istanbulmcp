@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import logging
 
@@ -22,6 +23,7 @@ from app.core.mcp_transport import McpJsonRpcGuard
 from app.core.settings import get_settings
 from app.core.status import build_status
 from app.mcp.registry import create_mcp_server
+from app.services.gtfs_schedule import begin_warmup, run_warmup
 from app.storage.db import public_readiness, readiness
 
 
@@ -75,8 +77,17 @@ def create_app() -> Starlette:
 
     @contextlib.asynccontextmanager
     async def lifespan(_app: Starlette):
-        async with mcp.session_manager.run():
-            yield
+        warmup_task = None
+        if settings.gtfs_schedule_enabled and begin_warmup():
+            warmup_task = asyncio.create_task(run_warmup(settings))
+        try:
+            async with mcp.session_manager.run():
+                yield
+        finally:
+            if warmup_task is not None and not warmup_task.done():
+                warmup_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await warmup_task
 
     app = Starlette(
         routes=[

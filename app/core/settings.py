@@ -110,7 +110,7 @@ class Settings:
     gtfs_schedule_max_bytes: int = 64 * 1024 * 1024
     gtfs_schedule_max_uncompressed_bytes: int = 512 * 1024 * 1024
     gtfs_schedule_max_rows: int = 8000000
-    gtfs_schedule_load_timeout_seconds: float = 120.0
+    gtfs_schedule_load_timeout_seconds: float = 180.0
     gtfs_schedule_cache_ttl_seconds: int = 86400
     gtfs_schedule_stale_if_error_seconds: int = 604800
     transport_disruptions_cache_ttl_seconds: int = 120
@@ -332,7 +332,7 @@ def get_settings() -> Settings:
         gtfs_schedule_max_bytes=_int_env("GTFS_SCHEDULE_MAX_BYTES", 64 * 1024 * 1024),
         gtfs_schedule_max_uncompressed_bytes=_int_env("GTFS_SCHEDULE_MAX_UNCOMPRESSED_BYTES", 512 * 1024 * 1024),
         gtfs_schedule_max_rows=_int_env("GTFS_SCHEDULE_MAX_ROWS", 8000000),
-        gtfs_schedule_load_timeout_seconds=_float_env("GTFS_SCHEDULE_LOAD_TIMEOUT_SECONDS", 120.0),
+        gtfs_schedule_load_timeout_seconds=_float_env("GTFS_SCHEDULE_LOAD_TIMEOUT_SECONDS", 180.0),
         gtfs_schedule_cache_ttl_seconds=_int_env("GTFS_SCHEDULE_CACHE_TTL_SECONDS", 86400),
         gtfs_schedule_stale_if_error_seconds=_int_env("GTFS_SCHEDULE_STALE_IF_ERROR_SECONDS", 604800),
         transport_disruptions_cache_ttl_seconds=_int_env("TRANSPORT_DISRUPTIONS_CACHE_TTL_SECONDS", 120),

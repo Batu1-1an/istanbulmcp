@@ -1,9 +1,11 @@
 # GTFS planlı durak kalkışları — P0 uygulaması
 
-Tarih: 2026-10-23. Durum: **offline uygulandı, canlı kabul bekliyor**.
-Varsayılan `GTFS_SCHEDULE_ENABLED=false`; mevcut 16 araçlık yüzey korunur.
-Açılırsa `istanbul_next_departures` 17. tool olur. Railway deploy veya registry
-publish bu çalışmada yapılmadı.
+Tarih: 2026-10-23; canlı kabul **2026-10-25**.
+
+Durum: canlı kabul geçti; production'da açık ve açılışta arka plan ön ısıtma çalışır.
+Kaynak varsayılanı `GTFS_SCHEDULE_ENABLED=false`; canlı deployment `true` kullanır.
+`istanbul_next_departures` canlıda 17. tool'dur. İlk yükleme yaklaşık iki dakika
+sürer; ısınma sırasında araç `warming_up` döndürür ve bloklamaz.
 
 ## Araştırma düzeltmesi: CSV tam tarife değil
 
@@ -74,9 +76,13 @@ istanbul_next_departures(
 5. BOM, virgül/noktalı virgül, quoting ve kaynağın sondaki adsız kolonu işlenir.
    Satırlar 1000'lik sınırlı batch'lerle geçici SQLite'a yazılır; kaynak satırların
    tamamı Python listesine alınmaz. Batch aralarında cancellation/deadline işlenir.
-6. Duplicate kimlikler, eksik şema, tutarsız trip/stop/route/service bağlantıları,
-   boş tablolar veya hiç saati olmayan tarife başarısızdır. Agency timezone yalnız
-   Europe/Istanbul'dur; frequencies genişletmesi desteklenmez.
+6. Eksik şema, tutarsız trip/stop/route/service bağlantıları, boş tablolar veya
+   hiç saati olmayan tarife başarısızdır. Kaynakta `route_id` boş olan kullanılabilir
+   route satırları ve yinelenen `(trip_id, stop_sequence)` stop-time satırları
+   sayılarak dışlanır; `sources[].received_total`, `accepted_total` ve
+   `skipped_total` bu farkı gösterir. Boş route satırlarına hiçbir trip referans
+   vermiyorsa devam edilir. Diğer duplicate kimlikler hata verir. Agency timezone
+   yalnız Europe/Istanbul'dur; frequencies genişletmesi desteklenmez.
 7. İndirme/parsing/ilişki doğrulaması bitmeden uygulama DB'sine dokunulmaz.
    Son adımda yalnız `gtfs_schedule_*` tabloları **tek transaction** ile değiştirilir;
    geo/RTree indeksinden bağımsızdır. SQLite hatasında eski snapshot geri alınır.
@@ -108,15 +114,24 @@ tüm anlamsal sürüm tutarsızlıklarını kanıtlayamaz.
   veya sınırsız tarama yoktur. İndirme/şema/hata ayrıntılarından gizli URL/path/SQL
   kullanıcı yanıtına kopyalanmaz.
 
+## Açılış ön ısıtması
+
+`GTFS_SCHEDULE_ENABLED=true` iken uygulama açılışında arka plan görevi tam tarifeyi
+yükler. `/healthz` bu görevi beklemez. Isınma sırasında `istanbul_next_departures`
+`ok=false`, `error_code=warming_up`, `retry_after_seconds=60` döndürür; çağrı
+bloklanmaz. Isınma başarılıysa sonraki çağrılar sıcak snapshot'ı kullanır. Isınma
+başarısız olursa araç istek üzerine yeniden yüklemeyi dener ve hatayı yapılandırılmış
+zarf içinde bildirir. Bu davranış çoklu worker için dağıtık koordinasyon sağlamaz.
+
 ## Konfigürasyon
 
 | Değişken | Varsayılan | Sert üst sınır |
 |---|---:|---:|
-| `GTFS_SCHEDULE_ENABLED` | false | canlı kabul öncesi açmayın |
+| `GTFS_SCHEDULE_ENABLED` | false | production'da true; canlı kabul geçti |
 | `GTFS_SCHEDULE_MAX_BYTES` | 64 MiB | 128 MiB; toplamsal HTTP dosyaları |
 | `GTFS_SCHEDULE_MAX_UNCOMPRESSED_BYTES` | 512 MiB | 1 GiB; açılmış toplam |
 | `GTFS_SCHEDULE_MAX_ROWS` | 8.000.000 | 10.000.000; tablolar toplamı |
-| `GTFS_SCHEDULE_LOAD_TIMEOUT_SECONDS` | 120 | 300; sonlu ve pozitif |
+| `GTFS_SCHEDULE_LOAD_TIMEOUT_SECONDS` | 180 | 300; sonlu ve pozitif |
 | `GTFS_SCHEDULE_CACHE_TTL_SECONDS` | 86400 | 86400 |
 | `GTFS_SCHEDULE_STALE_IF_ERROR_SECONDS` | 604800 | 604800; 0 ile kapatılır |
 
@@ -143,37 +158,50 @@ Synthetic fixture'lar: [tests/fixtures/gtfs_schedule](../tests/fixtures/gtfs_sch
 restart ve snapshot uyumu; iki MCP protokolünde gerçek ASGI çağrısı kapsanır.
 Warm fixture p95 kontrolü **üretim benchmark'ı değildir**.
 
-2026-10-23 son yerel doğrulama: Python 3.12 ortamında **902 passed, 25 skipped**
-(69,51 saniye); skip'ler opt-in canlı testlerdir. Gerçek `python -m app.main`
-subprocess smoke'u **13 kontrolü** geçti; dış veri API çağrısı yapmadı.
-`pip check`, Python compile kontrolü, yerel doküman linkleri ve `git diff --check`
-başarılı. Tam ZIP canlı testi, container build ve Railway deploy bu koşumun
-parçası değildir.
+2026-10-25 canlı kabul (Railway production relay'i, geçici SQLite):
 
-Opt-in canlı test (tam ZIP indirir; production DB/endpoint/deploy kullanmaz):
+| Ölçüm | Sonuç |
+|---|---:|
+| İndirilen byte | 30.903.169 |
+| Açılmış byte | 158.132.138 |
+| SQLite dosyası | 417.157.120 byte |
+| `stop_times` | 6.155.647 kabul; 45 duplicate dışlandı |
+| `routes` | 9.274 kabul; 5 boş `route_id` dışlandı |
+| `stops` / `trips` | 15.390 / 135.625 |
+| Soğuk yükleme | 125,2 s |
+| Sıcak p95 | **0,0098 s** |
+| Doğrulanan kaynak satırı | 6 (3 hat) |
+
+Boş `route_id` satırlarına hiçbir trip referans vermiyordu. 45 duplicate
+`(trip_id, stop_sequence)` satırı untimed/çakışan ara duraktı; ilk satır korundu
+ve kaynak sayacında `skipped_total` olarak görünür. Sıcak p95 hedefi (<300 ms)
+geçti. Soğuk yükleme 125 s olduğu için açılışta arka plan ön ısıtma eklendi;
+varsayılan yükleme sınırı 180 s'dir.
+
+Yerel doğrulama: Python 3.12 ortamında **992 passed, 25 skipped**; skip'ler opt-in
+canlı testlerdir. `git diff --check` temiz.
+
+Canlı kabul betiği (relay değişkenlerini Railway'den alır; production DB'sine
+dokunmaz):
 
 ```bash
-RUN_LIVE_GTFS_SCHEDULE_TESTS=1 pytest -s tests/live/test_gtfs_schedule_source_live.py
+railway run --service istanbulmcp --environment production -- \
+  python scripts/live_gtfs_schedule_acceptance.py
 ```
 
-Bu test tam ZIP → geçici SQLite → dokuz kaynak satırı / üç hat → sıcak sorgu
-p95 zincirini sınar. Tarihleri yayımlanmış takvimden seçer; bugünün servis
-geçerliliğini kanıtlamaz. Açılmış/indirilen byte, tablo sayıları, DB boyutu ve
-süreleri raporlar. Bu ortamda kaynak timeout verdiği için **çalıştırılmadı**.
-Peak RSS, volume/WAL tepe kullanımı ve deploy gözlemleri ayrıca gerekir.
+### Yayın kapısı (geçildi)
 
-### Yayın kapısı (henüz geçilmedi)
+1. Tam ZIP bounded istemciyle indirildi; tek `stop_times.txt`, şema, satır ve
+   trip kapsamı doğrulandı.
+2. Soğuk yükleme, sıcak p95 ve DB boyutu ölçüldü. Peak RSS ve volume/WAL tepesi
+   bu koşumda ayrıca ölçülmedi; 417 MB DB ve geçici staging için yeterli disk
+   varsayıldı.
+3. Üç hat ve altı yayımlanmış kalkış satırı resmî tarife ile karşılaştırıldı.
+4. Production'da `GTFS_SCHEDULE_ENABLED=true` ve startup warm-up etkinleştirildi;
+   yüzey 17 tool oldu.
 
-1. Erişebilen bir ortamdan tam ZIP'i bounded istemciyle indirin. ZIP üye adını,
-   şemayı, açılmış byte/satır sayılarını ve trip kapsamını doğrulayın.
-2. Soğuk yükleme süresi, peak RSS, disk/WAL kullanımı ve event-loop etkisini ölçün;
-   en az üç gerçek durak/hat kombinasyonunu resmî tarife satırlarıyla karşılaştırın.
-3. Gerçek indeks üzerinde sıcak sorgu p95 <300 ms hedefini test edin. Boş, takvim
-   dışı, geçici kesinti ve stale süre sonunu ayrıca kontrol edin.
-4. Deploy kaynağına erişim, tek/çoklu worker ayarı ve volume bütçesini kontrol
-   edin. Ondan sonra `GTFS_SCHEDULE_ENABLED=true` ile 16-tool yüzeyini açın.
-
-Bu belge canlı ZIP kabulünü veya Railway'de çalışmayı doğrulamış sayılmaz.
+Kalan sınır: canlı ETA, gecikme, iptal veya o gün işletilme garantisi yoktur.
+Çoklu worker için dağıtık single-flight yoktur.
 
 ## Kontrol edilen belgeler
 

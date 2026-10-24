@@ -6,6 +6,7 @@ from datetime import datetime, time, timedelta
 from contextlib import closing
 import hashlib
 import heapq
+import logging
 import sqlite3
 import time as monotonic_time
 from zoneinfo import ZoneInfo
@@ -22,6 +23,40 @@ from app.storage.db import connect
 from app.storage.gtfs_schedule import require_snapshot
 
 ISTANBUL = ZoneInfo("Europe/Istanbul")
+logger = logging.getLogger("istanbul_mcp.gtfs_schedule")
+_warmup_active = False
+_warmup_done = asyncio.Event()
+_warmup_error: str | None = None
+
+
+def reset_warmup_state() -> None:
+    global _warmup_active, _warmup_done, _warmup_error
+    _warmup_active = False
+    _warmup_done = asyncio.Event()
+    _warmup_error = None
+
+
+def begin_warmup() -> bool:
+    global _warmup_active
+    if _warmup_active or _warmup_done.is_set():
+        return False
+    _warmup_active = True
+    return True
+
+
+async def run_warmup(settings: Settings) -> None:
+    global _warmup_active, _warmup_error
+    try:
+        await GtfsScheduleService(settings)._snapshot()
+        logger.info("GTFS timetable warm-up completed")
+    except Exception as exc:
+        _warmup_error = type(exc).__name__
+        logger.warning("GTFS timetable warm-up failed: %s", type(exc).__name__)
+    finally:
+        _warmup_active = False
+        _warmup_done.set()
+
+
 class ScheduleValidityError(GtfsScheduleError):
     """A request outside the supported calendar must not be a checked empty."""
 
@@ -72,6 +107,15 @@ class GtfsScheduleService:
         if not self.settings.gtfs_schedule_enabled:
             return error_envelope(summary="GTFS timetable lookup is disabled pending live source acceptance.",
                                   warning="GTFS_SCHEDULE_ENABLED=false; no timetable was checked.", sources=[unavailable], limits=limits)
+        if _warmup_active:
+            return error_envelope(
+                summary="GTFS timetable is warming up; no departures were checked.",
+                warning="The complete published timetable is loading. Retry in about 60 seconds.",
+                sources=[unavailable],
+                freshness_status="unknown",
+                data=[{"error_code": "warming_up", "retry_after_seconds": 60}],
+                limits=limits,
+            )
         try:
             cached = await self._snapshot()
             metadata = cached.metadata or {}
@@ -89,13 +133,20 @@ class GtfsScheduleService:
                 resource_id=resource["id"], operator="iett", coverage_kind="published_timetable",
                 coverage_status="unavailable" if cached.is_stale else "checked",
                 scope="complete_published_schedule", url=resource["url"],
-                received_total=metadata["counts"].get(resource.get("name")),
+                received_total=metadata["counts"].get(resource.get("name"), 0) + metadata.get("skipped", {}).get(resource.get("name"), 0),
                 accepted_total=metadata["counts"].get(resource.get("name")),
+                skipped_total=metadata.get("skipped", {}).get(resource.get("name"), 0),
                 source_updated_at=resource.get("last_modified") or resource.get("metadata_modified"),
                 last_successful_refresh_at=cached.refreshed_at_iso,
                 last_checked_at=utc_now_iso() if cached.is_stale else cached.refreshed_at_iso,
             ) for resource in metadata["resources"]]
             warnings = [STATIC_WARNING, "Cache freshness records retrieval age, not the age of the published timetable."]
+            skipped_routes = metadata.get("skipped", {}).get("routes", 0)
+            if skipped_routes:
+                warnings.append(f"{skipped_routes} route row(s) without route_id were excluded; no trip referenced them.")
+            skipped_stop_times = metadata.get("skipped", {}).get("stop_times", 0)
+            if skipped_stop_times:
+                warnings.append(f"{skipped_stop_times} duplicate (trip_id, stop_sequence) stop-time row(s) were excluded; the first row was kept.")
             if untimed:
                 warnings.append(f"{untimed} untimed stop-time row(s) have no departure time; no interpolation performed.")
             if invalid_coords:
