@@ -380,7 +380,9 @@ async def test_iski_preserves_stale_relay_cache_metadata() -> None:
     }
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=payload)
+        if request.url.host == "relay.example":
+            return httpx.Response(200, json=payload)
+        return httpx.Response(404)
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
         iski = IskiClient(
@@ -393,6 +395,76 @@ async def test_iski_preserves_stale_relay_cache_metadata() -> None:
 
     assert iski.last_faults_source_updated_at == "2026-07-23T10:30:00Z"
     assert iski.last_faults_source_stale is True
+
+
+def stale_relay_then_api_handler(relay_payload: dict, api_status: int = 200):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "relay.example":
+            return httpx.Response(200, json=relay_payload)
+        if request.url.host == "api.example" and api_status == 200:
+            if request.url.path.endswith("/iski/baraj/listesi/v2"):
+                return httpx.Response(200, json={"data": [{"kaynakAdi": "Omerli", "dolulukOrani": "77.55"}]})
+            if request.url.path.endswith("/bolgeselAriza/listesi"):
+                return httpx.Response(200, json={"data": [{"ilceKodu": "BE", "ilceAdi": "Kağıthane"}]})
+            if request.url.path.endswith("/bolgeselAriza/arizaDetayi"):
+                return httpx.Response(200, json={"data": [{"arizaNo": "42", "ilceAdi": "Kağıthane", "mahalleAdi": "Çağlayan"}]})
+        if request.url.host == "api.example":
+            return httpx.Response(api_status)
+        return httpx.Response(404)
+
+    return handler
+
+
+def stale_relay_iski(http_client: httpx.AsyncClient) -> IskiClient:
+    return IskiClient(
+        base_url="https://map.example/data",
+        api_base_url="https://api.example/api",
+        api_bearer_token="api-token",
+        relay_base_url="https://relay.example",
+        relay_token="relay-secret",
+        attempts=1,
+        http_client=http_client,
+        rate_limiter=RecordingLimiter(),
+    )
+
+
+STALE_RELAY_DAMS = {"relay_source": "edevlet", "relay_cache_status": "stale", "relay_cached_at": "2026-10-24T14:15:32Z", "data": [{"kaynakAdi": "Old", "dolulukOrani": "50"}]}
+STALE_RELAY_FAULTS = {"type": "FeatureCollection", "relay_source": "edevlet", "relay_cache_status": "stale", "relay_cached_at": "2026-10-24T14:15:32Z", "features": []}
+
+
+@pytest.mark.asyncio
+async def test_iski_stale_relay_dams_do_not_shadow_fresh_official_api() -> None:
+    async with httpx.AsyncClient(transport=httpx.MockTransport(stale_relay_then_api_handler(STALE_RELAY_DAMS))) as http_client:
+        iski = stale_relay_iski(http_client)
+        dams = await iski.dams()
+
+    assert dams == [{"kaynakAdi": "Omerli", "dolulukOrani": "77.55"}]
+    assert (iski.last_dams_source, iski.last_dams_source_stale) == ("official_api", False)
+
+
+@pytest.mark.asyncio
+async def test_iski_stale_relay_faults_do_not_shadow_fresh_official_api() -> None:
+    async with httpx.AsyncClient(transport=httpx.MockTransport(stale_relay_then_api_handler(STALE_RELAY_FAULTS))) as http_client:
+        iski = stale_relay_iski(http_client)
+        faults = await iski.active_faults()
+
+    assert [feature["properties"]["MAHALLE_ADI"] for feature in faults["features"]] == ["Çağlayan"]
+    assert (iski.last_faults_source, iski.last_faults_source_stale) == ("official_api", False)
+
+
+@pytest.mark.asyncio
+async def test_iski_falls_back_to_stale_relay_when_fresher_sources_fail() -> None:
+    async with httpx.AsyncClient(transport=httpx.MockTransport(stale_relay_then_api_handler(STALE_RELAY_DAMS, api_status=503))) as http_client:
+        iski = stale_relay_iski(http_client)
+        dams = await iski.dams()
+    async with httpx.AsyncClient(transport=httpx.MockTransport(stale_relay_then_api_handler(STALE_RELAY_FAULTS, api_status=503))) as http_client:
+        faults_iski = stale_relay_iski(http_client)
+        faults = await faults_iski.active_faults()
+
+    assert dams == [{"kaynakAdi": "Old", "dolulukOrani": "50"}]
+    assert (iski.last_dams_source, iski.last_dams_source_stale, iski.last_dams_source_updated_at) == ("relay_edevlet", True, "2026-10-24T14:15:32Z")
+    assert faults["features"] == []
+    assert (faults_iski.last_faults_source, faults_iski.last_faults_source_stale) == ("relay_edevlet", True)
 
 
 @pytest.mark.asyncio

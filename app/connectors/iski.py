@@ -74,6 +74,7 @@ class IskiClient:
         self.last_faults_source_stale = False
         self.last_faults_cache_max_age_seconds = None
         errors: list[Exception] = []
+        stale_relay: dict | None = None
 
         if self.relay_base_url and self.relay_token:
             body, error = await self._try_json_source(
@@ -87,10 +88,11 @@ class IskiClient:
                     )
                 ),
             )
-            if body is not None:
+            if body is not None and body.get("relay_cache_status") == "stale":
+                stale_relay = body
+            elif body is not None:
                 self.last_faults_source = "relay_edevlet" if body.get("relay_source") == "edevlet" else "relay_geojson"
                 self.last_faults_source_updated_at = self._relay_cached_at(body)
-                self.last_faults_source_stale = body.get("relay_cache_status") == "stale"
                 return body
             if error:
                 errors.append(error)
@@ -115,6 +117,12 @@ class IskiClient:
                 return body
             if error:
                 errors.append(error)
+
+        if stale_relay is not None:
+            self.last_faults_source = "relay_edevlet" if stale_relay.get("relay_source") == "edevlet" else "relay_geojson"
+            self.last_faults_source_updated_at = self._relay_cached_at(stale_relay)
+            self.last_faults_source_stale = True
+            return stale_relay
 
         if self.active_faults_snapshot_json:
             body, captured_at, remaining_age_seconds = self._snapshot_payload(
@@ -158,13 +166,17 @@ class IskiClient:
             )
         sources.append(("direct_dams", "live_json", lambda: self._validated_dams(self._get_json("baraj.json"))))
 
+        stale_relay: tuple[list[dict], str, str | None] | None = None
         for source_name, source_mode, load in sources:
             result, error = await self._try_json_source(source_name, load())
             if result is not None:
                 rows, relay_source, cached_at, is_stale = result
-                self.last_dams_source = "relay_edevlet" if relay_source == "edevlet" else source_mode
+                mode = "relay_edevlet" if relay_source == "edevlet" else source_mode
+                if is_stale:
+                    stale_relay = stale_relay or (rows, mode, cached_at)
+                    continue
+                self.last_dams_source = mode
                 self.last_dams_source_updated_at = cached_at
-                self.last_dams_source_stale = is_stale
                 return rows
             if error:
                 errors.append(error)
@@ -176,6 +188,11 @@ class IskiClient:
                 return rows
             if error:
                 errors.append(error)
+
+        if stale_relay is not None:
+            rows, self.last_dams_source, self.last_dams_source_updated_at = stale_relay
+            self.last_dams_source_stale = True
+            return rows
 
         if self.dams_snapshot_json:
             body, captured_at, remaining_age_seconds = self._snapshot_payload(
