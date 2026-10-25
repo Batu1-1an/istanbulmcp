@@ -477,10 +477,27 @@ Kontrol edilen resmi kaynaklar:
 
 ## Registry ve veri işleme
 
-[`server.json`](server.json) remote-only MCP Registry manifestidir; dosyanın
-bulunması yayımlandığı anlamına gelmez. Public/legacy/optional tool'ların tamamı
+[`server.json`](server.json) remote-only MCP Registry manifestidir. **0.2.4**,
+2026-10-25'te [resmî MCP Registry'ye kaydedildi](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.Batu1-1an%2Fistanbul-mcp/versions/0.2.4)
+ve kaydın `active` durumu API'den doğrulandı. Public/legacy/optional tool'ların tamamı
 `title` ve salt okunur annotation taşır. [Yayın öncesi kontrol ve komutlar](docs/registry.md).
 Registry yayını, Railway deploy ve Claude directory başvurusu ayrı adımlardır.
+
+[Sürüm geçmişi](CHANGELOG.md). Kod lisansı henüz seçilmedi; LICENSE dosyası
+eklenmedi. Şehir verilerinin lisansları ve kullanım koşulları kod lisansından ayrıdır.
+
+Resmî yayıncı CLI'si kurulduktan sonra manifest kontrolü ve yayın:
+
+```bash
+mcp-publisher validate server.json
+mcp-publisher login github
+mcp-publisher publish server.json
+# Yayımlanmış sürümü Registry'den ayrıca doğrulayın
+curl -fsS 'https://registry.modelcontextprotocol.io/v0.1/servers/io.github.Batu1-1an%2Fistanbul-mcp/versions/0.2.4'
+```
+
+Yayın için GitHub namespace sahipliğinin doğrulanması gerekir. Kurulum,
+kimlik bilgisi güvenliği ve Registry'den sonuç kontrolü [yayın rehberindedir](docs/registry.md).
 
 [Veri işleme/gizlilik notu](docs/privacy.md) ·
 [Destek / sorun bildirimi](https://github.com/Batu1-1an/istanbulmcp/issues)

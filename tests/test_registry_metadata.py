@@ -4,6 +4,7 @@ import hashlib
 from itertools import product
 import json
 from pathlib import Path
+import re
 import tomllib
 
 from jsonschema import Draft7Validator, FormatChecker
@@ -28,6 +29,17 @@ def test_manifest_matches_pinned_official_registry_schema_and_package():
     assert manifest["name"] == "io.github.Batu1-1an/istanbul-mcp"
     assert manifest["remotes"] == [{"type": "streamable-http", "url": "https://istanbulmcp-production.up.railway.app/mcp/"}]
     assert "packages" not in manifest  # Remote-only, no unverified package claims.
+
+
+def test_changelog_documents_current_version_without_duplicate_releases():
+    version = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
+    changelog = (ROOT / "CHANGELOG.md").read_text()
+    releases = re.findall(r"^## \[([0-9]+\.[0-9]+\.[0-9]+)\] - (\d{4}-\d{2}-\d{2})$", changelog, re.MULTILINE)
+    versions = [entry[0] for entry in releases]
+    assert versions and versions[0] == version
+    assert len(versions) == len(set(versions))
+    assert "## [Unreleased]" in changelog
+    assert "[Sürüm geçmişi](CHANGELOG.md)" in (ROOT / "README.md").read_text()
 
 
 @pytest.mark.asyncio
