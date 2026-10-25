@@ -23,7 +23,7 @@ sayı ve İstanbul plausibility kutusu kabul edilir.
   katmanlar varsayılan sorguya sessizce eklenmez.
 - Başarılı katman `geo_features` içinde kaynak/tür bazında **atomik replace**
   edilir; başarısız veya boş yükleme önceki katmanı silmez.
-- Her sonuç `maps_url`, kaynak kimliği, kaynak URL'i, alınan/kabul edilen/atlanan
+- Her sonuç `maps_url`, dataset/resource kimliği, alınan/kabul edilen/atlanan
   sayıları ve uyarı taşır. Statik veri `freshness` durumunu canlı sağlıkla
   karıştırmaz.
 - EV/taksi GeoJSON'unda koordinat önce property (`LATITUDE/LONGITUDE`, `lat/lon`)

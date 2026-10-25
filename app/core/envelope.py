@@ -3,14 +3,39 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import math
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 
 FreshnessStatus = Literal["fresh", "stale", "unknown", "broken"]
+
+MACHINE_HOST_MARKERS = ("api", "proxy")
+MACHINE_PATH_SEGMENTS = frozenset({"api", "download"})
+MACHINE_FILE_SUFFIXES = (".asmx", ".csv", ".geojson", ".json", ".xls", ".xlsx", ".xml", ".zip")
 
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def public_page_url(url: str | None) -> str | None:
+    if not url:
+        return None
+    try:
+        parts = urlsplit(url)
+        host = (parts.hostname or "").lower()
+    except ValueError:
+        return None
+    segments = [segment.lower() for segment in parts.path.split("/") if segment]
+    if parts.scheme != "https" or not host:
+        return None
+    if any(marker in label for label in host.split(".") for marker in MACHINE_HOST_MARKERS):
+        return None
+    if MACHINE_PATH_SEGMENTS.intersection(segments):
+        return None
+    if segments and segments[-1].endswith(MACHINE_FILE_SUFFIXES):
+        return None
+    return url
 
 
 class Freshness(BaseModel):
@@ -40,7 +65,14 @@ class Source(BaseModel):
     matched_total: int | None = None
     returned_total: int | None = None
     license: str | None = "Istanbul Metropolitan Municipality Open Data License"
-    url: str | None = None
+    url: str | None = Field(
+        default=None,
+        description="Human-readable source page for citations; null when the source is only an API endpoint or data file.",
+    )
+
+    @field_serializer("url")
+    def _serialize_url(self, url: str | None) -> str | None:
+        return public_page_url(url)
 
 
 class Pagination(BaseModel):

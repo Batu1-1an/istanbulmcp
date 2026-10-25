@@ -13,6 +13,8 @@ District mobility checks parking only; district city-services checks library/cul
 addresses, not WiFi. Named areas use static reference points, not full address geocoding.
 Acıbadem is ambiguous: ask for Kadıköy or Üsküdar before selecting a point.
 Preserve envelope freshness, limits, warnings and uncertainty in the answer.
+Attribute data by publisher name (e.g. İBB). Link a source only via a non-null
+sources[].url; never show API endpoints or data-file URLs to users as source links.
 Unavailable or partial coverage is not an empty result or proof of normal service.
 Cached/static locations are not live availability. EV charging, taxi stands and
 weekly markets are published snapshots, not live operating status; market

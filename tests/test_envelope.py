@@ -1,3 +1,5 @@
+import pytest
+
 from app.core.envelope import Freshness, Source, error_envelope, success_envelope
 
 
@@ -71,3 +73,43 @@ def test_source_preserves_transport_coverage_context_without_changing_envelope_s
     assert payload["sources"][0]["coverage_status"] == "checked"
     assert payload["sources"][0]["modes"] == ["metro", "tram", "funicular", "cable_car"]
     assert payload["freshness"]["ttl_seconds"] == 120
+
+
+@pytest.mark.parametrize("url", [
+    "https://api.ibb.gov.tr",
+    "https://api.ibb.gov.tr/tkmservices/api/TrafficData/v1",
+    "https://api.ibb.gov.tr/iett/UlasimDinamikVeri/Duyurular.asmx",
+    "https://iskiapi.iski.istanbul/api/iski/baraj/listesi/v2",
+    "https://cbsproxy.ibb.gov.tr/?eczanews&ilceID=all",
+    "https://data.ibb.gov.tr/api/3/action/datastore_search?resource_id=x",
+    "https://data.ibb.gov.tr/dataset/x/resource/y/download/stops.csv",
+    "https://harita.iski.gov.tr/data/baraj.json",
+    "https://harita.iski.gov.tr/data/mahallelerKesinti.geojson",
+    "https://example.test/ibb-sosyal-tesis-konumlar.XLSX",
+    "http://sehirhatlari.istanbul/tr/iptal-seferler",
+    "javascript:alert(1)",
+    "",
+])
+def test_source_url_omits_api_endpoints_and_data_files_from_answers(url):
+    for payload in (
+        success_envelope(summary="ok", sources=[Source(name="Machine source", url=url)]),
+        error_envelope(summary="failed", warning="down", sources=[Source(name="Machine source", url=url)]),
+        success_envelope(summary="ok", sources=[Source(name="Copied").model_copy(update={"url": url})]),
+    ):
+        assert payload["sources"][0]["url"] is None
+        assert payload["sources"][0]["name"] in {"Machine source", "Copied"}
+
+
+@pytest.mark.parametrize("url", [
+    "https://data.ibb.gov.tr",
+    "https://data.ibb.gov.tr/dataset/iett-gtfs-verisi",
+    "https://sehirhatlari.istanbul/tr/iptal-seferler",
+    "https://www.metro.istanbul/MetroIstanbulBuzPateni2024/SeferDurumlari/Ariza",
+    "https://www.turkiye.gov.tr/istanbul-su-ve-kanalizasyon-idaresi-baraj-doluluk-oranlari",
+    "https://tesislerimiz.ibb.istanbul/tesisler",
+    "https://www.wikidata.org/w/index.php?title=Q1&oldid=2",
+])
+def test_source_url_keeps_human_readable_pages(url):
+    payload = success_envelope(summary="ok", sources=[Source(name="Page source", url=url)])
+
+    assert payload["sources"][0]["url"] == url

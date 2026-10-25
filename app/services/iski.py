@@ -325,12 +325,11 @@ class IskiService:
                 url=EDEVLET_ISKI_FAULTS_URL if kind == "faults" else EDEVLET_ISKI_DAMS_URL,
             )
         if source_mode in {"relay_geojson", "relay_json"}:
-            path = "iski/faults" if kind == "faults" else "iski/dams"
             return Source(
                 name=f"ISKI {'active water faults' if kind == 'faults' else 'dam occupancy'} relay",
                 publisher="Istanbul Water and Sewerage Administration",
                 license=None,
-                url=f"{(self.settings.iski_relay_base_url or '').rstrip('/')}/{path}",
+                url=None,
             )
         if source_mode == "official_api":
             path = "iski/bolgeselAriza/listesi" if kind == "faults" else "iski/baraj/listesi/v2"

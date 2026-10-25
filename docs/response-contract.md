@@ -65,6 +65,18 @@ Başarıda `error:null`; standart hata zarfında:
   Üst düzey bir özet satırı, iç listelerin tam olduğunu göstermez.
 - Hata verisinin sayım kapsamı `error_details` olur; boş hata verisi boş şehir sonucu değildir.
 
+## Kaynak linkleri
+
+- `sources[].url` yalnız insanların okuyabileceği bir sayfadır (ör. Şehir Hatları duyuru
+  sayfası, İBB Açık Veri dataset sayfası, e-Devlet). Kullanıcı cevabında link olarak
+  verilebilecek tek kaynak alanı budur.
+- API uçları (`api.*`, `*api.*`, `*proxy.*` host'ları, `/api/` veya `/download/` yolları),
+  ham veri dosyaları (`.json`, `.geojson`, `.csv`, `.zip`, `.xls(x)`, `.xml`, `.asmx`),
+  HTTPS olmayan adresler `null` döner. Kural `Source` serileştirmesinde uygulanır; yeni
+  kaynaklar da otomatik kapsanır. Özel relay adresleri kaynak URL'i olarak hiç yazılmaz.
+- `url:null`, kaynağın bilinmediği anlamına gelmez. `name`, `publisher`, `dataset_id`,
+  `resource_id` ve `freshness` korunur; cevapta kaynak yayıncı adıyla ("İBB verisi") anılır.
+
 `istanbul://schema/catalog`, güncel `ResponseEnvelope` şemasını sunar. Şemalı araçlarda
 JSON metni ve `structuredContent` aynı alanları taşır.
 

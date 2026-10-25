@@ -361,7 +361,8 @@ async def test_iski_relay_provenance_is_reported_truthfully():
 
     assert result["freshness"]["status"] == "fresh"
     assert result["sources"][0]["name"] == "ISKI active water faults relay"
-    assert result["sources"][0]["url"] == "https://relay.example/iski/faults"
+    assert result["sources"][0]["url"] is None
+    assert "relay.example" not in str(result)
     assert "source=ISKI relay GeoJSON" in result["limits"]
 
 

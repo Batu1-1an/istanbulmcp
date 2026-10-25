@@ -182,6 +182,9 @@ async def test_live_test_fixes_survive_real_service_and_mcp_serialization(mode, 
         assert not traffic.is_error
         assert traffic.structured_content["data"][0]["measured_at"] == "2026-10-24T23:30:00+03:00"
         assert json.loads(traffic.content[0].text) == traffic.structured_content
+        assert traffic.structured_content["sources"][0]["publisher"] == "Istanbul Metropolitan Municipality"
+        assert traffic.structured_content["sources"][0]["url"] is None
+        assert "api.ibb.gov.tr" not in traffic.content[0].text
 
         services = await client.call_tool("istanbul_city_services_nearby", {"place": "Kadıköy"})
         assert not services.is_error

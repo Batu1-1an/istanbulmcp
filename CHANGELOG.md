@@ -6,6 +6,16 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 
 ## [Unreleased]
 
+### Changed
+- `sources[].url` yalnız kullanıcının açabileceği web sayfalarını taşır. API uçları
+  (`api.ibb.gov.tr` vb.), proxy adresleri ve ham veri dosyaları (JSON, CSV, ZIP, XLSX)
+  `null` döner; yayıncı, dataset/resource ID ve tazelik bilgisi korunur.
+- Sunucu talimatı, cevapta kaynağı yayıncı adıyla belirtmeyi ve yalnız dolu
+  `sources[].url` alanını link olarak vermeyi ister.
+
+### Security
+- İSKİ relay adresi artık tool sonucunda kaynak URL'i olarak görünmez.
+
 ## [0.2.5] - 2026-10-25
 
 ### Added

@@ -67,3 +67,9 @@ async def test_pharmacy_descriptions_are_narrow_and_presentation_guidance_is_pre
         assert "Show source/citation footers" not in description
     for guidance in ("maps_url", "maps_search_url", "calling before visiting", "source footers only when asked", "freshness", "warnings"):
         assert guidance in SERVER_INSTRUCTIONS
+
+
+def test_instructions_forbid_api_endpoints_as_answer_source_links():
+    assert "publisher name" in SERVER_INSTRUCTIONS
+    assert "sources[].url" in SERVER_INSTRUCTIONS
+    assert "never show API endpoints or data-file URLs" in SERVER_INSTRUCTIONS
