@@ -16,6 +16,24 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 ### Security
 - İSKİ relay adresi artık tool sonucunda kaynak URL'i olarak görünmez.
 
+## [0.2.6] - 2026-10-25
+
+### Added
+- Araç bazında çağrı, devam eden işlem, süre (toplam/ortalama/en uzun), yavaş çağrı,
+  hata türü, stale/kısmi cevap ve ortak önbellek olay sayaçları.
+- `istanbul_mcp.tools` JSON günlüğü ve mevcut `/status` içinde `tool_metrics`.
+  Argüman, koordinat, sorgu, anahtar, yanıt metni ve exception mesajı kaydedilmez.
+- Sabitlenmiş resmî `@modelcontextprotocol/conformance@0.1.16` paketiyle gerçek
+  yerel sunucuya karşı beş uygulanabilir senaryo; CI'da zorunlu ayrı job.
+  Rapor ve günlükler başarısızlıkta da 14 gün saklanır.
+
+### Notes
+- Sayaçlar süreç içidir, yeniden başlatmada sıfırlanır. Önbellek gözlemi yalnız
+  ortak `SourceTTLCache` içindir. p95 veya upstream/CDN cache ölçümü değildir.
+- Resmî profil yalnız seçilen 2025 dönemi senaryolarını kapsar; tam paket,
+  sertifika veya 2026 protokol doğrulaması değildir. Üretime test aracı eklenmedi.
+- MCP araç isimleri, SQL aracı ve allowlist değiştirilmedi.
+
 ## [0.2.5] - 2026-10-25
 
 ### Added
@@ -124,6 +142,7 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
   altyapısıyla projenin ilk temeli.
 
 [Unreleased]: https://github.com/Batu1-1an/istanbulmcp/commits/main
+[0.2.6]: https://github.com/Batu1-1an/istanbulmcp/compare/59e2118...main
 [0.2.5]: https://github.com/Batu1-1an/istanbulmcp/compare/9010d75...main
 [0.2.4]: https://github.com/Batu1-1an/istanbulmcp/commit/1736725
 [0.2.3]: https://github.com/Batu1-1an/istanbulmcp/commit/ccc3864

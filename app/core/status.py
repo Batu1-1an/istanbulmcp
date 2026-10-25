@@ -49,12 +49,14 @@ TOOL_SOURCES = {
 }
 
 
-def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = None, tools=None) -> dict[str, Any]:
+def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = None, tools=None,
+                 tool_metrics: dict[str, Any] | None = None) -> dict[str, Any]:
     inventory = _tool_inventory(tools or [])
     return {
         "ok": True,
         "service": settings.app_name,
         "version": _package_version(),
+        "tool_metrics": tool_metrics or {"enabled": False},
         "access": {
             "api_key_required": settings.mcp_auth_required or bool(settings.mcp_api_keys),
             "daily_quota_per_key": settings.mcp_api_key_daily_quota,

@@ -9,6 +9,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import Tool as MCPTool, ToolAnnotations
 
 from app.core.settings import Settings
+from app.core.tool_telemetry import ToolTelemetry
 from app.mcp.instructions import SERVER_INSTRUCTIONS
 from app.mcp.prompts import register_prompts
 from app.mcp.resources import register_resources
@@ -89,6 +90,7 @@ def package_version() -> str:
 
 class IstanbulMCPServer(MCPServer):
     hidden_tools: frozenset[str] = frozenset()
+    telemetry: ToolTelemetry | None = None
 
     async def list_tools(self) -> list[MCPTool]:
         return [tool for tool in await super().list_tools() if tool.name not in self.hidden_tools]
@@ -97,6 +99,14 @@ class IstanbulMCPServer(MCPServer):
         return {tool.name for tool in self._tool_manager.list_tools()}
 
     async def call_tool(self, name: str, arguments: dict[str, Any], context: Any = None) -> Any:
+        if self.telemetry is None:
+            return await self._call_tool_compatible(name, arguments, context)
+        with self.telemetry.track(name) as observation:
+            result = await self._call_tool_compatible(name, arguments, context)
+            observation.result(result)
+            return result
+
+    async def _call_tool_compatible(self, name: str, arguments: dict[str, Any], context: Any = None) -> Any:
         try:
             return await super().call_tool(name, arguments, context)
         except ToolError as exc:
@@ -131,6 +141,7 @@ def create_mcp_server(settings: Settings) -> MCPServer:
         server.add_tool(handler, title=TOOL_TITLES[name], annotations=READ_ONLY,
                         structured_output=True if structured else None)
     handlers.register_ferry_schedule_tool(server, True)
+    server.telemetry = ToolTelemetry(server.callable_tool_names())
     server.hidden_tools = frozenset(hidden)
     register_resources(server, settings)
     register_prompts(server)

@@ -47,7 +47,9 @@ async def status(request):
     if hasattr(request.app.state, "mcp_concurrency_limiter"):
         abuse_guard["concurrency"] = request.app.state.mcp_concurrency_limiter.snapshot()
     tools = await request.app.state.mcp_server.list_tools()
-    return JSONResponse(build_status(request.app.state.settings, abuse_guard=abuse_guard, tools=tools))
+    telemetry = request.app.state.mcp_server.telemetry
+    return JSONResponse(build_status(request.app.state.settings, abuse_guard=abuse_guard, tools=tools,
+                                     tool_metrics=telemetry.snapshot() if telemetry is not None else None))
 
 
 async def mcp_redirect(_request):

@@ -1,0 +1,7 @@
+{
+  "name": "istanbul-mcp-conformance",
+  "private": true,
+  "devDependencies": {
+    "@modelcontextprotocol/conformance": "0.1.16"
+  }
+}

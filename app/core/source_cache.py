@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+from app.core.tool_telemetry import observe_cache
+
 
 @dataclass
 class CacheEntry:
@@ -69,6 +71,7 @@ class SourceTTLCache:
         now = time.monotonic()
         entry = self._entries.get(key)
         if entry is not None and now < entry.expires_at_monotonic:
+            observe_cache("hit")
             return CachedSourceData(
                 value=entry.value,
                 refreshed_at_iso=entry.refreshed_at_iso,
@@ -77,12 +80,16 @@ class SourceTTLCache:
                 metadata=entry.metadata,
             )
 
+        observe_cache("miss")
         lock = self._locks.setdefault(key, asyncio.Lock())
+        if lock.locked():
+            observe_cache("wait")
         try:
             async with lock:
                 now = time.monotonic()
                 entry = self._entries.get(key)
                 if entry is not None and now < entry.expires_at_monotonic:
+                    observe_cache("hit")
                     return CachedSourceData(
                         value=entry.value,
                         refreshed_at_iso=entry.refreshed_at_iso,
@@ -91,6 +98,7 @@ class SourceTTLCache:
                         metadata=entry.metadata,
                     )
 
+                observe_cache("load")
                 value = await loader()
                 metadata = None
                 max_cache_age_seconds = None
@@ -124,6 +132,7 @@ class SourceTTLCache:
                     metadata=metadata,
                 )
         except Exception as exc:
+            observe_cache("error")
             stale_entry = self._entries.get(key)
             stale_deadline = (
                 stale_entry.expires_at_monotonic + stale_if_error_seconds
@@ -137,6 +146,7 @@ class SourceTTLCache:
                 and stale_if_error_seconds > 0
                 and time.monotonic() <= stale_deadline
             ):
+                observe_cache("stale")
                 return CachedSourceData(
                     value=stale_entry.value,
                     refreshed_at_iso=stale_entry.refreshed_at_iso,
@@ -168,14 +178,17 @@ class SourceTTLCache:
         """Inspect a bounded existing entry without a refresh or an upstream call."""
         entry = self._entries.get(key)
         if entry is None:
+            observe_cache("miss")
             return None
         now = time.monotonic()
         deadline = entry.expires_at_monotonic + stale_if_error_seconds
         if entry.max_age_at_monotonic is not None:
             deadline = min(deadline, entry.max_age_at_monotonic)
         if now >= deadline:
+            observe_cache("miss")
             return None
         fresh = now < entry.expires_at_monotonic
+        observe_cache("hit" if fresh else "stale")
         return CachedSourceData(value=entry.value, refreshed_at_iso=entry.refreshed_at_iso,
                                 is_fresh=fresh, is_stale=not fresh, metadata=entry.metadata)
 

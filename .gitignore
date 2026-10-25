@@ -39,6 +39,7 @@ coverage.xml
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+.artifacts/
 
 # Python packaging output
 /build/

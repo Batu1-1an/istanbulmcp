@@ -505,6 +505,22 @@ kimlik bilgisi güvenliği ve Registry'den sonuç kontrolü [yayın rehberindedi
 
 ## HTTP Sağlık Kontrolleri
 
+### Araç izleme ve protokol kontrolü
+
+0.2.6 ile `/status` içindeki `tool_metrics`, araç başına süre, hata türü ve ortak
+önbellek olaylarını gösterir. Argüman/konum/anahtar yazılmaz; sayaçlar restart ile
+sıfırlanır. [Alanlar ve sınırlar](docs/monitoring.md).
+
+CI ayrıca sabitlenmiş resmî MCP paketinden beş uygulanabilir senaryoyu gerçek
+yerel sunucuda çalıştırır. Bu seçilmiş 2025 dönemi profilidir; tam sertifika veya
+2026 protokol testi değildir. [Kapsam ve raporlar](tests/conformance/README.md).
+
+```bash
+pytest tests/test_tool_telemetry.py tests/test_conformance_runner.py
+npm ci --prefix tests/conformance --ignore-scripts --no-audit --no-fund
+python -m scripts.check_mcp_conformance
+```
+
 ### Tarayıcıdan doğrudan MCP bağlantısı
 
 0.2.5'te `MCP_CORS_ALLOWED_ORIGINS` ile yalnız seçilen sitelere izin verilebilir.

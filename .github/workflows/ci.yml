@@ -23,6 +23,36 @@ jobs:
       - name: Smoke test local MCP process (no external data calls)
         run: python -m scripts.smoke_mcp
 
+  conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: tests/conformance/package-lock.json
+      - name: Install application
+        run: pip install -e ".[dev]"
+      - name: Install pinned official conformance package
+        run: npm ci --prefix tests/conformance --ignore-scripts --no-audit --no-fund
+      - name: Check applicable official MCP scenarios against the real app
+        run: python -m scripts.check_mcp_conformance
+      - name: Retain conformance reports and server logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-conformance
+          path: .artifacts/conformance/
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: warn
+
   docker:
     runs-on: ubuntu-latest
     steps:

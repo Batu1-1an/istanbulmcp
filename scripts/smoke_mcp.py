@@ -194,6 +194,15 @@ def check_public_mode(directory: Path) -> list[str]:
         assert status == 200
         assert tool_payload(invalid_sql)["data"][0]["error_code"] == "resource_not_allowlisted"
         checks.append("SQL resource allowlist fails closed")
+
+        status, monitored = request(server.base, "/status")
+        assert status == 200 and monitored["tool_metrics"]["reset_on_restart"]
+        metrics = {row["tool"]: row for row in monitored["tool_metrics"]["tools"]}
+        assert metrics["istanbul_health"]["outcomes"]["success"] == 1
+        assert metrics["istanbul_nearby"]["outcomes"]["domain_error"] == 1
+        assert metrics["istanbul_datastore_query"]["errors"] == {"resource_not_allowlisted": 1}
+        assert all(row["in_flight"] == 0 for row in metrics.values())
+        checks.append("real tool calls expose success/domain errors and completed timings in /status")
     return checks
 
 

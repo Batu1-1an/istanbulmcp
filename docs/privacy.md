@@ -1,6 +1,6 @@
 # Veri işleme ve gizlilik notu
 
-Son güncelleme: 2026-10-23. Bu belge depodaki uygulama davranışını açıklar;
+Son güncelleme: 2026-10-25. Bu belge depodaki uygulama davranışını açıklar;
 isteminizi kullandığınız MCP istemcisinin veya barındırma sağlayıcısının
 politikalarının yerine geçmez.
 
@@ -18,6 +18,19 @@ politikalarının yerine geçmez.
   göre SQLite'a yazılır; sayaç ham anahtar yerine anahtar hash'i kullanır.
 
 ## Günlükler ve saklama
+
+Araç bazlı `istanbul_mcp.tools` günlüğü kayıtlı araç adı, süre, sonuç türü,
+sabit hata kategorisi, dönen liste uzunluğu, tazelik/kısmi cevap işareti ve ortak
+önbellek sayaçlarını içerir. Argümanlar, koordinatlar, sorgu metni, anahtarlar,
+yanıt metni, önbellek anahtarı veya exception mesajı bu kayda eklenmez.
+Bilinmeyen araç adları `__unknown__`, bilinmeyen hata kodları `other_error`
+olarak birleştirilir. Toplamlar süreç belleğinde sınırlı alanlarda tutulur;
+yeniden başlatmada sıfırlanır. Günlüklerin saklanması ise sağlayıcıya bağlıdır.
+
+`/status`, bu toplamları ve son tamamlanan çağrı zamanını gösterir. Herkese açık
+modda bu operasyon bilgileri herkese açıktır; anahtarlı modda mevcut `/status`
+kimlik doğrulaması korunur. Kullanıcı/istemci bazında izleme yapılmaz.
+[Ölçüm kapsamı](monitoring.md).
 
 Uygulamanın `JsonRequestLogMiddleware` günlüğü HTTP yöntemi, path, durum kodu ve
 süreyi kaydeder; istek gövdesini, Authorization başlığını veya sorgu string'ini

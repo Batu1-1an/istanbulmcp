@@ -1,0 +1,17 @@
+{
+  "package": "@modelcontextprotocol/conformance",
+  "version": "0.1.16",
+  "scenarios": [
+    "server-initialize",
+    "ping",
+    "tools-list",
+    "resources-list",
+    "prompts-list"
+  ],
+  "coverage": "Selected official generic server scenarios for the 2025-era protocol. Not a complete suite, certification, or 2026 protocol validation.",
+  "exclusions": [
+    "tools-call-* require the official example tool fixtures; the application does not publish those tools.",
+    "Resource-read and prompt-get fixture scenarios expect example URIs/names. Application-specific paths remain covered by our process smoke tests.",
+    "Sessions, subscriptions, sampling, elicitation, OAuth, and other optional capability scenarios are outside this stateless read-only application profile."
+  ]
+}
