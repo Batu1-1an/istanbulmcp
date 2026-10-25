@@ -12,6 +12,7 @@ from starlette.routing import Mount, Route
 
 from app.core.abuse_guard import ClientRateLimiter, ConcurrencyLimiter, McpAbuseGuardMiddleware
 from app.core.http_logging import JsonRequestLogMiddleware
+from app.core.cors import McpCorsApplication, cors_transport_security, validate_cors_settings
 from app.core.api_auth import ApiKeyAuthMiddleware, ApiKeyQuotaMiddleware, validate_auth_settings
 from app.storage.quota import DailyQuota
 from app.services.datastore_sql import validate_sql_settings
@@ -55,6 +56,7 @@ async def mcp_redirect(_request):
 
 def create_app() -> Starlette:
     settings = get_settings()
+    validate_cors_settings(settings)
     validate_sql_settings(settings)
     validate_gtfs_settings(settings)
     validate_schedule_settings(settings)
@@ -89,7 +91,7 @@ def create_app() -> Starlette:
                 with contextlib.suppress(asyncio.CancelledError):
                     await warmup_task
 
-    app = Starlette(
+    app = McpCorsApplication(
         routes=[
             Route("/healthz", healthz, methods=["GET"]),
             Route("/readyz", readyz, methods=["GET"]),
@@ -99,6 +101,7 @@ def create_app() -> Starlette:
                 host=settings.host, streamable_http_path="/",
                 stateless_http=True, json_response=True,
                 max_request_body_size=settings.mcp_max_body_bytes,
+                transport_security=cors_transport_security(settings),
             )),
         ],
         middleware=[

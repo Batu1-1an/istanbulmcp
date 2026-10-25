@@ -134,6 +134,7 @@ class Settings:
     mcp_auth_required: bool = False
     mcp_api_keys: tuple[str, ...] = field(default=(), repr=False)
     mcp_api_key_daily_quota: int = 10000
+    mcp_cors_allowed_origins: tuple[str, ...] = ()
     forwarded_allow_ips: str = "127.0.0.1"
     mcp_max_body_bytes: int = 256 * 1024
     mcp_rate_limit_capacity: int = 60
@@ -357,6 +358,10 @@ def get_settings() -> Settings:
         forwarded_allow_ips=_str_env("FORWARDED_ALLOW_IPS", "127.0.0.1"),
         mcp_api_keys=tuple(key.strip() for key in (_str_env("MCP_API_KEYS") or "").split(",")) if _str_env("MCP_API_KEYS") else (),
         mcp_api_key_daily_quota=_int_env("MCP_API_KEY_DAILY_QUOTA", 10000),
+        mcp_cors_allowed_origins=tuple(
+            origin.strip() for origin in (_str_env("MCP_CORS_ALLOWED_ORIGINS") or "").split(",")
+            if origin.strip()
+        ),
         mcp_max_body_bytes=_int_env("MCP_MAX_BODY_BYTES", 256 * 1024),
         mcp_rate_limit_capacity=_int_env("MCP_RATE_LIMIT_CAPACITY", 60),
         mcp_rate_limit_refill_per_second=_float_env("MCP_RATE_LIMIT_REFILL_PER_SECOND", 1.0),

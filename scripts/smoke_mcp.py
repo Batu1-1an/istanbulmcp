@@ -97,7 +97,9 @@ class Server:
             )
         finally:
             log.close()
-        deadline = time.monotonic() + 15
+        # Import/schema construction can be slower on a shared CI host. This is
+        # a startup budget, not a relaxed request or source-query timeout.
+        deadline = time.monotonic() + 45
         try:
             while self.process.poll() is None and time.monotonic() < deadline:
                 try:
@@ -107,7 +109,8 @@ class Server:
                     pass
                 time.sleep(0.05)
             raise RuntimeError(
-                "Local MCP subprocess did not become ready; inspect its startup configuration"
+                "Local MCP subprocess did not become ready; startup log follows:\n"
+                + (self.directory / "server.log").read_text()
             )
         except BaseException:
             stop(self.process)

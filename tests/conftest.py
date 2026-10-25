@@ -7,6 +7,7 @@ import pytest
 os.environ["MCP_AUTH_REQUIRED"] = "false"
 os.environ["GTFS_SCHEDULE_ENABLED"] = "false"
 os.environ.pop("MCP_API_KEYS", None)
+os.environ.pop("MCP_CORS_ALLOWED_ORIGINS", None)
 os.environ.pop("FORWARDED_ALLOW_IPS", None)
 os.environ.pop("IBB_RELAY_BASE_URL", None)
 os.environ.pop("IBB_RELAY_TOKEN", None)

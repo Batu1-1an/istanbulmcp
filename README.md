@@ -482,6 +482,7 @@ Kontrol edilen resmi kaynaklar:
 ve kaydın `active` durumu API'den doğrulandı. Public/legacy/optional tool'ların tamamı
 `title` ve salt okunur annotation taşır. [Yayın öncesi kontrol ve komutlar](docs/registry.md).
 Registry yayını, Railway deploy ve Claude directory başvurusu ayrı adımlardır.
+[Güncel Registry kaydı](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.Batu1-1an%2Fistanbul-mcp&version=latest).
 
 [Sürüm geçmişi](CHANGELOG.md). Kod lisansı henüz seçilmedi; LICENSE dosyası
 eklenmedi. Şehir verilerinin lisansları ve kullanım koşulları kod lisansından ayrıdır.
@@ -493,7 +494,7 @@ mcp-publisher validate server.json
 mcp-publisher login github
 mcp-publisher publish server.json
 # Yayımlanmış sürümü Registry'den ayrıca doğrulayın
-curl -fsS 'https://registry.modelcontextprotocol.io/v0.1/servers/io.github.Batu1-1an%2Fistanbul-mcp/versions/0.2.4'
+curl -fsS 'https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.Batu1-1an%2Fistanbul-mcp&version=latest'
 ```
 
 Yayın için GitHub namespace sahipliğinin doğrulanması gerekir. Kurulum,
@@ -503,6 +504,20 @@ kimlik bilgisi güvenliği ve Registry'den sonuç kontrolü [yayın rehberindedi
 [Destek / sorun bildirimi](https://github.com/Batu1-1an/istanbulmcp/issues)
 
 ## HTTP Sağlık Kontrolleri
+
+### Tarayıcıdan doğrudan MCP bağlantısı
+
+0.2.5'te `MCP_CORS_ALLOWED_ORIGINS` ile yalnız seçilen sitelere izin verilebilir.
+Örnek: `https://uygulamaniz.example,http://localhost:5173`. Varsayılan liste boştur;
+site adresi eklenmeden tarayıcı origin'ine izin verilmez. Origin göndermeyen
+ChatGPT/sunucu istemcileri değişmez. API anahtarı, kota ve hız sınırları korunur;
+uzun ömürlü anahtarı web sayfasına gömmeyin. [Ayarlar ve sınırlar](docs/browser-cors.md).
+
+```bash
+pytest tests/test_cors.py tests/test_api_auth.py tests/test_abuse_guard.py
+```
+
+### Liveness / readiness
 
 ```bash
 curl -fsS https://istanbulmcp-production.up.railway.app/healthz

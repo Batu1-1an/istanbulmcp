@@ -63,6 +63,12 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
         "transport": {
             "streamable_http": "/mcp/",
             "canonical_redirect": "/mcp -> /mcp/",
+            "browser_cors": {
+                "enabled": bool(settings.mcp_cors_allowed_origins),
+                "allowed_origin_count": len(settings.mcp_cors_allowed_origins),
+                "credentials": False,
+                "scope": "/mcp and /mcp/ only",
+            },
         },
         "limits": {
             "default_limit": settings.default_limit,

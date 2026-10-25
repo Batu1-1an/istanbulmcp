@@ -5,6 +5,7 @@ import io
 import json
 from pathlib import Path
 from types import SimpleNamespace
+import time
 from unittest.mock import AsyncMock
 import zipfile
 
@@ -207,7 +208,7 @@ async def test_invalid_refresh_preserves_previous_snapshot_and_reports_stale(tmp
             lambda req: httpx.Response(200, content=by_url[str(req.url)])
         )) as http:
             f.client._client = http
-            source_cache._entries[f.service.cache_key].expires_at_monotonic = 0
+            source_cache._entries[f.service.cache_key].expires_at_monotonic = time.monotonic() - 1
             stale = await f.service.next_departures(stop_id="S1", at=AT, limit=3)
     assert stale["ok"] and stale["freshness"]["status"] == "stale"
     assert stale["data"] == original["data"]
@@ -370,7 +371,9 @@ async def test_fresh_cache_single_flight_and_failed_refresh_preserves_snapshot(t
         assert len(f.requests) == 7
         entry = source_cache._entries[f.service.cache_key]
         refreshed = entry.refreshed_at_iso
-        entry.expires_at_monotonic = 0
+        # Expired by one second, regardless of host uptime; epoch 0 can be
+        # outside the seven-day stale window on long-running test machines.
+        entry.expires_at_monotonic = time.monotonic() - 1
         f.client.ckan.package_show_bounded.side_effect = TimeoutError("private debug URL")
         stale = await f.service.next_departures(stop_id="S1", at=AT, limit=1)
         assert stale["ok"] and stale["freshness"]["status"] == "stale"
@@ -526,7 +529,7 @@ async def test_sqlite_publish_failure_rolls_back_previous_snapshot(tmp_path):
         with connect(f.service.settings.database_path) as conn:
             original = conn.execute("SELECT snapshot_id FROM gtfs_schedule_meta").fetchone()[0]
             conn.execute("CREATE TRIGGER refuse_schedule BEFORE INSERT ON gtfs_schedule_stops BEGIN SELECT RAISE(ABORT, 'test'); END;")
-        source_cache._entries[f.service.cache_key].expires_at_monotonic = 0
+        source_cache._entries[f.service.cache_key].expires_at_monotonic = time.monotonic() - 1
         stale = await f.service.next_departures(stop_id="S1", at=AT)
     assert stale["ok"] and stale["freshness"]["status"] == "stale"
     with connect(f.service.settings.database_path) as conn:

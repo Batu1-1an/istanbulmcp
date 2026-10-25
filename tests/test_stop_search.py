@@ -1,5 +1,6 @@
 """Stop discovery uses synthetic published GTFS fixtures, never live endpoints."""
 import json
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -149,7 +150,7 @@ async def test_failed_refresh_preserves_stale_search_and_expiry(tmp_path):
     async with f.http:
         original = await f.service.next_departures(stop_query="kadikoy")
         entry = source_cache._entries[f.service.cache_key]
-        entry.expires_at_monotonic = 0
+        entry.expires_at_monotonic = time.monotonic() - 1
         f.client.ckan.package_show_bounded.side_effect = TimeoutError("private URL secret")
         stale = await f.service.next_departures(stop_query="kadikoy")
         entry.max_age_at_monotonic = 0

@@ -1,21 +1,40 @@
 # Changelog
 
-Bu günlük Git geçmişinden geriye dönük hazırlanmıştır. Tarihler, sürüm numarasının
+0.2.4 ve önceki kayıtlar Git geçmişinden geriye dönük hazırlanmıştır. Tarihler, sürüm numarasının
 depoda değiştiği tarihlerdir; GitHub Release veya Registry yayını yapıldığını
 göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) bakın.
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-10-25
+
 ### Added
+- `MCP_CORS_ALLOWED_ORIGINS` ile yalnız belirlenen sitelerden tarayıcı bağlantısı.
+  Boş liste hiçbir browser origin'ine izin vermez; wildcard ve `null` kabul edilmez.
+- MCP uçlarında yerel OPTIONS/preflight yanıtı; MCP ve Authorization başlıkları,
+  JavaScript'ten okunabilen oturum, tekrar deneme ve kota başlıkları.
+- İzinli origin'ler için 401/413/429/500 yanıtlarında da CORS başlıkları.
+- İzin verilmeyen veya yinelenen Origin başlıklarının MCP çalışmadan reddedilmesi.
+
+### Notes
+- Preflight API anahtarı veya kota tüketmez; gerçek isteklerde mevcut anahtar,
+  gövde, hız, eşzamanlılık ve kota kontrolleri korunur. Cookie credentials açılmaz.
+- Origin göndermeyen mevcut istemciler değişmez. Yeni araç veya SQL değişikliği yoktur.
+
+### Tests
+- GTFS stale testlerinde süre, makinenin çalışma süresinden bağımsız olacak şekilde
+  güncel monoton saate göre ayarlanır. Üretim önbellek süreleri değiştirilmedi.
+- Gerçek süreç smoke testinin açılış bütçesi paylaşılan CI makineleri için 45 saniye;
+  başarısız açılışta sunucu günlüğü hata çıktısına eklenir.
+
+## [0.2.4] - 2026-10-25
+
+### Publication
 - Sürüm değişikliklerini kaydeden bu CHANGELOG.
 - Resmî MCP Registry'de 0.2.4 için ilk remote-only kayıt ve yayın/doğrulama adımları
   (2026-10-25). Bu kayıt yeni bir uygulama sürümü veya directory kabulü değildir.
-
-### Notes
 - Kod lisansı henüz seçilmedi. LICENSE dosyası eklenmedi. Veri kaynaklarının
   kullanım koşulları ve lisansları ayrı değerlendirilir.
-
-## [0.2.4] - 2026-10-25
 
 ### Added
 - Her GTFS ve planlı terminal kalkışında `realtime:false`,
@@ -94,7 +113,8 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 - Python MCP sunucusu, temel şehir-verisi konektörleri, SQLite depolama ve test
   altyapısıyla projenin ilk temeli.
 
-[Unreleased]: https://github.com/Batu1-1an/istanbulmcp/compare/1736725...HEAD
+[Unreleased]: https://github.com/Batu1-1an/istanbulmcp/commits/main
+[0.2.5]: https://github.com/Batu1-1an/istanbulmcp/compare/9010d75...main
 [0.2.4]: https://github.com/Batu1-1an/istanbulmcp/commit/1736725
 [0.2.3]: https://github.com/Batu1-1an/istanbulmcp/commit/ccc3864
 [0.2.2]: https://github.com/Batu1-1an/istanbulmcp/commit/e76a46f

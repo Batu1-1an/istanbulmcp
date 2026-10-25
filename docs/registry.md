@@ -14,6 +14,7 @@ gelmez. Gerçek yayın sonucu aşağıda ayrıca kaydedilmiştir.
 - Transport: `streamable-http`
 - Remote URL: `https://istanbulmcp-production.up.railway.app/mcp/`
 - [Sürüme özgü resmî kayıt](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.Batu1-1an%2Fistanbul-mcp/versions/0.2.4)
+- [En son yayımlanmış sürümü sorgula](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.Batu1-1an%2Fistanbul-mcp&version=latest)
 
 Kayıt, `mcp-publisher` **v1.8.4** ile yayımlandı. Yayından sonra Registry API'sinden
 ad, sürüm, durum ve remote URL tekrar okundu. Yayın öncesi canlı sunucunun 0.2.4
@@ -62,8 +63,11 @@ API'lerini çağırmaz. Bu komutlar README'de de listelenir.
    Registry preview olduğundan şema/komutlar değişebilir. Örnek:
 
    ```bash
-   curl -fsS 'https://registry.modelcontextprotocol.io/v0.1/servers/io.github.Batu1-1an%2Fistanbul-mcp/versions/0.2.4'
+   curl -fsS 'https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.Batu1-1an%2Fistanbul-mcp&version=latest'
    ```
+
+   Dönen sürümün yerel `server.json` ile aynı olduğunu kontrol edin; önceki bir
+   sürümün `active` olması yeni sürümün yayımlandığını göstermez.
 
 ### Kimlik bilgileri
 
