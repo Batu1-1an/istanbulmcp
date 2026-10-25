@@ -164,6 +164,21 @@ class SourceTTLCache:
             )
         return rows
 
+    def peek_with_status(self, key: str, *, stale_if_error_seconds: int = 0) -> CachedSourceData | None:
+        """Inspect a bounded existing entry without a refresh or an upstream call."""
+        entry = self._entries.get(key)
+        if entry is None:
+            return None
+        now = time.monotonic()
+        deadline = entry.expires_at_monotonic + stale_if_error_seconds
+        if entry.max_age_at_monotonic is not None:
+            deadline = min(deadline, entry.max_age_at_monotonic)
+        if now >= deadline:
+            return None
+        fresh = now < entry.expires_at_monotonic
+        return CachedSourceData(value=entry.value, refreshed_at_iso=entry.refreshed_at_iso,
+                                is_fresh=fresh, is_stale=not fresh, metadata=entry.metadata)
+
     def _evict_before_insert(self, *, max_entries: int, now: float) -> None:
         max_entries = max(1, int(max_entries))
         expired = [key for key, entry in self._entries.items() if now >= entry.expires_at_monotonic]

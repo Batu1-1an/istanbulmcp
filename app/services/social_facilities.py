@@ -11,7 +11,7 @@ from app.connectors.social_facilities import (
     SocialFacilitiesPayload,
     canonical_identity,
 )
-from app.core.envelope import Freshness, Source, error_envelope, success_envelope, utc_now_iso
+from app.core.envelope import Freshness, Source, error_envelope, result_info, success_envelope, utc_now_iso
 from app.core.error_responses import source_error_envelope, validation_error_envelope
 from app.core.geo import google_maps_url, haversine_m
 from app.core.rate_limit import SourceRateLimitExceeded
@@ -127,6 +127,7 @@ class SocialFacilitiesService:
         return success_envelope(
             summary=f"{len(data)} İstanbul sosyal tesisi {safe_radius} metre içinde bulundu.",
             data=data,
+            result=result_info(returned=len(data), matched=len(ranked)),
             sources=self._sources(cached),
             freshness=self._freshness(cached),
             limits=[

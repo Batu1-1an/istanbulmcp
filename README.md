@@ -260,7 +260,7 @@ Tam `stop_times.zip`, servis takvimi ve tarife dosyalarını kullanır;
 `stop_times.csv` yalnız önizleme olduğu için kabul edilmez. Servis günü, takvim
 istisnaları ve `25:xx` saatleri işlenir; canlı ETA veya rota planlayıcı değildir.
 Açılışta arka plan ön ısıtma çalışır. Isınma sırasında araç `warming_up`
-döndürür; ilk yükleme yaklaşık iki dakika sürer. Açıkken yüzey 17 araçtır;
+döndürür; ilk yükleme yaklaşık iki dakika sürer. 0.2.4'te GTFS açıkken yüzey 18 araçtır;
 [kapsam, ayarlar ve kabul adımları](docs/gtfs-schedule.md).
 
 Durak kimliğini bilmiyorsanız `{"stop_query":"kadikoy","limit":10}` ile
@@ -269,12 +269,19 @@ durak adayları** döndürür. Aynı adlı duraklar kimlik ve konumlarıyla ayr�
 isim/haritaya göre durak seçildikten sonra `stop_id` ile kalkış sorgulanır.
 Yazım önerileri `match_kind=suggestion` taşır; doğrulanmış eşleşme değildir.
 `stop_query` yalnız `limit` ile kullanılır. İlçe/yön bilgisi türetilmez.
+Kaynakta varsa durak tabela kodu (`stop_code`), açıklaması (`stop_desc` /
+`platform_direction_text`) ve `location_type` korunur; eksikler `null` kalır.
+Her kalkış `realtime:false`, `schedule_relationship:STATIC` ve `data_source` taşır.
+
+`istanbul_gtfs_snapshot_status()` mevcut yerel tarifenin yaşını, takvim aralığını,
+kayıt ve atlanan satır sayılarını gösterir. İndirme veya canlı kaynak kontrolü yapmaz.
+Hata ve sonuç kesilmesi için ortak [yanıt sözleşmesi](docs/response-contract.md) kullanılır.
 
 ## MCP Keşfi ve Promptlar
 
 Python MCP SDK **2.3+** ile aynı `/mcp/` endpoint'i hem eski `initialize`
 istemiyle hem `2026-07-28` sürümündeki `server/discover` akışıyla çalışır.
-Canlı yüzey **17** araçtır; kaynak varsayılanı GTFS tarifesi kapalıyken 16'dır. Sunucu talimatlarına ek olarak:
+0.2.4 yüzeyi GTFS açıkken **18**, kapalıyken **16** araçtır. Sunucu talimatlarına ek olarak:
 
 | Resource URI | İçerik |
 |---|---|
@@ -535,6 +542,8 @@ python -m scripts.eval_tools
 pytest tests/test_gtfs.py tests/test_gtfs_regression.py tests/test_city_service.py tests/test_ckan_bounded.py
 # Tam GTFS tarife ZIP, takvim/geceyarısı, bütçe/rollback ve opt-in MCP testleri
 pytest tests/test_gtfs_schedule.py
+# Ortak hata/kesilme sözleşmesi, durak metadata'sı ve yerel tarife sağlığı
+pytest tests/test_response_contract.py tests/test_gtfs_snapshot_status.py
 # EV/taksi/pazar/kültür statik katmanları ve pazar takvimi
 pytest tests/test_city_open_data.py tests/test_city_service.py
 # Yalnız erişebilen ortamda, tam GTFS ZIP indirir (opt-in; geçici DB kullanır)

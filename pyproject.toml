@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "istanbul-mcp"
-version = "0.2.3"
+version = "0.2.4"
 description = "Remote MCP server for Istanbul open city data."
 readme = "README.md"
 requires-python = ">=3.11"

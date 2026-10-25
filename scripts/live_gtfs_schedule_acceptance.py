@@ -44,6 +44,16 @@ async def main() -> None:
             "uncompressed_bytes": metadata.get("uncompressed_bytes"),
             "database_bytes": database.stat().st_size,
         }, ensure_ascii=False), flush=True)
+        status = await service.snapshot_status()
+        if not status.get("ok"):
+            raise SystemExit("local snapshot status is unavailable after successful load")
+        health = status["data"][0]
+        if health["rows"] != metadata["counts"] or health["skipped"] != metadata["skipped"]:
+            raise SystemExit("snapshot status counters differ from ingestion metadata")
+        if health["upstream_health"] != "not_checked" or health["realtime_available"] is not False:
+            raise SystemExit("snapshot status incorrectly claims live coverage")
+        print(json.dumps({"snapshot_status_checked": True, "calendar": health["calendar"],
+                          "age_seconds": health["age_seconds"]}), flush=True)
 
         cases = []
         with closing(connect(database)) as conn:
@@ -96,6 +106,11 @@ async def main() -> None:
                 raise SystemExit(f"departure query failed: {result.get('summary')}")
             if not any(row["trip_id"] == trip_id and row["scheduled_departure"] == at for row in result["data"]):
                 raise SystemExit("published departure row not found")
+            if any(row["realtime"] is not False or row["schedule_relationship"] != "STATIC"
+                   or row["data_source"] != "gtfs_static" for row in result["data"]):
+                raise SystemExit("scheduled departure provenance is missing")
+            if result["result_info"]["returned"] != len(result["data"]):
+                raise SystemExit("departure returned count differs from data")
         stop, line, at, _ = cases[0]
         for _ in range(40):
             started = time.monotonic()
@@ -141,11 +156,15 @@ async def main() -> None:
                     raise SystemExit("stop-name candidates differ from published stops")
                 for row in result["data"]:
                     original = stops[row["stop_id"]]
-                    if any(row[key] != original[key] for key in ("stop_name", "lat", "lon")):
+                    if any(row[key] != original[key] for key in ("stop_name", "lat", "lon", "stop_code", "stop_desc", "location_type")):
                         raise SystemExit("stop-name candidate changed a published location")
+                    if row["platform_direction_text"] != original["stop_desc"]:
+                        raise SystemExit("stop direction text differs from source metadata")
                     if "scheduled_departure" in row or row["match_kind"] == "suggestion":
                         raise SystemExit("stop-name discovery returned departures or suggestions as matches")
                 pair_ids.append(ids)
+                if result["result_info"]["matched"] != len(expected):
+                    raise SystemExit("standard result contract lost stop match total")
                 print(json.dumps({"stop_query": query, "matched_total": len(expected), "returned_total": len(ids)}, ensure_ascii=False), flush=True)
             if pair_ids[0] != pair_ids[1]:
                 raise SystemExit("Turkish and ASCII queries returned different candidate IDs")

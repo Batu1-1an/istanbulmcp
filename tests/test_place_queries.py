@@ -28,7 +28,10 @@ async def test_city_services_supports_every_district_without_inventing_coordinat
     assert row["query"] == {"district": district, "scope": "district", "distance_included": False}
     assert row["wifi_locations"] == []
     assert len(row["libraries"]) == 1
-    svc._libraries_for_district.assert_awaited_once_with(district, limit=2)
+    # One extra candidate detects truncation; the public limit is unchanged.
+    svc._libraries_for_district.assert_awaited_once_with(district, limit=3)
+    assert row["result_info"]["libraries"]["truncated"] is False
+    assert row["result_info"]["wifi_locations"]["truncated"] is None
     svc._wifi_nearby.assert_not_awaited()
     assert all(source["coverage_status"] == "checked" for source in result["sources"])
     assert any("WiFi was not checked" in warning for warning in result["warnings"])

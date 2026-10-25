@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.connectors.iski import IskiClient
-from app.core.envelope import Freshness, Source, error_envelope, success_envelope
+from app.core.envelope import Freshness, Source, error_envelope, result_info, success_envelope
 from app.core.error_responses import source_error_envelope, validation_error_envelope
 from app.core.geo import google_maps_url, haversine_m
 from app.core.rate_limit import SourceRateLimitExceeded
@@ -87,6 +87,7 @@ class IskiService:
         return success_envelope(
             summary=f"{len(data)} active ISKI water fault(s) returned{suffix}.",
             data=data,
+            result=result_info(returned=len(data), matched=len(rows)),
             sources=[self._source_for("faults", source_mode)],
             freshness=self._cache_freshness(
                 source_result,
@@ -124,6 +125,7 @@ class IskiService:
                 else f"No active ISKI fault found for number {safe_fault_number}."
             ),
             data=matches[:1],
+            result=result_info(returned=len(matches[:1]), matched=len(matches)),
             sources=[self._source_for("faults", source_mode)],
             freshness=self._cache_freshness(
                 source_result,
@@ -176,6 +178,7 @@ class IskiService:
         return success_envelope(
             summary=f"{len(data)} active ISKI water fault(s) found within {radius_m} meters.",
             data=data,
+            result=result_info(returned=len(data), matched=len(nearby)),
             sources=[self._source_for("faults", source_mode)],
             freshness=self._cache_freshness(
                 source_result,
@@ -232,6 +235,7 @@ class IskiService:
         return success_envelope(
             summary=f"{len(data)} ISKI dam occupancy record(s) returned.",
             data=data,
+            result=result_info(returned=len(data), matched=len(rows)),
             sources=[self._source_for("dams", source_mode)],
             freshness=self._cache_freshness(
                 source_result,

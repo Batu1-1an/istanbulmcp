@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.connectors.iett import IettClient
-from app.core.envelope import Freshness, Source, error_envelope, success_envelope
+from app.core.envelope import Freshness, Source, error_envelope, result_info, success_envelope
 from app.core.geo import google_maps_url
 from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
@@ -42,6 +42,7 @@ class TransitService:
         except Exception as exc:
             return error_envelope(
                 summary=f"IETT line info is unavailable for {safe_line_code}.",
+                code="source_unavailable",
                 warning=f"IETT SOAP request failed: {type(exc).__name__}",
                 sources=[IETT_SOURCE],
             )
@@ -78,6 +79,7 @@ class TransitService:
         except Exception as exc:
             return error_envelope(
                 summary=f"IETT stops are unavailable for line {safe_line_code}.",
+                code="source_unavailable",
                 warning=f"IETT SOAP request failed: {type(exc).__name__}",
                 sources=[IETT_SOURCE],
             )
@@ -109,6 +111,7 @@ class TransitService:
         except Exception as exc:
             return error_envelope(
                 summary="IETT disruptions are unavailable.",
+                code="source_unavailable",
                 warning=f"IETT SOAP request failed: {type(exc).__name__}",
                 sources=[IETT_SOURCE],
             )
@@ -138,9 +141,11 @@ class TransitService:
         except Exception as exc:
             return error_envelope(
                 summary="IETT disruptions are unavailable.",
+                code="source_unavailable",
                 warning=f"IETT SOAP request failed: {type(exc).__name__}",
                 sources=[IETT_SOURCE],
             )
+        matched = len(data)
         data = data[:safe_limit]
         filter_label = f" for line {safe_line_code}" if safe_line_code else ""
         summary = f"{len(data)} IETT disruption(s) found{filter_label}." if data else f"No IETT disruptions found{filter_label}."
@@ -150,6 +155,7 @@ class TransitService:
         return success_envelope(
             summary=summary,
             data=data,
+            result=result_info(returned=len(data), matched=matched),
             sources=[IETT_SOURCE],
             freshness=Freshness(status="fresh", ttl_seconds=self.settings.iett_line_cache_ttl_seconds),
             limits=limits,
@@ -170,6 +176,7 @@ class TransitService:
         except Exception as exc:
             return error_envelope(
                 summary=f"IETT planned departures are unavailable for line {line_code}.",
+                code="source_unavailable",
                 warning=f"IETT SOAP request failed: {type(exc).__name__}",
                 sources=[IETT_SOURCE],
             )
@@ -197,13 +204,16 @@ class TransitService:
         except Exception as exc:
             return error_envelope(
                 summary=f"IETT planned departures are unavailable for line {line_code}.",
+                code="source_unavailable",
                 warning=f"IETT SOAP request failed: {type(exc).__name__}",
                 sources=[IETT_SOURCE],
             )
+        matched = len(data)
         data = data[:safe_limit]
         return success_envelope(
             summary=f"{len(data)} planned main-terminal departure(s) found for line {safe_line_code}." if data else f"No planned main-terminal departures found for line {safe_line_code}.",
             data=data,
+            result=result_info(returned=len(data), matched=matched),
             sources=[IETT_SOURCE],
             freshness=Freshness(status="fresh", ttl_seconds=self.settings.iett_line_cache_ttl_seconds),
             limits=[
@@ -259,6 +269,9 @@ class TransitService:
             "day_type_code": day_type_code,
             "day_type_label": day_type_label,
             "planned_departure_time": planned_departure_time,
+            "realtime": False,
+            "schedule_relationship": "STATIC",
+            "data_source": "iett_published_timetable",
         }
 
     @staticmethod

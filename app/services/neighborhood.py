@@ -7,7 +7,7 @@ from collections import defaultdict
 from typing import Any
 
 from app.connectors.ckan import CkanClient
-from app.core.envelope import Freshness, Pagination, Source, success_envelope
+from app.core.envelope import Freshness, Pagination, Source, result_info, success_envelope
 from app.core.error_responses import source_error_envelope, validation_error_envelope
 from app.core.settings import Settings
 from app.core.source_cache import cached_source_data
@@ -267,6 +267,7 @@ class NeighborhoodService:
             sources=NEIGHBORHOOD_SOURCES,
             freshness=Freshness(status="fresh", ttl_seconds=NEIGHBORHOOD_CACHE_TTL_SECONDS),
             pagination=Pagination(limit=limit, total_estimate=len(profiles)),
+            result=result_info(returned=len(data), matched=len(profiles), scope="loaded_neighborhood_profiles"),
             limits=[
                 f"limit={limit}",
                 "source=CKAN datastore_search",

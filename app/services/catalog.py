@@ -4,7 +4,7 @@ import json
 from typing import Any
 
 from app.connectors.ckan import CkanClient, CkanNotFoundError
-from app.core.envelope import Freshness, Pagination, Source, error_envelope, success_envelope
+from app.core.envelope import Freshness, Pagination, Repair, Source, error_envelope, result_info, success_envelope
 from app.core.error_responses import not_found_envelope, source_error_envelope, validation_error_envelope
 from app.core.rate_limit import SourceRateLimitExceeded
 from app.core.settings import Settings
@@ -66,6 +66,7 @@ class CatalogService:
             sources=[IBB_SOURCE],
             freshness=Freshness(status="fresh", ttl_seconds=60 * 60 * 6),
             pagination=Pagination(limit=safe_limit, total_estimate=result.get("count")),
+            result=result_info(returned=len(data), matched=result.get("count")),
             limits=[f"limit={safe_limit}", "source=CKAN package_search"],
         )
 
@@ -147,7 +148,10 @@ class CatalogService:
                     return validation_error_envelope(InputValidationError(
                         f"Unknown filter field(s): {', '.join(unknown)}. Valid fields: {', '.join(map(str, known))}",
                         field="filters",
-                    ), sources=[IBB_SOURCE])
+                    ), sources=[IBB_SOURCE], repair=Repair(
+                        next_step="Inspect the resource schema and use advertised filter columns.",
+                        tool="istanbul_get_resource_schema", arguments={"resource_id": safe_resource_id},
+                    ))
             result = await self._cached_datastore_search(
                 resource_id=safe_resource_id,
                 filters=safe_filters,
@@ -172,6 +176,7 @@ class CatalogService:
             sources=[IBB_SOURCE],
             freshness=Freshness(status="fresh", ttl_seconds=60 * 60 * 6),
             pagination=Pagination(limit=safe_limit, total_estimate=result.get("total")),
+            result=result_info(returned=len(records), matched=result.get("total")),
             limits=[f"limit={safe_limit}", "source=CKAN datastore_search", "filters only"],
         )
 

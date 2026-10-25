@@ -490,7 +490,9 @@ async def istanbul_next_departures(
     NOT departures. Same-name stops remain separate; never choose the first
     automatically. Approximate spelling suggestions are labeled, not matches.
     Ask the user to select a candidate using name/map, then call with stop_id.
-    Names have no district/direction metadata; do not infer either.
+    stop_code identifies the published stop sign when present. stop_desc and
+    platform_direction_text preserve source text; they are not inferred route directions.
+    Missing metadata stays null; districts are not inferred.
 
     at is an ISO datetime with a UTC offset; omitted means now in Europe/Istanbul.
     The search covers 24 hours. stop_id and coordinates are mutually exclusive.
@@ -501,6 +503,16 @@ async def istanbul_next_departures(
         stop_id=stop_id, lat=lat, lon=lon, line=line, at=at,
         radius_m=radius_m, limit=limit, stop_query=stop_query,
     )
+
+
+async def istanbul_gtfs_snapshot_status() -> dict:
+    """Inspect local GTFS load age, calendar validity, row counts and skipped rows.
+
+    No upstream request or refresh is made. A missing or warming snapshot is
+    unavailable, not an empty timetable. Cache age is not feed publication age;
+    a loaded snapshot does not prove live arrivals or transport service.
+    """
+    return await GtfsScheduleService(get_settings()).snapshot_status()
 
 
 async def istanbul_planned_departures(line_code: str, limit: int | None = None) -> dict:

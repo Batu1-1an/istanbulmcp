@@ -11,7 +11,7 @@ from app.connectors.ibb_pharmacy import (
     IbbPharmacyClient,
     IbbPharmacyPayloadError,
 )
-from app.core.envelope import Freshness, Source, error_envelope, success_envelope, utc_now_iso
+from app.core.envelope import Freshness, Source, error_envelope, result_info, success_envelope, utc_now_iso
 from app.core.error_responses import source_error_envelope, validation_error_envelope
 from app.core.geo import google_maps_search_url, google_maps_url, haversine_m
 from app.core.rate_limit import SourceRateLimitExceeded
@@ -88,6 +88,7 @@ class PharmacyService:
                 item["distance_m"] = round(distance, 1)
                 data.append(item)
         data.sort(key=lambda row: (row["distance_m"], normalize_place(row["name"]), row["source_id"]))
+        matched = len(data)
         data = data[:safe_limit]
         warnings = self._warnings(cached)
         metadata = cached.metadata or {}
@@ -99,6 +100,7 @@ class PharmacyService:
             ),
             data=data,
             sources=[self._source(cached)],
+            result=result_info(returned=len(data), matched=matched),
             freshness=self._freshness(cached),
             limits=[
                 f"radius_m={safe_radius}",
@@ -132,6 +134,7 @@ class PharmacyService:
             if self._normalize_district(row["district"]) == normalized
         ]
         data.sort(key=lambda row: (normalize_place(row["name"]), row["source_id"]))
+        matched = len(data)
         data = data[:safe_limit]
         warnings = self._warnings(cached)
         warnings.append("Bu ilçe geneli nöbetçi eczane listesidir; mesafe hesaplanmadı.")
@@ -143,6 +146,7 @@ class PharmacyService:
             ),
             data=data,
             sources=[self._source(cached)],
+            result=result_info(returned=len(data), matched=matched),
             freshness=self._freshness(cached),
             limits=[
                 f"limit={safe_limit}",

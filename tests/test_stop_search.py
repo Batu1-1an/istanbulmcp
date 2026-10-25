@@ -206,7 +206,7 @@ async def test_stop_query_is_optional_and_discoverable_without_a_new_tool():
     server = create_mcp_server(Settings(gtfs_schedule_enabled=True))
     tools = {tool.name: tool for tool in await server.list_tools()}
     tool = tools["istanbul_next_departures"]
-    assert len(tools) == 17
+    assert len(tools) == 18
     assert "stop_query" in tool.input_schema["properties"]
     assert "stop_query" not in tool.input_schema.get("required", [])
     assert "NOT departures" in tool.description

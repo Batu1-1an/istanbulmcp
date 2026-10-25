@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.core.envelope import Source, error_envelope
+from app.core.envelope import Repair, Source, error_envelope
 from app.core.validation import InputValidationError
 
 
@@ -10,6 +10,7 @@ def validation_error_envelope(
     exc: InputValidationError,
     *,
     sources: list[Source] | None = None,
+    repair: Repair | None = None,
 ) -> dict[str, Any]:
     data = [
         {
@@ -32,6 +33,7 @@ def validation_error_envelope(
         freshness_status="unknown",
         data=data,
         limits=limits,
+        repair=repair,
     )
 
 
@@ -74,4 +76,5 @@ def source_error_envelope(
         sources=sources,
         freshness_status="broken",
         data=data,
+        code="source_unavailable",
     )

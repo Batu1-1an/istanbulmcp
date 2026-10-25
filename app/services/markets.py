@@ -6,7 +6,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from app.connectors.city_open_data import MARKET_RESOURCE_ID, CityOpenDataClient, OpenDataLayer, parse_market_coordinate
-from app.core.envelope import Freshness, Source, success_envelope, utc_now_iso
+from app.core.envelope import Freshness, Source, result_info, success_envelope, utc_now_iso
 from app.core.error_responses import source_error_envelope, validation_error_envelope
 from app.core.geo import google_maps_url
 from app.core.settings import Settings
@@ -90,6 +90,7 @@ class MarketService:
                 exception=exc,
             )
 
+        matched = len(rows)
         rows = rows[:safe_limit]
         warnings = [
             "Weekly published market schedule; holidays, relocations and closures may differ. Verify locally before visiting.",
@@ -105,6 +106,7 @@ class MarketService:
         return success_envelope(
             summary=f"{len(rows)} market(s) found{label}.",
             data=rows,
+            result=result_info(returned=len(rows), matched=matched),
             sources=[source],
             freshness=Freshness(status="fresh", retrieved_at=payload.fetched_at or utc_now_iso(),
                                 ttl_seconds=self.settings.open_data_layers_cache_ttl_seconds),

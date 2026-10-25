@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 import httpx
 
 from app.connectors.sehir_hatlari import SehirHatlariClient
-from app.core.envelope import Freshness, Source, error_envelope, success_envelope, utc_now_iso
+from app.core.envelope import Freshness, Source, error_envelope, result_info, success_envelope, utc_now_iso
 from app.core.error_responses import validation_error_envelope
 from app.core.settings import Settings
 from app.core.source_cache import cached_source_data_with_status
@@ -51,6 +51,7 @@ class FerryScheduleService:
             )
             return error_envelope(
                 summary="Şehir Hatları tarife indeksi kullanılamıyor.",
+                code="source_unavailable",
                 warning=f"Şehir Hatları tarife indeks kaynağı kullanılamadı: {self._error_detail(exc)}.",
                 sources=[source],
                 freshness_status="broken",
@@ -66,6 +67,7 @@ class FerryScheduleService:
             )
             return error_envelope(
                 summary="Şehir Hatları tarife indeksi bozuk.",
+                code="source_invalid_response",
                 warning="Şehir Hatları tarife indeksi beklenen liste biçiminde değil.",
                 sources=[source],
                 freshness_status="broken",
@@ -122,6 +124,7 @@ class FerryScheduleService:
             )
             return error_envelope(
                 summary="Şehir Hatları tarife rota bağlantısı geçersiz.",
+                code="source_invalid_response",
                 warning="Tarife detay bağlantısı resmî HTTPS URL'si değil.",
                 sources=[index_source, detail_source],
                 freshness_status="unknown",
@@ -148,6 +151,7 @@ class FerryScheduleService:
             )
             return error_envelope(
                 summary="Şehir Hatları tarife detay sayfası kullanılamıyor.",
+                code="source_unavailable",
                 warning=f"Şehir Hatları tarife detay kaynağı kullanılamadı: {self._error_detail(exc)}.",
                 sources=[index_source, detail_source],
                 freshness_status="unknown",
@@ -156,7 +160,9 @@ class FerryScheduleService:
 
         if not isinstance(rows, list):
             raise ValueError("ferry schedule detail payload must be a list")
-        data = self._stable_rows(rows)[:safe_limit]
+        rows = self._stable_rows(rows)
+        data = [{**row, "realtime": False, "schedule_relationship": "STATIC",
+                 "data_source": "sehir_hatlari_published_timetable"} for row in rows[:safe_limit]]
         detail_source = self._source(
             name="Şehir Hatları Published Timetable Detail",
             url=detail_url,
@@ -166,6 +172,7 @@ class FerryScheduleService:
         return success_envelope(
             summary=f"{len(data)} yayımlanmış Şehir Hatları tarife kaydı bulundu.",
             data=data,
+            result=result_info(returned=len(data), matched=len(rows)),
             sources=[index_source, detail_source],
             freshness=Freshness(
                 status="fresh",

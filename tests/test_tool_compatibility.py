@@ -21,7 +21,7 @@ PUBLISHED_TOOL_NAMES = frozenset({
     "istanbul_query_resource", "istanbul_search_datasets", "istanbul_sosyal_tesis_nearby",
     "istanbul_stops_for_line", "istanbul_traffic_status", "istanbul_transit_disruptions",
     "istanbul_transit_line", "istanbul_transit_line_info", "istanbul_transport_disruptions",
-    "istanbul_water_status",
+    "istanbul_water_status", "istanbul_next_departures", "istanbul_gtfs_snapshot_status",
 })
 
 

@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
 from app.connectors.metro import MetroClient, _normalize_token
-from app.core.envelope import Freshness, Source, success_envelope, utc_now_iso
+from app.core.envelope import Freshness, Source, result_info, success_envelope, utc_now_iso
 from app.core.error_responses import source_error_envelope
 from app.core.settings import Settings
 from app.core.source_cache import SourceLoadResult, cached_source_data_with_status, source_cache_snapshot
@@ -213,6 +213,7 @@ class MetroAccessibilityService:
                 NO_REPAIR_GUARANTEE,
             ]
             response["warnings"] = [warning]
+            response["result_info"] = result_info(returned=1, scope="error_details").model_dump(mode="json")
             return response
 
         partial = not summary_available or not detail_available
@@ -247,6 +248,9 @@ class MetroAccessibilityService:
                 "details_malformed_total": detail_result.malformed_detail_count,
                 "details_matched_total": len(filtered_faults),
                 "details_returned_total": len(faults),
+                "result_info": result_info(returned=len(faults),
+                                           matched=len(filtered_faults) if detail_available else None,
+                                           scope="faults").model_dump(mode="json"),
             }
         )
 

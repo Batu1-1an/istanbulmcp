@@ -17,7 +17,7 @@ from app.connectors.air_quality import AirQualityClient
 from app.connectors.ispark import IsparkClient
 from app.connectors.metro import MetroClient
 from app.connectors.traffic import TrafficClient
-from app.core.envelope import Freshness, FreshnessStatus, Source, error_envelope, success_envelope, utc_now_iso
+from app.core.envelope import Freshness, FreshnessStatus, Source, error_envelope, result_info, success_envelope, utc_now_iso
 from app.core.error_responses import source_error_envelope, validation_error_envelope
 from app.core.geo import google_maps_search_url, google_maps_url, parse_wkt_point
 from app.core.settings import Settings
@@ -101,10 +101,12 @@ class CityService:
         except Exception as exc:
             return self._source_error("Parking source is unavailable.", exc)
         self.geo.upsert_features([self._ispark_feature(park) for park in parks if park.get("lat") and park.get("lng")])
-        data = self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=safe_limit, types=["parking"])
+        candidates = self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=safe_limit + 1, types=["parking"])
+        data = candidates[:safe_limit]
         return success_envelope(
             summary=f"{len(data)} parking lot(s) found within {radius_m} meters.",
             data=data,
+            result=result_info(returned=len(data), truncated=len(candidates) > safe_limit, scope="indexed_parking"),
             sources=[CITY_SOURCE],
             freshness=Freshness(status="fresh", ttl_seconds=300),
             limits=[f"radius_m={radius_m}", f"limit={safe_limit}"],
@@ -135,6 +137,7 @@ class CityService:
         return success_envelope(
             summary=f"{len(data)} parking lot(s) found in {display_district} district. Distances are not included because no exact location was provided.",
             data=data,
+            result=result_info(returned=len(data), matched=len(rows)),
             sources=[CITY_SOURCE],
             freshness=Freshness(status="fresh", ttl_seconds=self.settings.ispark_cache_ttl_seconds),
             limits=[f"up to {safe_limit} results", "district-wide parking records", "no distance shown without an exact location"],
@@ -151,10 +154,12 @@ class CityService:
         except Exception as exc:
             return self._source_error("Metro source is unavailable.", exc)
         self.geo.upsert_features([self._metro_feature(station) for station in stations if self._metro_coordinates(station)])
-        data = self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=safe_limit, types=["metro_station"])
+        candidates = self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=safe_limit + 1, types=["metro_station"])
+        data = candidates[:safe_limit]
         return success_envelope(
             summary=f"{len(data)} metro station(s) found within {radius_m} meters.",
             data=data,
+            result=result_info(returned=len(data), truncated=len(candidates) > safe_limit, scope="indexed_metro_stations"),
             sources=[CITY_SOURCE],
             freshness=Freshness(status="fresh", ttl_seconds=60 * 60 * 24),
             limits=[f"radius_m={radius_m}", f"limit={safe_limit}"],
@@ -169,7 +174,8 @@ class CityService:
         except Exception as exc:
             return self._source_error("Air quality station source is unavailable.", exc)
         self.geo.upsert_features([self._aq_feature(station) for station in stations if parse_wkt_point(station.get("Location"))])
-        nearby = self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=safe_limit, types=["air_quality_station"])
+        candidates = self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=safe_limit + 1, types=["air_quality_station"])
+        nearby = candidates[:safe_limit]
         warnings = []
         for station in nearby:
             try:
@@ -191,6 +197,7 @@ class CityService:
         return success_envelope(
             summary=f"{len(nearby)} air quality station(s) found within {radius_m} meters.",
             data=nearby,
+            result=result_info(returned=len(nearby), truncated=len(candidates) > safe_limit, scope="indexed_air_quality_stations"),
             sources=[CITY_SOURCE],
             freshness=Freshness(status="unknown", ttl_seconds=900),
             limits=[f"radius_m={radius_m}", f"limit={safe_limit}"],
@@ -279,7 +286,7 @@ class CityService:
         air_quality_stations: list[dict[str, Any]] = []
         try:
             public_stops, gtfs_source, gtfs_cached = await self._public_transport_stops_nearby(
-                lat=resolved.lat, lon=resolved.lon, radius_m=radius_m, limit=safe_limit,
+                lat=resolved.lat, lon=resolved.lon, radius_m=radius_m, limit=safe_limit + 1,
             )
             warnings.extend(self._gtfs_warnings(gtfs_cached))
         except asyncio.TimeoutError:
@@ -294,7 +301,7 @@ class CityService:
                     lat=resolved.lat,
                     lon=resolved.lon,
                     radius_m=min(radius_m, self.settings.max_radius_m),
-                    limit=min(safe_limit, 3),
+                    limit=min(safe_limit, 3) + 1,
                 ),
                 timeout=MOBILITY_COMPONENT_TIMEOUT_SECONDS,
             )
@@ -313,9 +320,18 @@ class CityService:
             if not envelope.get("ok", False):
                 warnings.append(f"{label} source unavailable: {envelope.get('summary')}")
 
+        section_info = {
+            "parking": parking.get("result_info"), "metro_stations": metro.get("result_info"),
+            "public_transport_stops": self._section_info(public_stops, safe_limit, gtfs_cached is not None),
+            "air_quality_stations": self._section_info(air_quality_stations, min(safe_limit, 3), not air_failed),
+        }
+        public_stops = public_stops[:safe_limit]
+        gtfs_source.returned_total = len(public_stops) if gtfs_cached is not None else None
+        air_quality_stations = air_quality_stations[:min(safe_limit, 3)]
         data = [
             {
                 "query": self._resolved_payload(resolved),
+                "result_info": section_info,
                 "parking": parking.get("data", []) if parking.get("ok") else [],
                 "metro_stations": metro.get("data", []) if metro.get("ok") else [],
                 "public_transport_stops": public_stops,
@@ -361,6 +377,7 @@ class CityService:
                     "distance_included": False,
                 },
                 "parking": parking.get("data", []),
+                "result_info": {"parking": parking.get("result_info")},
             }
         ]
         return success_envelope(
@@ -411,14 +428,14 @@ class CityService:
                                 url="https://data.ibb.gov.tr", scope="district", coverage_status="unavailable")
         if resolved is not None:
             try:
-                wifi = await self._wifi_nearby(lat=resolved.lat, lon=resolved.lon, radius_m=radius_m, limit=safe_limit)
+                wifi = await self._wifi_nearby(lat=resolved.lat, lon=resolved.lon, radius_m=radius_m, limit=safe_limit + 1)
                 wifi_source.coverage_status = "checked"
             except Exception as exc:
                 failed = True
                 warnings.append(f"WiFi locations unavailable: {type(exc).__name__}.")
         if district_name:
             try:
-                libraries = await self._libraries_for_district(district_name, limit=safe_limit)
+                libraries = await self._libraries_for_district(district_name, limit=safe_limit + 1)
                 library_source.coverage_status = "checked"
                 warnings.append("Library results are district-level address records, not radius-precise coordinates.")
             except Exception as exc:
@@ -464,9 +481,16 @@ class CityService:
                     "query": self._resolved_payload(resolved) if resolved is not None else {
                         "district": district_name, "scope": "district", "distance_included": False,
                     },
-                    "wifi_locations": wifi,
-                    "libraries": libraries,
+                    "wifi_locations": wifi[:safe_limit],
+                    "libraries": libraries[:safe_limit],
                     "cultural_centres": cultural_centres,
+                    "result_info": {
+                        "wifi_locations": self._section_info(wifi, safe_limit, wifi_source.coverage_status == "checked"),
+                        "libraries": self._section_info(libraries, safe_limit, library_source.coverage_status == "checked"),
+                        "cultural_centres": result_info(returned=len(cultural_centres),
+                            matched=cultural_source.matched_total if cultural_source else None,
+                            scope="cultural_centres").model_dump(mode="json"),
+                    },
                 }
             ],
             sources=sources,
@@ -494,10 +518,12 @@ class CityService:
             return self._source_error("City feature sources are unavailable.", exc)
         if not refresh.types:
             return self._city_refresh_error(refresh)
-        data = self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=safe_limit, types=refresh.types)
+        candidates = self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=safe_limit + 1, types=refresh.types)
+        data = candidates[:safe_limit]
         return success_envelope(
             summary=f"{len(data)} city feature(s) found within {radius_m} meters.",
             data=data,
+            result=result_info(returned=len(data), truncated=len(candidates) > safe_limit, scope="available_indexed_layers"),
             sources=[CITY_SOURCE, *refresh.sources],
             freshness=self._city_freshness(refresh),
             limits=[f"radius_m={radius_m}", f"limit={safe_limit}", *self._city_gtfs_limits(refresh)],
@@ -515,18 +541,25 @@ class CityService:
             return self._source_error("City feature sources are unavailable.", exc)
         if not refresh.types:
             return self._city_refresh_error(refresh)
-        data = self.geo.bbox_search(
+        candidates = self.geo.bbox_search(
             min_lon=min_lon, min_lat=min_lat, max_lon=max_lon, max_lat=max_lat,
-            limit=safe_limit, types=refresh.types,
+            limit=safe_limit + 1, types=refresh.types,
         )
+        data = candidates[:safe_limit]
         return success_envelope(
             summary=f"{len(data)} city feature(s) found in bbox.",
             data=data,
+            result=result_info(returned=len(data), truncated=len(candidates) > safe_limit, scope="available_indexed_layers"),
             sources=[CITY_SOURCE, *refresh.sources],
             freshness=self._city_freshness(refresh),
             limits=[f"limit={safe_limit}", *self._city_gtfs_limits(refresh)],
             warnings=refresh.warnings,
         )
+
+    @staticmethod
+    def _section_info(rows: list[dict], limit: int, checked: bool) -> dict:
+        return result_info(returned=min(len(rows), limit),
+                           truncated=len(rows) > limit if checked else None).model_dump(mode="json")
 
     def _city_refresh_error(self, refresh: _CityRefresh) -> dict:
         return error_envelope(
@@ -980,6 +1013,8 @@ class CityService:
             return None
         properties = {
             "stop_code": stop.get("stop_code"), "stop_desc": stop.get("stop_desc"),
+            "platform_direction_text": stop.get("stop_desc"),
+            "location_type": int(str(stop.get("location_type"))) if str(stop.get("location_type")) in {"0", "1", "2", "3", "4"} else None,
             "zone_id": stop.get("zone_id"), "wheelchair_boarding": stop.get("wheelchair_boarding"),
         }
         if any(GROUPED_COORDINATE_RE.fullmatch(str(stop.get(key) or "").strip()) for key in ("stop_lat", "stop_lon")):

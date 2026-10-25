@@ -69,7 +69,7 @@ def _coverage(settings: Settings, actual_tools: set[str]) -> list[dict[str, Any]
          "All 39 districts: library/cultural address lists, without WiFi or invented distances. Point mode adds WiFi. Acıbadem requires Kadıköy or Üsküdar. Not full address geocoding or live availability."),
         ("neighborhood", ["istanbul_neighborhood_profile"], ["ckan"], "historical_scenario",
          "2023 social/building/earthquake scenario records; not an individual-building safety assessment."),
-        ("gtfs_schedule", ["istanbul_next_departures"], ["gtfs_schedule"], "published_timetable",
+        ("gtfs_schedule", ["istanbul_next_departures", "istanbul_gtfs_snapshot_status"], ["gtfs_schedule"], "published_timetable",
          "Opt-in. stop_query with limit searches names only and returns separate stop_id candidates, not departures; confirm by name/map. Turkish/ASCII supported; suggestions are not matches. No district/direction inference. Selected-stop departures enforce calendar validity; not live ETA."),
         ("transit", ["istanbul_transit_line"], ["iett"], "published_plan",
          "Line info, ordered stops and planned main-terminal departures; not intermediate-stop ETA."),

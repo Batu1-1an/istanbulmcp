@@ -4,7 +4,7 @@ Tarih: 2026-10-23; canlı kabul **2026-10-25**.
 
 Durum: canlı kabul geçti; production'da açık ve açılışta arka plan ön ısıtma çalışır.
 Kaynak varsayılanı `GTFS_SCHEDULE_ENABLED=false`; canlı deployment `true` kullanır.
-`istanbul_next_departures` canlıda 17. tool'dur. İlk yükleme yaklaşık iki dakika
+0.2.4'te `istanbul_gtfs_snapshot_status` ile GTFS açıkken yüzey 18 araçtır. İlk yükleme yaklaşık iki dakika
 sürer; ısınma sırasında araç `warming_up` döndürür ve bloklamaz.
 
 ## Araştırma düzeltmesi: CSV tam tarife değil
@@ -82,7 +82,9 @@ istanbul_next_departures(
 - Adaylarda `stop_id`, özgün `stop_name`, `lat`, `lon`, `maps_url`,
   `result_kind=stop_candidate` ve `match_kind=exact|prefix|contains|suggestion`
   bulunur. Eksik koordinat ve harita `null` kalır; konum üretilmez.
-- Kaynakta ilçe/yön/platform metadata'sı yoktur; bunlar türetilmez. İlçe adı
+- 0.2.4'te isteğe bağlı `stop_code`, `stop_desc`, `location_type` korunur.
+  `platform_direction_text`, `stop_desc` kaynak metnini yorumlamadan taşır;
+  rota `direction_id`'si değildir. Eksik değerler `null` kalır. İlçe türetilmez. İlçe adı
   eklemek yalnız yayımlanmış durak adında o kelime varsa eşleşir. Adres çözümleme
   veya ilçeye göre coğrafi filtre değildir.
 - `stop_query` yalnız `limit` ile kullanılır; `stop_id`, koordinatlar, `line`,
@@ -113,6 +115,39 @@ Context7 üzerinden kontrol edildi: parametre türü input şemasını, varsayı
 `None` değeri isteğe bağlılığı, docstring araç açıklamasını belirler.
 
 ## Yükleme ve snapshot güvenliği
+
+### 0.2.4 — planlı veri, durak metadata'sı ve tarife sağlığı
+
+- Her GTFS kalkışında `realtime:false`, `schedule_relationship:"STATIC"`,
+  `data_source:"gtfs_static"` vardır. Bu alanlar mevcut saat alanlarının yerine geçmez.
+- `stop_code` string olarak korunur; baştaki sıfırlar düşmez. `stop_desc` ve
+  `platform_direction_text` yalnız kaynak açıklamasıdır, yön/ilçe tahmini yapılmaz.
+  `location_type` GTFS 0–4 enum'una uyuyorsa korunur; eksik veya bozuksa `null` kalır.
+  Bozuk isteğe bağlı değerler tüm tarifeyi reddetmez; `invalid_location_type_total`
+  sayacı ve arama/kalkış/durum uyarısıyla bildirilir. Kaynak yönü tahmin edilmez.
+- Mevcut volume'daki dört kolonlu durak tablosuna üç metadata kolonu, snapshot
+  yayınıyla aynı transaction içinde eklenir. Başarısız yayın eski şema ve satırları korur.
+- `istanbul_gtfs_snapshot_status()` **indirme veya refresh başlatmaz**. Geçerli yerel
+  cache ve DB snapshot kimliğini kontrol eder. Yaş, yükleme zamanı, satır/atlama
+  sayaçları, saatsiz kayıtlar, geçersiz koordinatlar ve takvim tarihlerini gösterir.
+- Takvim `expired` hesabı son servis gününün geceyarısı sonrası saatlerini de kapsar.
+  Min/max tarih aralığı, aradaki her gün sefer olduğunu kanıtlamaz.
+- Yaş, başarılı yükleme yaşıdır; feed yayın yaşı değildir. `upstream_health:not_checked`
+  korunur. TTL aşılmış ama izin verilen stale penceresindeki veri, açık `stale` ile gösterilir.
+  Stale penceresi bitmişse veya snapshot başka worker tarafından değiştirilmişse unavailable olur.
+- GTFS kapalıyken iki GTFS aracı listelenmez ama eski istemciler için çağrılabilir kalır.
+- Kalkış listesi en fazla `limit+1` adayla kesilmeyi denetler; ek satır kullanıcıya
+  verilmez. `result_info.truncated`, `returned`, kapsam ve devam önerisini taşır.
+  Kesilmiş kalkışlarda tam toplam hesaplanmaz, `matched:null` kalır. Offset desteği eklenmedi.
+- Ad aramasında toplam bilinir. Yazım önerilerinin sayısı `scope:spelling_suggestions`
+  altındadır; doğrulanmış eşleşme sayısı olan `sources[].matched_total=0` değişmez.
+
+Ayrıntı: [Ortak yanıt sözleşmesi](response-contract.md).
+
+Kaynak probe'u (2026-10-25): 15.390 durağın 15.387'sinde `location_type=0`;
+üç kayıtta `2,83E+14`, `2,91E+12`, `2,91E+14` bulundu. Bu üç bozuk değer
+istasyon/platform türü olarak yorumlanmaz. Ham değer yalnız geçici doğrulama
+tablosunda tutulur; yayımlanan kolon `null`, sayaç 3 olur.
 
 1. Sınırlı CKAN package metadata'sı okunur (512 KiB). `agency`, `calendar`,
    `routes`, `stops`, `trips` CSV/TXT ve **tam stop_times ZIP** zorunludur.
@@ -273,6 +308,17 @@ Yazım önerisi ve ilgisiz ad da kontrol edildi. Ad araması p95 **185,4 ms**;
 aynı koşumda altı yayımlanmış kalkış satırı doğrulandı, kalkış p95 **10,4 ms**.
 Bu ad eşleşmeleri ilçe içindeki bütün durakların sayısı değildir. Yerel tam paket
 **1256 geçti, 25 atlandı**; gerçek sunucu süreciyle MCP smoke testi de geçti.
+
+0.2.4 gerçek kaynak kabulü (2026-10-25, production relay'i; ayrı geçici DB):
+15.390 durak ve 6.155.647 stop-time kaydı; 5 boş rota ve 45 tekrar sayılarak
+dışlandı. Durak kodu/açıklaması/türü kaynakla karşılaştırıldı; kalkış provenance'ı,
+tarife sağlığı ve ortak sonuç sayımları doğrulandı. Üç bozuk isteğe bağlı
+`location_type` alanı tüm feed'i reddetmek yerine `null` ve uyarı ile korunur.
+Soğuk yükleme **163,8 s**, sıcak kalkış p95 **9,5 ms**, 12 durak araması p95
+**205,8 ms**. Altı yayımlanmış kalkış satırı kontrol edildi. Bu işlem production
+veritabanını değiştirmedi; canlı ETA testi değildir.
+Yerel tam paket **1299 geçti, 25 atlandı**; gerçek sunucu süreciyle MCP smoke
+testi, bağımlılık kontrolü ve `git diff --check` geçti.
 
 Canlı kabul betiği (relay değişkenlerini Railway'den alır; production DB'sine
 dokunmaz):

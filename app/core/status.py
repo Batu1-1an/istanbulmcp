@@ -21,6 +21,7 @@ TOOL_SOURCES = {
     "istanbul_water_status": "iski",
     "istanbul_transit_line": "iett",
     "istanbul_next_departures": "gtfs_schedule",
+    "istanbul_gtfs_snapshot_status": "gtfs_schedule",
     "istanbul_bbox_search": "sqlite",
     "istanbul_parking_nearby": "ispark",
     "istanbul_parking_by_district": "ispark",

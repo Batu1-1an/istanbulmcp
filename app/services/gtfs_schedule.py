@@ -13,11 +13,11 @@ from zoneinfo import ZoneInfo
 
 from app.connectors.gtfs import GTFS_DATASET_ID
 from app.connectors.gtfs_schedule import GtfsScheduleClient, GtfsScheduleError
-from app.core.envelope import Freshness, Pagination, Source, error_envelope, success_envelope, utc_now_iso
+from app.core.envelope import Freshness, Pagination, Repair, Source, error_envelope, result_info, success_envelope, utc_now_iso
 from app.core.error_responses import validation_error_envelope
 from app.core.geo import google_maps_url, haversine_m, radius_bbox
 from app.core.settings import Settings
-from app.core.source_cache import SourceLoadResult, cached_source_data_with_status
+from app.core.source_cache import SourceLoadResult, cached_source_data_with_status, source_cache
 from app.core.validation import InputValidationError, resolve_limit, validate_lat_lon, validate_line_code, validate_radius, validate_text
 from app.services.stop_search import StopSearchResult, search_stops, validate_stop_query
 from app.storage.db import connect
@@ -65,6 +65,12 @@ class ScheduleValidityError(GtfsScheduleError):
 STATIC_WARNING = "Published GTFS timetable only; not live ETA, delay, cancellation or proof a trip operates today. Verify with IETT before travel."
 
 
+def schedule_source() -> Source:
+    return Source(name="IETT GTFS published timetable", dataset_id=GTFS_DATASET_ID,
+                  operator="iett", coverage_kind="published_timetable", coverage_status="unavailable",
+                  url="https://data.ibb.gov.tr/dataset/iett-gtfs-verisi")
+
+
 class GtfsScheduleService:
     def __init__(self, settings: Settings, *, client: GtfsScheduleClient | None = None):
         self.settings = settings
@@ -75,6 +81,69 @@ class GtfsScheduleService:
                    settings.gtfs_schedule_cache_ttl_seconds, settings.gtfs_schedule_stale_if_error_seconds)
         self.profile = hashlib.sha256(repr(profile).encode()).hexdigest()
         self.cache_key = "ckan.gtfs_schedule." + self.profile
+
+    async def snapshot_status(self) -> dict:
+        """Inspect the existing process snapshot only; never download a feed."""
+        source = schedule_source()
+        limits = ["local_snapshot_metadata_only", "no_upstream_health_check", "published_timetable_not_live_eta"]
+        if not self.settings.gtfs_schedule_enabled:
+            return error_envelope(summary="GTFS timetable is disabled.", warning="No timetable was checked.",
+                                  code="feature_disabled", sources=[source], limits=limits)
+        cached = source_cache.peek_with_status(
+            self.cache_key, stale_if_error_seconds=self.settings.gtfs_schedule_stale_if_error_seconds,
+        )
+        if cached is None:
+            warming = _warmup_active
+            return error_envelope(
+                summary="GTFS timetable is warming up." if warming else "No usable local GTFS snapshot is available.",
+                warning="No upstream request was made; unavailable does not mean no transport service.",
+                code="warming_up" if warming else "snapshot_unavailable", temporary=True,
+                retry_after_ms=60000 if warming else None, freshness_status="unknown", sources=[source], limits=limits,
+                repair=Repair(next_step="Check snapshot status again after warm-up.", tool="istanbul_gtfs_snapshot_status", arguments={}),
+            )
+        try:
+            with closing(connect(self.settings.database_path)) as conn:
+                require_snapshot(conn, cached.value, self.profile)
+            metadata = cached.metadata or {}
+            now = datetime.now(ISTANBUL)
+            start, end = metadata["calendar_start"], metadata["calendar_end"]
+            end_date = datetime.strptime(end, "%Y%m%d").date()
+            last_exclusive = datetime.combine(end_date, time(), tzinfo=ISTANBUL) + timedelta(
+                seconds=max(86400, metadata["max_departure_seconds"] + 1),
+            )
+            row = {
+                "snapshot_id": cached.value, "loaded_at": cached.refreshed_at_iso,
+                "age_seconds": max(0, int((now - datetime.fromisoformat(cached.refreshed_at_iso)).total_seconds())),
+                "stale": cached.is_stale, "refresh_in_progress": _warmup_active,
+                "realtime_available": False, "upstream_health": "not_checked",
+                "calendar": {"min_date": datetime.strptime(start, "%Y%m%d").date().isoformat(),
+                             "max_date": end_date.isoformat(), "expired": now >= last_exclusive,
+                             "service_timezone": "Europe/Istanbul", "valid_until_exclusive": last_exclusive.isoformat()},
+                "rows": metadata["counts"], "skipped": metadata.get("skipped", {}),
+                "max_departure_seconds": metadata["max_departure_seconds"],
+                "untimed_total": metadata.get("untimed_total", 0),
+                "invalid_coordinate_total": metadata.get("invalid_coordinate_total", 0),
+                "invalid_location_type_total": metadata.get("invalid_location_type_total", 0),
+            }
+        except Exception as exc:
+            return error_envelope(summary="Local GTFS snapshot cannot be verified.",
+                                  warning=f"Snapshot verification failed ({type(exc).__name__}); no upstream request was made.",
+                                  code="snapshot_unavailable", temporary=True, sources=[source], limits=limits)
+        source.scope = "local_snapshot_metadata"
+        source.coverage_status = None  # Inspection establishes neither upstream health nor failure.
+        source.last_successful_refresh_at = cached.refreshed_at_iso
+        warnings = [STATIC_WARNING, "Cache age is retrieval age, not the publication age of the feed."]
+        warnings.extend(self._stop_metadata_warnings(metadata))
+        if cached.is_stale:
+            warnings.append("Cache TTL has elapsed; this inspection did not attempt a refresh.")
+        if row["calendar"]["expired"]:
+            warnings.append("The published calendar has expired; this is not proof of no service.")
+        return success_envelope(
+            summary="Local GTFS snapshot metadata; upstream health was not checked.", data=[row], sources=[source],
+            freshness=Freshness(status="stale" if cached.is_stale else "fresh", retrieved_at=cached.refreshed_at_iso,
+                                ttl_seconds=self.settings.gtfs_schedule_cache_ttl_seconds),
+            warnings=warnings, limits=limits, result=result_info(returned=1, matched=1),
+        )
 
     async def next_departures(self, *, stop_id: str | None = None, lat: float | None = None,
                               lon: float | None = None, line: str | None = None, at: str | None = None,
@@ -88,9 +157,7 @@ class GtfsScheduleService:
                    f"gtfs_schedule_max_uncompressed_bytes={self.settings.gtfs_schedule_max_uncompressed_bytes}",
                    f"gtfs_schedule_max_rows={self.settings.gtfs_schedule_max_rows}",
                    f"gtfs_schedule_load_timeout_seconds={self.settings.gtfs_schedule_load_timeout_seconds:g}"])
-        unavailable = Source(name="IETT GTFS published timetable", dataset_id=GTFS_DATASET_ID,
-                             operator="iett", coverage_kind="published_timetable", coverage_status="unavailable",
-                             url="https://data.ibb.gov.tr/dataset/iett-gtfs-verisi")
+        unavailable = schedule_source()
         try:
             safe_limit = resolve_limit(limit, self.settings.default_limit, self.settings.max_limit)
             validate_radius(radius_m, self.settings.max_radius_m)
@@ -119,7 +186,8 @@ class GtfsScheduleService:
             limits.extend([f"radius_m={radius_m}", f"at={when.isoformat()}"])
         if not self.settings.gtfs_schedule_enabled:
             return error_envelope(summary="GTFS timetable lookup is disabled pending live source acceptance.",
-                                  warning="GTFS_SCHEDULE_ENABLED=false; no timetable was checked.", sources=[unavailable], limits=limits)
+                                  warning="GTFS_SCHEDULE_ENABLED=false; no timetable was checked.", sources=[unavailable], limits=limits,
+                                  code="feature_disabled")
         if _warmup_active:
             return error_envelope(
                 summary="GTFS timetable is warming up; no stops were searched." if searching else "GTFS timetable is warming up; no departures were checked.",
@@ -141,7 +209,7 @@ class GtfsScheduleService:
                 if searching:
                     found = search_stops(conn, stop_query, safe_limit)
                 else:
-                    data = self._query(conn, stop_id, lat, lon, radius_m, line, when, safe_limit, metadata["max_departure_seconds"])
+                    data = self._query(conn, stop_id, lat, lon, radius_m, line, when, safe_limit + 1, metadata["max_departure_seconds"])
             untimed = metadata.get("untimed_total", 0)
             invalid_coords = metadata.get("invalid_coordinate_total", 0)
             sources = [Source(
@@ -159,6 +227,7 @@ class GtfsScheduleService:
             if searching:
                 return self._stop_search_envelope(found, cached, sources, limits, safe_limit)
             warnings = [STATIC_WARNING, "Cache freshness records retrieval age, not the age of the published timetable."]
+            warnings.extend(self._stop_metadata_warnings(metadata))
             skipped_routes = metadata.get("skipped", {}).get("routes", 0)
             if skipped_routes:
                 warnings.append(f"{skipped_routes} route row(s) without route_id were excluded; no trip referenced them.")
@@ -171,9 +240,15 @@ class GtfsScheduleService:
                 warnings.append(f"{invalid_coords} stops have no usable Istanbul coordinates; coordinate search excludes them.")
             if cached.is_stale:
                 warnings.append("Source refresh failed; last successful snapshot served within its bounded stale window.")
+            truncated = len(data) > safe_limit
+            data = data[:safe_limit]
+            if truncated:
+                warnings.append("Scheduled departures were truncated by limit; narrow the stop or line filter, or increase limit.")
             return success_envelope(
                 summary=f"{len(data)} scheduled departure(s) in the next 24 hours; not live ETA.", data=data,
                 sources=sources, limits=limits, warnings=warnings,
+                result=result_info(returned=len(data), matched=None if truncated else len(data), truncated=truncated,
+                                   scope="next_24_hours_at_selected_stops"),
                 freshness=Freshness(status="stale" if cached.is_stale else "fresh",
                                     retrieved_at=cached.refreshed_at_iso or utc_now_iso(),
                                     source_updated_at=min((s.source_updated_at for s in sources if s.source_updated_at), default=None),
@@ -184,13 +259,16 @@ class GtfsScheduleService:
         except ScheduleValidityError:
             return error_envelope(summary="Requested time is outside the published GTFS calendar.",
                                   warning="No timetable covers this time. Obtain an updated feed; do not infer no service.",
-                                  sources=[unavailable], limits=limits,
-                                  data=[{"error_code": "outside_calendar", "field": "at"}])
+                                   sources=[unavailable], limits=limits,
+                                   data=[{"error_code": "outside_calendar", "field": "at"}],
+                                   repair=Repair(next_step="Inspect the published calendar; do not infer no service.",
+                                                 tool="istanbul_gtfs_snapshot_status", arguments={}))
         except Exception as exc:
             # Never leak source text, local paths, SQL or credentials.
             return error_envelope(summary="GTFS stop search is unavailable; no stops were verified." if searching else "GTFS timetable is unavailable; no departures were verified.",
-                                  warning=f"Complete timetable lookup failed ({type(exc).__name__}). {STATIC_WARNING}",
-                                  sources=[unavailable], limits=limits)
+                                   warning=f"Complete timetable lookup failed ({type(exc).__name__}). {STATIC_WARNING}",
+                                   sources=[unavailable], limits=limits,
+                                   code="source_timeout" if isinstance(exc, TimeoutError) else "source_unavailable")
 
     def _stop_search_envelope(self, found: StopSearchResult, cached, sources: list[Source],
                               limits: list[str], limit: int) -> dict:
@@ -199,6 +277,7 @@ class GtfsScheduleService:
             "Select a stop_id using its name and map before querying departures. Same-name stops remain separate; no stop, direction or district was selected automatically.",
             "Cache freshness records retrieval age, not the age of the published stops.",
         ]
+        warnings.extend(self._stop_metadata_warnings(cached.metadata or {}))
         total = found.matched_total or found.suggested_total
         if found.suggested_total:
             summary = f"No matching stop names; {len(found.rows)} possible spelling suggestion(s). Confirm before selecting a stop_id."
@@ -221,11 +300,19 @@ class GtfsScheduleService:
             summary=summary, data=found.rows, sources=sources,
             limits=[*limits, f"matched_total={found.matched_total}", f"suggested_total={found.suggested_total}"],
             warnings=warnings, pagination=Pagination(limit=limit, total_estimate=total),
+            result=result_info(returned=len(found.rows), matched=total,
+                               scope="spelling_suggestions" if found.suggested_total else "stop_name_matches"),
             freshness=Freshness(status="stale" if cached.is_stale else "fresh",
                                 retrieved_at=cached.refreshed_at_iso or utc_now_iso(),
                                 source_updated_at=min((s.source_updated_at for s in sources if s.source_updated_at), default=None),
                                 ttl_seconds=self.settings.gtfs_schedule_cache_ttl_seconds),
         )
+
+    @staticmethod
+    def _stop_metadata_warnings(metadata: dict) -> list[str]:
+        count = metadata.get("invalid_location_type_total", 0)
+        return ([f"{count} stop(s) have an invalid optional location_type; it is null, not inferred. Stop identities and published times are preserved."]
+                if count else [])
 
     async def _snapshot(self):
         async def load():
@@ -313,6 +400,8 @@ class GtfsScheduleService:
                 seconds = row["departure_seconds"]
                 data.append({
                     "stop_id": row["stop_id"], "stop_name": stop["stop_name"],
+                    "stop_code": stop.get("stop_code"), "stop_desc": stop.get("stop_desc"),
+                    "platform_direction_text": stop.get("stop_desc"), "location_type": stop.get("location_type"),
                     "lat": stop["lat"], "lon": stop["lon"], "maps_url": google_maps_url(stop["lat"], stop["lon"]),
                     "distance_m": stop.get("distance_m"), "route_id": row["route_id"], "line": row["line"],
                     "route_name": row["route_name"], "trip_id": row["trip_id"], "service_id": row["service_id"],
@@ -321,6 +410,7 @@ class GtfsScheduleService:
                     "gtfs_departure_time": f"{seconds // 3600:02}:{seconds // 60 % 60:02}:{seconds % 60:02}",
                     "timepoint": row["timepoint"], "pickup_type": row["pickup_type"],
                     "departure_kind": "scheduled_exact" if row["timepoint"] else "scheduled_approximate",
+                    "realtime": False, "schedule_relationship": "STATIC", "data_source": "gtfs_static",
                 })
         data.sort(key=lambda row: (row["scheduled_departure"], row["stop_id"], row["trip_id"]))
         return data[:limit]

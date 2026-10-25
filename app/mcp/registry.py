@@ -58,6 +58,7 @@ TOOL_TITLES = {
     "istanbul_transport_disruptions": "Ulaşım aksaklıkları ve duyurular",
     "istanbul_metro_accessibility_status": "Metro ekipman ve arıza durumu",
     "istanbul_next_departures": "Planlı GTFS durak kalkışları",
+    "istanbul_gtfs_snapshot_status": "GTFS tarife anlık görüntü durumu",
     "istanbul_ferry_schedules": "Şehir Hatları yayımlanmış tarifesi",
     "istanbul_bbox_search": "Harita alanındaki şehir noktaları",
     "istanbul_parking_nearby": "Yakındaki İSPARK otoparkları",
@@ -117,12 +118,13 @@ def create_mcp_server(settings: Settings) -> MCPServer:
     hidden = set() if settings.mcp_legacy_tools_enabled else set(LEGACY_TOOL_NAMES)
     if not settings.ferry_schedules_enabled:
         hidden.add("istanbul_ferry_schedules")
-    if settings.gtfs_schedule_enabled:
-        names += ("istanbul_next_departures",)
+    names += ("istanbul_next_departures", "istanbul_gtfs_snapshot_status")
+    if not settings.gtfs_schedule_enabled:
+        hidden.update({"istanbul_next_departures", "istanbul_gtfs_snapshot_status"})
     for name in names:
         handler = getattr(handlers, name)
         structured = name in STRUCTURED_TOOL_NAMES | STRUCTURED_LEGACY_TOOL_NAMES or name in {
-            "istanbul_next_departures", "istanbul_market_schedule",
+            "istanbul_next_departures", "istanbul_gtfs_snapshot_status", "istanbul_market_schedule",
         }
         if structured:
             handler = with_envelope_output(handler)

@@ -121,6 +121,11 @@ render akışları test edilir; belirli bir Claude/Cursor menüsünün görünü
 
 ## 5. Output schema ve structuredContent
 
+0.2.4 eklemesi: ortak zarf `error` ve `result_info` alanlarını içerir.
+[Hata, toparlanma ve kesilme sözleşmesi](response-contract.md).
+GTFS açıkken `istanbul_next_departures` ve `istanbul_gtfs_snapshot_status` da
+aynı zarfın şemasını yayımlar; toplam araç sayısı 18 olur.
+
 Varsayılan **beş** araç `ResponseEnvelope` JSON şeması yayımlar:
 
 1. `istanbul_nearby` — `kind="pharmacy"` dahil bütün dispatch yolları.

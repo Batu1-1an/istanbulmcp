@@ -10,7 +10,7 @@ from app.connectors.iett import IettClient
 from app.connectors.marmaray import MarmarayClient
 from app.connectors.metro import MetroClient
 from app.connectors.sehir_hatlari import SehirHatlariClient
-from app.core.envelope import Freshness, Source, success_envelope, utc_now_iso
+from app.core.envelope import ErrorInfo, Freshness, Source, result_info, success_envelope, utc_now_iso
 from app.core.error_responses import validation_error_envelope
 from app.core.settings import Settings
 from app.core.source_cache import cached_source_data_with_status
@@ -92,6 +92,7 @@ class TransportDisruptionService:
         served_stale = any(result[3] for result in results)
         data = [row for _, _, rows, _ in results for row in rows]
         data = self._filter_and_sort(data, mode=safe_mode, operator=safe_operator, line=safe_line)
+        matched = len(data)
         data = data[:safe_limit]
 
         unavailable_count = len(specs) - checked_count
@@ -111,6 +112,7 @@ class TransportDisruptionService:
         response = success_envelope(
             summary=summary,
             data=data,
+            result=result_info(returned=len(data), matched=matched, scope="available_source_records"),
             sources=sources,
             freshness=Freshness(
                 status=freshness_status,
@@ -125,6 +127,8 @@ class TransportDisruptionService:
         )
         if unavailable_count == len(specs):
             response["ok"] = False
+            response["error"] = ErrorInfo(code="source_unavailable", temporary=True).model_dump(mode="json")
+            response["result_info"] = result_info(returned=0, scope="unavailable_source_records").model_dump(mode="json")
         return response
 
     def _select_specs(self, *, mode: str | None, operator: str | None) -> list[_SourceSpec]:

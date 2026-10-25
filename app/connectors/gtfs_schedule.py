@@ -48,6 +48,7 @@ TABLE_ROW_CAPS = {"agency": 100, "calendar": 1000, "calendar_dates": 10000,
 # them only in the disposable staging DB; the published schema stays unchanged.
 STAGING_VALIDATION_SCHEMA = """
 ALTER TABLE gtfs_schedule_stop_times ADD COLUMN arrival_seconds INTEGER;
+ALTER TABLE gtfs_schedule_stops ADD COLUMN source_location_type TEXT;
 CREATE TRIGGER reject_conflicting_stop_times BEFORE INSERT ON gtfs_schedule_stop_times
 WHEN EXISTS (
  SELECT 1 FROM gtfs_schedule_stop_times s
@@ -232,6 +233,11 @@ class GtfsScheduleClient:
                     max_seconds = conn.execute("SELECT MAX(departure_seconds) FROM gtfs_schedule_stop_times").fetchone()[0]
                     untimed = conn.execute("SELECT COUNT(*) FROM gtfs_schedule_stop_times WHERE departure_seconds IS NULL").fetchone()[0]
                     invalid_coords = conn.execute("SELECT COUNT(*) FROM gtfs_schedule_stops WHERE lat IS NULL OR lon IS NULL").fetchone()[0]
+                    invalid_location_types = conn.execute("SELECT COUNT(*) FROM gtfs_schedule_stops WHERE source_location_type IS NOT NULL AND location_type IS NULL").fetchone()[0]
+                    calendar_bounds = conn.execute("""SELECT MIN(first), MAX(last) FROM (
+                        SELECT MIN(start_date) AS first, MAX(end_date) AS last FROM gtfs_schedule_calendar
+                        UNION ALL SELECT MIN(date), MAX(date) FROM gtfs_schedule_calendar_dates WHERE exception_type=1
+                    )""").fetchone()
                     conn.commit()
                 except (csv.Error, UnicodeError, sqlite3.IntegrityError, zipfile.BadZipFile, NotImplementedError) as exc:
                     raise GtfsScheduleError("Malformed or inconsistent GTFS schedule") from exc
@@ -244,7 +250,9 @@ class GtfsScheduleClient:
                 publish_schedule(settings.database_path, stage_path, snapshot_id=snapshot_id, profile=profile)
                 return {"snapshot_id": snapshot_id, "counts": counts, "skipped": skipped, "received_bytes": downloaded,
                         "uncompressed_bytes": expanded, "max_departure_seconds": max_seconds, "untimed_total": untimed,
-                        "invalid_coordinate_total": invalid_coords, "resources": list(resources.values())}
+                        "invalid_coordinate_total": invalid_coords, "resources": list(resources.values()),
+                        "invalid_location_type_total": invalid_location_types,
+                        "calendar_start": calendar_bounds[0], "calendar_end": calendar_bounds[1]}
 
     async def _download(self, client, resource, kind, path, remaining):
         url = schedule_url(resource, kind)
@@ -367,7 +375,11 @@ class GtfsScheduleClient:
             lon = parse_gtfs_coordinate(get("stop_lon", required=False), axis="lon")
             if lat is None or lon is None:
                 lat = lon = None
-            return get("stop_id"), get("stop_name"), lat, lon
+            location_type = get("location_type", required=False)
+            return (get("stop_id"), get("stop_name"), lat, lon,
+                    get("stop_code", required=False) or None, get("stop_desc", required=False) or None,
+                    int(location_type) if location_type in {"0", "1", "2", "3", "4"} else None,
+                    location_type or None)
         if kind == "trips":
             return get("trip_id"), get("route_id"), get("service_id"), get("trip_headsign", required=False), get("direction_id", required=False) or None
         arrival = parse_schedule_time(get("arrival_time", required=False))

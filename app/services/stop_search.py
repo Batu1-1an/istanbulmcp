@@ -41,7 +41,7 @@ def search_stops(conn, query: str, limit: int) -> StopSearchResult:
     tokens = needle.split()
     named = []
     matches = []
-    for row in conn.execute("SELECT stop_id, stop_name, lat, lon FROM gtfs_schedule_stops"):
+    for row in conn.execute("SELECT * FROM gtfs_schedule_stops"):
         if time.monotonic() > deadline:
             raise TimeoutError("GTFS stop search exceeded its budget")
         name = normalize_stop_name(row["stop_name"])
@@ -86,4 +86,5 @@ def search_stops(conn, query: str, limit: int) -> StopSearchResult:
 
 def _candidate(row: dict, match_kind: str) -> dict:
     return {**row, "result_kind": "stop_candidate", "match_kind": match_kind,
+            "platform_direction_text": row.get("stop_desc"),
             "maps_url": google_maps_url(row["lat"], row["lon"])}
