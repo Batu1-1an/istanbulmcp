@@ -481,8 +481,16 @@ async def istanbul_next_departures(
     at: str | None = None,
     radius_m: int = 500,
     limit: int | None = None,
+    stop_query: str | None = None,
 ) -> dict:
-    """Return published GTFS departures for a stop or up to five nearby stops.
+    """Search GTFS stop names or return published departures for selected stops.
+
+    Use stop_query with limit only to discover stop_id candidates by name,
+    including Turkish/ASCII spellings (Kadıköy/kadikoy). This mode returns stops,
+    NOT departures. Same-name stops remain separate; never choose the first
+    automatically. Approximate spelling suggestions are labeled, not matches.
+    Ask the user to select a candidate using name/map, then call with stop_id.
+    Names have no district/direction metadata; do not infer either.
 
     at is an ISO datetime with a UTC offset; omitted means now in Europe/Istanbul.
     The search covers 24 hours. stop_id and coordinates are mutually exclusive.
@@ -491,7 +499,7 @@ async def istanbul_next_departures(
     """
     return await GtfsScheduleService(get_settings()).next_departures(
         stop_id=stop_id, lat=lat, lon=lon, line=line, at=at,
-        radius_m=radius_m, limit=limit,
+        radius_m=radius_m, limit=limit, stop_query=stop_query,
     )
 
 

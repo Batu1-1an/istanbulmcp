@@ -70,7 +70,7 @@ def _coverage(settings: Settings, actual_tools: set[str]) -> list[dict[str, Any]
         ("neighborhood", ["istanbul_neighborhood_profile"], ["ckan"], "historical_scenario",
          "2023 social/building/earthquake scenario records; not an individual-building safety assessment."),
         ("gtfs_schedule", ["istanbul_next_departures"], ["gtfs_schedule"], "published_timetable",
-         "Opt-in pending full ZIP live acceptance. Published schedule, not live ETA; calendar validity is enforced."),
+         "Opt-in. stop_query with limit searches names only and returns separate stop_id candidates, not departures; confirm by name/map. Turkish/ASCII supported; suggestions are not matches. No district/direction inference. Selected-stop departures enforce calendar validity; not live ETA."),
         ("transit", ["istanbul_transit_line"], ["iett"], "published_plan",
          "Line info, ordered stops and planned main-terminal departures; not intermediate-stop ETA."),
         ("transport_disruptions", ["istanbul_transport_disruptions"], ["iett", "metro", "sehir_hatlari", "marmaray"], "official_status_and_notices",

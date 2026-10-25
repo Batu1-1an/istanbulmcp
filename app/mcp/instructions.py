@@ -19,6 +19,10 @@ weekly markets are published snapshots, not live operating status; market
 timetables can change on holidays. IETT departures are planned
 main-terminal times, not intermediate-stop ETA; no route-planning or live-arrival guarantee.
 Optional istanbul_next_departures provides published GTFS stop times, not live ETA.
+Use its stop_query with limit only to search stop names (Turkish/ASCII supported).
+This returns stop_id candidates, not departures. Keep same-name stops separate;
+ask the user to select by name/map, then query stop_id. Never auto-select a match
+or treat spelling suggestions as verified stops. Do not infer district or direction.
 Its calendar validity, approximate timepoints and stale warnings remain explicit.
 Metro equipment status is not an end-to-end accessibility guarantee. Neighborhood
 earthquake scenarios are historical, not individual-building safety assessments.

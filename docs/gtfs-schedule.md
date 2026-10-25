@@ -25,7 +25,7 @@ CSV seti yeterli” varsayımı bu bulguyla düzeltilmiştir.
 
 ```text
 istanbul_next_departures(
-  stop_id? | lat/lon?, line?, at?, radius_m=500, limit?
+  stop_query? | stop_id? | lat/lon?, line?, at?, radius_m=500, limit?
 )
 ```
 
@@ -59,6 +59,58 @@ istanbul_next_departures(
 ```
 
 Örnek tarih tarife geçerliliğine tabidir; bugünün tarifesi olduğu iddia edilmez.
+
+### Durak adı arama — 0.2.3
+
+```json
+{"stop_query":"kadikoy","limit":10}
+```
+
+- Yeni araç yoktur; mevcut `istanbul_next_departures` şemasına isteğe bağlı
+  `stop_query` eklendi. Önceki `stop_id` ve koordinat çağrıları değişmedi.
+- Ad araması **durak adayı** döndürür, kalkış saati döndürmez. Kullanıcı ad ve
+  haritadan seçim yaptıktan sonra dönen GTFS `stop_id` ile kalkış sorgulanır.
+- Büyük/küçük harf, Türkçe/ASCII (`Kadıköy/kadikoy`, `Şişli/SISLI`), Unicode
+  birleşik/ayrık harfler, noktalama ve boşluklar normalize edilir. Tüm sorgu
+  kelimeleri ad içinde bulunmalıdır; kelime sırası önemli değildir.
+- Sıralama: normalize tam ad, adın başlangıcı, diğer parça eşleşmeleri;
+  eşitlikte normalize ad ve `stop_id`. Aynı adlı duraklar **birleştirilmez**.
+- Eşleşme yoksa en az dört karakterli sorgularda en fazla beş benzer ada ait
+  duraklar önerilebilir. Bunlar `match_kind=suggestion`, `matched_total=0`
+  ve açık uyarı taşır. Kısa/ilgisiz sorgu için boş sonuç dönebilir. Benzerlik
+  eşiği 0,72'dir; öneri, kullanıcının istediği durağın bulunduğu anlamına gelmez.
+- Adaylarda `stop_id`, özgün `stop_name`, `lat`, `lon`, `maps_url`,
+  `result_kind=stop_candidate` ve `match_kind=exact|prefix|contains|suggestion`
+  bulunur. Eksik koordinat ve harita `null` kalır; konum üretilmez.
+- Kaynakta ilçe/yön/platform metadata'sı yoktur; bunlar türetilmez. İlçe adı
+  eklemek yalnız yayımlanmış durak adında o kelime varsa eşleşir. Adres çözümleme
+  veya ilçeye göre coğrafi filtre değildir.
+- `stop_query` yalnız `limit` ile kullanılır; `stop_id`, koordinatlar, `line`,
+  `at` veya varsayılandan farklı `radius_m` ile karıştırılırsa kaynak okunmadan
+  validation hatası döner. Ad 2–200 karakterdir; normalize hali en az iki harf
+  veya rakam içermelidir. Varsayılan/üst sonuç sınırı 20/100'dür.
+- Sonuç sınırı eşleşmeleri keserse toplam ve uyarı korunur. `pagination` yalnız
+  ilk sayfanın sınırını/sayısını bildirir; bu modda offset parametresi yoktur.
+  `suggested_total` yalnız seçilen en fazla beş benzer adın duraklarını sayar.
+- Mevcut tam GTFS snapshot'ı kullanılır; yeni dış servis veya indirme yoktur.
+  Ancak açılıştaki tam tarife ön ısıtması bitmeden bu mod da `warming_up` döner.
+  Snapshot'ın kaynak/profil kontrolü, TTL ve sınırlı stale penceresi değişmez.
+  Arama yalnız `stops` kaynağının güncelleme zamanını ve sayaçlarını bildirir.
+- Takvim yalnız kalkış sorgusunda uygulanır. Ad araması, tarife takvimi sona
+  ermiş olsa da statik aday döndürebilir; bu, bugün sefer olduğu anlamına gelmez.
+- En fazla 100.000 yayımlanmış durak taranır. SQL metnine kullanıcı girdisi
+  eklenmez. Ad normalizasyonu ve benzerlik hesabı dahil sorgu bütçesi bir saniyedir;
+  bütçe aşılırsa kısmi/boş başarı değil unavailable döner. SQL aracı ve allowlist
+  değişmedi.
+
+Doğrulama: `tests/test_stop_search.py` sentetik GTFS fixture'larıyla Türkçe/ASCII,
+aynı ad/yön belirsizliği, sıralama, kesilme, öneri/boş sonuç, eksik koordinat,
+validation, timeout, stale/expiry, snapshot değişimi, seçilen kimlikle kalkış ve
+iki MCP protokolündeki gerçek ASGI çağrısını kapsar.
+
+Bu ekleme için [Python MCP SDK v2 tool input şeması](https://py.sdk.modelcontextprotocol.io/v2/servers/tools/)
+Context7 üzerinden kontrol edildi: parametre türü input şemasını, varsayılan
+`None` değeri isteğe bağlılığı, docstring araç açıklamasını belirler.
 
 ## Yükleme ve snapshot güvenliği
 
@@ -171,7 +223,7 @@ büyütmek yerine kaynak/ortam incelenmelidir.
 Offline:
 
 ```bash
-pytest tests/test_gtfs_schedule.py tests/test_registry_metadata.py
+pytest tests/test_stop_search.py tests/test_gtfs_schedule.py tests/test_registry_metadata.py
 pytest
 python -m scripts.smoke_mcp
 ```
@@ -213,6 +265,14 @@ tamamlanmadı; yaklaşık %95,6 saatsiz stop-time satırı sınırı devam ediyo
 Yerel tam paket: **1217 geçti, 25 atlandı**; 83 GTFS testi ve gerçek sunucu
 süreciyle MCP smoke testi geçti. Yeni hata testleri düzeltmeden önce başarısız
 oldu; düzeltmeden sonra geçti.
+
+0.2.3 durak araması kabulü (2026-10-25): **15.390** yayımlanmış durak üzerinde
+12 gerçek kaynak sorgusu geçti. Türkçe/ASCII çiftleri aynı kimlik listesini verdi:
+Kadıköy 27, Üsküdar 29, Şişli 12, Beşiktaş 16, Eminönü 27 ad eşleşmesi.
+Yazım önerisi ve ilgisiz ad da kontrol edildi. Ad araması p95 **185,4 ms**;
+aynı koşumda altı yayımlanmış kalkış satırı doğrulandı, kalkış p95 **10,4 ms**.
+Bu ad eşleşmeleri ilçe içindeki bütün durakların sayısı değildir. Yerel tam paket
+**1256 geçti, 25 atlandı**; gerçek sunucu süreciyle MCP smoke testi de geçti.
 
 Canlı kabul betiği (relay değişkenlerini Railway'den alır; production DB'sine
 dokunmaz):

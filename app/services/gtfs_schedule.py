@@ -13,12 +13,13 @@ from zoneinfo import ZoneInfo
 
 from app.connectors.gtfs import GTFS_DATASET_ID
 from app.connectors.gtfs_schedule import GtfsScheduleClient, GtfsScheduleError
-from app.core.envelope import Freshness, Source, error_envelope, success_envelope, utc_now_iso
+from app.core.envelope import Freshness, Pagination, Source, error_envelope, success_envelope, utc_now_iso
 from app.core.error_responses import validation_error_envelope
 from app.core.geo import google_maps_url, haversine_m, radius_bbox
 from app.core.settings import Settings
 from app.core.source_cache import SourceLoadResult, cached_source_data_with_status
 from app.core.validation import InputValidationError, resolve_limit, validate_lat_lon, validate_line_code, validate_radius, validate_text
+from app.services.stop_search import StopSearchResult, search_stops, validate_stop_query
 from app.storage.db import connect
 from app.storage.gtfs_schedule import require_snapshot
 
@@ -77,39 +78,51 @@ class GtfsScheduleService:
 
     async def next_departures(self, *, stop_id: str | None = None, lat: float | None = None,
                               lon: float | None = None, line: str | None = None, at: str | None = None,
-                              radius_m: int = 500, limit: int | None = None) -> dict:
-        limits = ["published_timetable_not_live_eta", "search_window_hours=24", "nearest_stops_max=5",
-                  "service_timezone=Europe/Istanbul", "max_gtfs_time=71:59:59",
-                  f"gtfs_schedule_max_bytes={self.settings.gtfs_schedule_max_bytes}",
-                  f"gtfs_schedule_max_uncompressed_bytes={self.settings.gtfs_schedule_max_uncompressed_bytes}",
-                  f"gtfs_schedule_max_rows={self.settings.gtfs_schedule_max_rows}",
-                  f"gtfs_schedule_load_timeout_seconds={self.settings.gtfs_schedule_load_timeout_seconds:g}"]
+                              radius_m: int = 500, limit: int | None = None, stop_query: str | None = None) -> dict:
+        searching = stop_query is not None
+        limits = (["mode=stop_search", "stop_name_search_only", "suggested_names_max=5",
+                   "search_timeout_seconds=1", "stops_max=100000", "no_district_or_direction_inference"] if searching else
+                  ["published_timetable_not_live_eta", "search_window_hours=24", "nearest_stops_max=5",
+                   "service_timezone=Europe/Istanbul", "max_gtfs_time=71:59:59",
+                   f"gtfs_schedule_max_bytes={self.settings.gtfs_schedule_max_bytes}",
+                   f"gtfs_schedule_max_uncompressed_bytes={self.settings.gtfs_schedule_max_uncompressed_bytes}",
+                   f"gtfs_schedule_max_rows={self.settings.gtfs_schedule_max_rows}",
+                   f"gtfs_schedule_load_timeout_seconds={self.settings.gtfs_schedule_load_timeout_seconds:g}"])
         unavailable = Source(name="IETT GTFS published timetable", dataset_id=GTFS_DATASET_ID,
                              operator="iett", coverage_kind="published_timetable", coverage_status="unavailable",
                              url="https://data.ibb.gov.tr/dataset/iett-gtfs-verisi")
         try:
             safe_limit = resolve_limit(limit, self.settings.default_limit, self.settings.max_limit)
             validate_radius(radius_m, self.settings.max_radius_m)
-            if stop_id is not None:
+            if searching:
+                stop_query = validate_stop_query(stop_query)
+                if any(value is not None for value in (stop_id, lat, lon, line, at)) or radius_m != 500:
+                    raise InputValidationError(
+                        "stop_query searches names only; do not mix with stop_id, coordinates, line, at or radius_m",
+                        field="stop_query",
+                    )
+            elif stop_id is not None:
                 stop_id = validate_text(stop_id, field="stop_id", max_length=500)
                 if lat is not None or lon is not None:
                     raise InputValidationError("stop_id cannot be mixed with coordinates", field="stop_id")
             elif lat is None or lon is None:
-                raise InputValidationError("Provide stop_id or both lat and lon", field="stop_id")
+                raise InputValidationError("Provide stop_query for name search, stop_id, or both lat and lon", field="stop_id")
             else:
                 validate_lat_lon(lat, lon)
             if line is not None:
                 line = validate_line_code(line)
-            when = self._query_time(at)
+            when = None if searching else self._query_time(at)
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[unavailable])
-        limits.extend([f"limit={safe_limit}", f"radius_m={radius_m}", f"at={when.isoformat()}"])
+        limits.append(f"limit={safe_limit}")
+        if not searching:
+            limits.extend([f"radius_m={radius_m}", f"at={when.isoformat()}"])
         if not self.settings.gtfs_schedule_enabled:
             return error_envelope(summary="GTFS timetable lookup is disabled pending live source acceptance.",
                                   warning="GTFS_SCHEDULE_ENABLED=false; no timetable was checked.", sources=[unavailable], limits=limits)
         if _warmup_active:
             return error_envelope(
-                summary="GTFS timetable is warming up; no departures were checked.",
+                summary="GTFS timetable is warming up; no stops were searched." if searching else "GTFS timetable is warming up; no departures were checked.",
                 warning="The complete published timetable is loading. Retry in about 60 seconds.",
                 sources=[unavailable],
                 freshness_status="unknown",
@@ -125,21 +138,26 @@ class GtfsScheduleService:
                 require_snapshot(conn, cached.value, self.profile)
                 deadline = monotonic_time.monotonic() + 1
                 conn.set_progress_handler(lambda: int(monotonic_time.monotonic() > deadline), 1000)
-                data = self._query(conn, stop_id, lat, lon, radius_m, line, when, safe_limit, metadata["max_departure_seconds"])
+                if searching:
+                    found = search_stops(conn, stop_query, safe_limit)
+                else:
+                    data = self._query(conn, stop_id, lat, lon, radius_m, line, when, safe_limit, metadata["max_departure_seconds"])
             untimed = metadata.get("untimed_total", 0)
             invalid_coords = metadata.get("invalid_coordinate_total", 0)
             sources = [Source(
                 name=f"IETT GTFS {resource.get('name') or 'table'}", dataset_id=GTFS_DATASET_ID,
                 resource_id=resource["id"], operator="iett", coverage_kind="published_timetable",
                 coverage_status="unavailable" if cached.is_stale else "checked",
-                scope="complete_published_schedule", url=resource["url"],
+                scope="published_gtfs_stops" if searching else "complete_published_schedule", url=resource["url"],
                 received_total=metadata["counts"].get(resource.get("name"), 0) + metadata.get("skipped", {}).get(resource.get("name"), 0),
                 accepted_total=metadata["counts"].get(resource.get("name")),
                 skipped_total=metadata.get("skipped", {}).get(resource.get("name"), 0),
                 source_updated_at=resource.get("last_modified") or resource.get("metadata_modified"),
                 last_successful_refresh_at=cached.refreshed_at_iso,
                 last_checked_at=utc_now_iso() if cached.is_stale else cached.refreshed_at_iso,
-            ) for resource in metadata["resources"]]
+            ) for resource in metadata["resources"] if not searching or resource.get("name") == "stops"]
+            if searching:
+                return self._stop_search_envelope(found, cached, sources, limits, safe_limit)
             warnings = [STATIC_WARNING, "Cache freshness records retrieval age, not the age of the published timetable."]
             skipped_routes = metadata.get("skipped", {}).get("routes", 0)
             if skipped_routes:
@@ -170,9 +188,44 @@ class GtfsScheduleService:
                                   data=[{"error_code": "outside_calendar", "field": "at"}])
         except Exception as exc:
             # Never leak source text, local paths, SQL or credentials.
-            return error_envelope(summary="GTFS timetable is unavailable; no departures were verified.",
+            return error_envelope(summary="GTFS stop search is unavailable; no stops were verified." if searching else "GTFS timetable is unavailable; no departures were verified.",
                                   warning=f"Complete timetable lookup failed ({type(exc).__name__}). {STATIC_WARNING}",
                                   sources=[unavailable], limits=limits)
+
+    def _stop_search_envelope(self, found: StopSearchResult, cached, sources: list[Source],
+                              limits: list[str], limit: int) -> dict:
+        warnings = [
+            "Published GTFS stop names and coordinates only; not live arrivals, address geocoding or proof of service.",
+            "Select a stop_id using its name and map before querying departures. Same-name stops remain separate; no stop, direction or district was selected automatically.",
+            "Cache freshness records retrieval age, not the age of the published stops.",
+        ]
+        total = found.matched_total or found.suggested_total
+        if found.suggested_total:
+            summary = f"No matching stop names; {len(found.rows)} possible spelling suggestion(s). Confirm before selecting a stop_id."
+            warnings.append("Suggestions are approximate name similarities, not verified matches to the requested stop.")
+        elif not found.matched_total:
+            summary = "No matching stop names in the published GTFS snapshot."
+            warnings.append("No name match does not mean no transport service. Check spelling or use coordinates.")
+        else:
+            summary = f"{len(found.rows)} of {found.matched_total} matching GTFS stop candidate(s); select a stop_id for departures."
+        if total > len(found.rows):
+            warnings.append("Results are truncated by limit; increase limit or use a more specific stop name.")
+        if any(row["lat"] is None or row["lon"] is None for row in found.rows):
+            warnings.append("Some stop candidates have no usable coordinates; their map links are unavailable. Do not invent a location.")
+        if cached.is_stale:
+            warnings.append("Source refresh failed; last successful snapshot served within its bounded stale window.")
+        for source in sources:
+            source.matched_total = found.matched_total
+            source.returned_total = len(found.rows)
+        return success_envelope(
+            summary=summary, data=found.rows, sources=sources,
+            limits=[*limits, f"matched_total={found.matched_total}", f"suggested_total={found.suggested_total}"],
+            warnings=warnings, pagination=Pagination(limit=limit, total_estimate=total),
+            freshness=Freshness(status="stale" if cached.is_stale else "fresh",
+                                retrieved_at=cached.refreshed_at_iso or utc_now_iso(),
+                                source_updated_at=min((s.source_updated_at for s in sources if s.source_updated_at), default=None),
+                                ttl_seconds=self.settings.gtfs_schedule_cache_ttl_seconds),
+        )
 
     async def _snapshot(self):
         async def load():
@@ -203,7 +256,7 @@ class GtfsScheduleService:
         if stop_id is not None:
             stops = [dict(row) for row in conn.execute("SELECT * FROM gtfs_schedule_stops WHERE stop_id=?", (stop_id,))]
             if not stops:
-                raise InputValidationError("Unknown GTFS stop_id; use a stop from the published GTFS dataset", field="stop_id")
+                raise InputValidationError("Unknown GTFS stop_id; use stop_query to search published stop names", field="stop_id")
         else:
             min_lon, min_lat, max_lon, max_lat = radius_bbox(lat, lon, radius_m)
             def nearby_stops():

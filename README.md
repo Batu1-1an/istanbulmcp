@@ -253,7 +253,7 @@ adresi çözümleme ve tüm mahalleleri kapsama henüz yoktur.
 
 ### GTFS planlı durak kalkışları
 
-`istanbul_next_departures(stop_id? | lat/lon?, line?, at?, radius_m?, limit?)`
+`istanbul_next_departures(stop_query? | stop_id? | lat/lon?, line?, at?, radius_m?, limit?)`
 uygulandı ve 2026-10-25 canlı kabulünden sonra production'da açıldı. Kaynak
 varsayılanı `GTFS_SCHEDULE_ENABLED=false`; canlı deployment `true` kullanır.
 Tam `stop_times.zip`, servis takvimi ve tarife dosyalarını kullanır;
@@ -262,6 +262,13 @@ istisnaları ve `25:xx` saatleri işlenir; canlı ETA veya rota planlayıcı de�
 Açılışta arka plan ön ısıtma çalışır. Isınma sırasında araç `warming_up`
 döndürür; ilk yükleme yaklaşık iki dakika sürer. Açıkken yüzey 17 araçtır;
 [kapsam, ayarlar ve kabul adımları](docs/gtfs-schedule.md).
+
+Durak kimliğini bilmiyorsanız `{"stop_query":"kadikoy","limit":10}` ile
+isimden arayın. Türkçe/ASCII ve kısmi ad desteklenir. Bu mod **kalkış değil,
+durak adayları** döndürür. Aynı adlı duraklar kimlik ve konumlarıyla ayrı kalır;
+isim/haritaya göre durak seçildikten sonra `stop_id` ile kalkış sorgulanır.
+Yazım önerileri `match_kind=suggestion` taşır; doğrulanmış eşleşme değildir.
+`stop_query` yalnız `limit` ile kullanılır. İlçe/yön bilgisi türetilmez.
 
 ## MCP Keşfi ve Promptlar
 

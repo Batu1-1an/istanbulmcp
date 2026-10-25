@@ -5,12 +5,14 @@ import json
 import tempfile
 import time
 from contextlib import closing
+from dataclasses import replace
 from datetime import datetime, time as dt_time, timedelta
 from pathlib import Path
 
-from app.core.settings import Settings, get_settings
+from app.core.settings import get_settings
 from app.core.source_cache import clear_source_cache
 from app.services.gtfs_schedule import GtfsScheduleService, ISTANBUL
+from app.services.stop_search import normalize_stop_name
 from app.storage.db import connect
 
 
@@ -24,7 +26,7 @@ async def main() -> None:
     }), flush=True)
     with tempfile.TemporaryDirectory(prefix="gtfs-live-") as directory:
         database = Path(directory) / "schedule.sqlite3"
-        settings = Settings(database_path=database, gtfs_schedule_enabled=True)
+        settings = replace(runtime, database_path=database, gtfs_schedule_enabled=True)
         service = GtfsScheduleService(settings)
         started = time.monotonic()
         snapshot = await service._snapshot()
@@ -113,6 +115,55 @@ async def main() -> None:
         }, ensure_ascii=False), flush=True)
         if p95 >= 0.3:
             raise SystemExit(f"warm p95 {p95:.4f}s exceeds 0.3s")
+
+        # Compare name discovery with the same accepted source snapshot, without
+        # using a geocoder, another feed, or touching the production database.
+        with closing(connect(database)) as conn:
+            stops = {row["stop_id"]: dict(row) for row in conn.execute("SELECT * FROM gtfs_schedule_stops")}
+        search_samples = []
+        pairs = [("Kadıköy", "kadikoy"), ("Üsküdar", "uskudar"), ("Şişli", "sisli"),
+                 ("Beşiktaş", "besiktas"), ("Eminönü", "eminonu")]
+        for pair in pairs:
+            pair_ids = []
+            for query in pair:
+                started = time.monotonic()
+                result = await service.next_departures(stop_query=query, limit=100)
+                search_samples.append(time.monotonic() - started)
+                if not result.get("ok"):
+                    raise SystemExit(f"stop-name search failed: {result.get('summary')}")
+                tokens = normalize_stop_name(query).split()
+                expected = {stop_id for stop_id, row in stops.items()
+                            if all(token in normalize_stop_name(row["stop_name"]) for token in tokens)}
+                if not expected or result["sources"][0]["matched_total"] != len(expected):
+                    raise SystemExit("stop-name matched count differs from published stops")
+                ids = [row["stop_id"] for row in result["data"]]
+                if len(ids) != min(100, len(expected)) or not set(ids) <= expected:
+                    raise SystemExit("stop-name candidates differ from published stops")
+                for row in result["data"]:
+                    original = stops[row["stop_id"]]
+                    if any(row[key] != original[key] for key in ("stop_name", "lat", "lon")):
+                        raise SystemExit("stop-name candidate changed a published location")
+                    if "scheduled_departure" in row or row["match_kind"] == "suggestion":
+                        raise SystemExit("stop-name discovery returned departures or suggestions as matches")
+                pair_ids.append(ids)
+                print(json.dumps({"stop_query": query, "matched_total": len(expected), "returned_total": len(ids)}, ensure_ascii=False), flush=True)
+            if pair_ids[0] != pair_ids[1]:
+                raise SystemExit("Turkish and ASCII queries returned different candidate IDs")
+        for query in ("kadkoy", "zzzzzzzzzzzzzzzzzz"):
+            started = time.monotonic()
+            result = await service.next_departures(stop_query=query)
+            search_samples.append(time.monotonic() - started)
+            if not result.get("ok") or result["sources"][0]["matched_total"] != 0:
+                raise SystemExit("unmatched stop query was not an honest no-match")
+            if any(row["match_kind"] != "suggestion" for row in result["data"]):
+                raise SystemExit("spelling suggestions were not labeled")
+            if query.startswith("zz") and result["data"]:
+                raise SystemExit("unrelated name produced candidates")
+        search_p95 = sorted(search_samples)[int(.95 * (len(search_samples) - 1))]
+        print(json.dumps({"stop_search_queries_checked": len(search_samples),
+                          "stop_search_p95_seconds": round(search_p95, 4)}), flush=True)
+        if search_p95 >= .3:
+            raise SystemExit(f"stop search p95 {search_p95:.4f}s exceeds 0.3s")
     clear_source_cache()
 
 
