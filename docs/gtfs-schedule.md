@@ -79,8 +79,8 @@ istanbul_next_departures(
    tamamı Python listesine alınmaz. Batch aralarında cancellation/deadline işlenir.
 6. Eksik şema, tutarsız trip/stop/route/service bağlantıları, boş tablolar veya
    hiç saati olmayan tarife başarısızdır. Kaynakta `route_id` boş olan kullanılabilir
-   route satırları ve yinelenen `(trip_id, stop_sequence)` stop-time satırları
-   sayılarak dışlanır; `sources[].received_total`, `accepted_total` ve
+   route satırları ve güvenle atlanabilen yinelenen `(trip_id, stop_sequence)`
+   stop-time satırları sayılarak dışlanır; `sources[].received_total`, `accepted_total` ve
    `skipped_total` bu farkı gösterir. Boş route satırlarına hiçbir trip referans
    vermiyorsa devam edilir. Diğer duplicate kimlikler hata verir. Agency timezone
    yalnız Europe/Istanbul'dur; frequencies genişletmesi desteklenmez.
@@ -88,6 +88,29 @@ istanbul_next_departures(
    Son adımda yalnız `gtfs_schedule_*` tabloları **tek transaction** ile değiştirilir;
    geo/RTree indeksinden bağımsızdır. SQLite hatasında eski snapshot geri alınır.
    Geçici dosyalar başarı/hata/cancel durumlarında temizlenir.
+
+### Saat tutarlılığı — 0.2.2
+
+- Aynı `(trip_id, stop_sequence)` için varış, kalkış, saat kesinliği, biniş
+  koşulu veya saatli durak kimliği çelişirse **yeni snapshot reddedilir**.
+  Kaynak satır sırasına göre bir saat seçilmez. Kontrol batch sınırları arasında
+  da çalışır. Birebir aynı normalize kayıtlar sayılarak atlanabilir.
+- Canlı kaynaktaki özel durum korunur: iki kayıtta da varış/kalkış tamamen boş,
+  `timepoint=0` ve biniş koşulları aynıysa saatsiz tekrar sayılarak dışlanır.
+  İlk satır tutulur; bundan bir kalkış saati üretilmez. Saatli/saatsiz karışık
+  çakışmalar kabul edilmez.
+- Her seferde bilinen saatler `stop_sequence` sırasıyla kontrol edilir.
+  Sonraki varış, önceki bilinen kalkıştan erken olamaz. Varış veya kalkıştan
+  yalnız biri varsa o saat kullanılır. Saatsiz ara duraklar önceki bilinen saati
+  unutturmaz; eşit saatler ve `25:xx`/`49:xx` geçerlidir.
+- Varış saniyeleri yalnız geçici doğrulama veritabanında tutulur. Yayımlanan
+  veritabanının altı kolonlu departure şeması değişmez; migration gerekmez.
+- Hatalı güncelleme önceki başarılı snapshot'ı değiştirmez. Eski veri yalnız
+  mevcut stale penceresi içinde, `freshness=stale` uyarısıyla sunulabilir.
+
+Kaynak kuralı: [GTFS Schedule Reference](https://gtfs.org/documentation/schedule/reference/).
+SQLite trigger/UPSERT ve pencere fonksiyonları için güncel belgeler Context7
+`/websites/sqlite_docs` üzerinden kontrol edildi.
 
 Kaynak indirme/parsing için deadline vardır; son SQLite publish transaction'ı
 senkrondur ve yarıda async-cancel edilmez. **Soğuk yükleme gecikmesi ve transaction
@@ -181,6 +204,15 @@ varsayılan yükleme sınırı 180 s'dir.
 
 Yerel doğrulama: Python 3.12 ortamında **992 passed, 25 skipped**; skip'ler opt-in
 canlı testlerdir. `git diff --check` temiz.
+
+0.2.2 düzeltmesinin tam ZIP ile tekrar kabulü: aynı **6.155.647** stop-time ve
+45 saatsiz tekrar; yeni çelişki ve kronoloji kontrolleri geçti. Soğuk yükleme
+**159,1 s**, sıcak sorgu p95 **8,0 ms**, yayımlanan SQLite **451.862.528 byte**.
+Üç hat için altı kaynak satırı tekrar sorgulandı. Kaynakta eksik saatler
+tamamlanmadı; yaklaşık %95,6 saatsiz stop-time satırı sınırı devam ediyor.
+Yerel tam paket: **1217 geçti, 25 atlandı**; 83 GTFS testi ve gerçek sunucu
+süreciyle MCP smoke testi geçti. Yeni hata testleri düzeltmeden önce başarısız
+oldu; düzeltmeden sonra geçti.
 
 Canlı kabul betiği (relay değişkenlerini Railway'den alır; production DB'sine
 dokunmaz):

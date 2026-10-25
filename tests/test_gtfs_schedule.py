@@ -104,6 +104,118 @@ async def test_duplicate_stop_time_keys_are_ignored_with_warning(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("duplicate", [
+    b"W;S1;1;08:11:00;08:11:00;1;0\n",  # Different departure.
+    b"W;S1;1;08:09:00;08:10:00;1;0\n",  # Same departure, different arrival.
+    b"W;S2;1;08:10:00;08:10:00;1;0\n",  # Different timed stop.
+    b"W;S1;1;;;0;0\n",                     # Missing versus known times.
+    b"W;S1;1;08:10:00;08:10:00;0;0\n",  # Different exactness.
+    b"W;S1;1;08:10:00;08:10:00;1;1\n",  # Different boarding permission.
+])
+@pytest.mark.parametrize("duplicate_first", [False, True])
+async def test_conflicting_stop_times_rejected_in_either_source_order(tmp_path, duplicate, duplicate_first):
+    original = (FIXTURES / "stop_times.csv").read_bytes()
+    header, rows = original.split(b"\n", 1)
+    body = header + b"\n" + duplicate + rows if duplicate_first else original + duplicate
+    f = feed(tmp_path, changes={"stop_times": body})
+    async with f.http:
+        with pytest.raises(GtfsScheduleError):
+            await f.client.load(profile=f.service.profile)
+    assert not list(tmp_path.glob(".gtfs-stage-*"))
+    with connect(f.service.settings.database_path) as conn:
+        assert not conn.execute("SELECT name FROM sqlite_master WHERE name='gtfs_schedule_meta'").fetchall()
+
+
+@pytest.mark.asyncio
+async def test_conflicting_stop_times_rejected_across_ingestion_batches(tmp_path):
+    original = (FIXTURES / "stop_times.csv").read_bytes()
+    # The conflicting key is already committed to the staging table by a prior
+    # 1,000-row batch; the check must not be limited to an in-memory batch.
+    body = original + b"W;S1;4;;;0;0\n" * 1000 + b"W;S1;1;08:11:00;08:11:00;1;0\n"
+    f = feed(tmp_path, changes={"stop_times": body})
+    async with f.http:
+        with pytest.raises(GtfsScheduleError):
+            await f.client.load(profile=f.service.profile)
+
+
+@pytest.mark.asyncio
+async def test_identical_timed_duplicates_are_counted_without_changing_departures(tmp_path):
+    original = (FIXTURES / "stop_times.csv").read_bytes()
+    f = feed(tmp_path, changes={"stop_times": original + b"W;S1;1;8:10:00;08:10:00;1;0\n"})
+    async with f.http:
+        result = await f.service.next_departures(stop_id="S1", at=AT, limit=3)
+    assert result["ok"], result
+    assert result["data"][0]["gtfs_departure_time"] == "08:10:00"
+    source = next(s for s in result["sources"] if s["resource_id"] == "id-stop-times")
+    assert (source["received_total"], source["accepted_total"], source["skipped_total"]) == (24, 23, 1)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("change", [
+    {b"W;S2;2;08:15:00;08:15:00;1;0": b"W;S2;2;07:15:00;07:15:00;1;0"},
+    # Later departure alone looks valid; arrival precedes the prior departure.
+    {b"W;S2;2;08:15:00;08:15:00;1;0": b"W;S2;2;08:09:00;08:15:00;1;0"},
+    # Untimed gaps must not reset the last known time.
+    {b"W;S2;2;08:15:00;08:15:00;1;0": b"W;S2;2;;;0;0",
+     b"W;S3;3;08:20:00;08:20:00;1;0": b"W;S3;3;08:09:00;08:09:00;1;0"},
+    # Arrival-only intermediate rows still constrain later timestamps.
+    {b"W;S2;2;08:15:00;08:15:00;1;0": b"W;S2;2;08:25:00;;0;0"},
+    # Midnight must be expressed as 24+:xx, not a reset to 00:xx.
+    {b"N;S2;2;25:15:00;25:15:00;1;0": b"N;S2;2;01:15:00;01:15:00;1;0"},
+])
+async def test_backwards_trip_times_rejected_before_publishing(tmp_path, change):
+    body = (FIXTURES / "stop_times.csv").read_bytes()
+    for old, new in change.items():
+        body = body.replace(old, new)
+    f = feed(tmp_path, changes={"stop_times": body})
+    async with f.http:
+        with pytest.raises(GtfsScheduleError, match="backwards"):
+            await f.client.load(profile=f.service.profile)
+    assert not list(tmp_path.glob(".gtfs-stage-*"))
+
+
+@pytest.mark.asyncio
+async def test_equal_times_and_unsorted_source_rows_remain_valid(tmp_path):
+    original = (FIXTURES / "stop_times.csv").read_bytes().replace(b"08:15:00", b"08:10:00")
+    header, *rows = original.splitlines()
+    f = feed(tmp_path, changes={"stop_times": b"\n".join([header, *reversed(rows)]) + b"\n"})
+    async with f.http:
+        result = await f.service.next_departures(stop_id="S2", at=AT, limit=3)
+    assert result["ok"], result
+    assert result["data"][0]["gtfs_departure_time"] == "08:10:00"
+    with connect(f.service.settings.database_path) as conn:
+        # Arrival validation is staging-only, not a migration of the published DB.
+        assert len(conn.execute("PRAGMA table_info(gtfs_schedule_stop_times)").fetchall()) == 6
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["duplicate", "backwards"])
+async def test_invalid_refresh_preserves_previous_snapshot_and_reports_stale(tmp_path, failure):
+    f = feed(tmp_path)
+    async with f.http:
+        original = await f.service.next_departures(stop_id="S1", at=AT, limit=3)
+        assert original["ok"]
+        before = source_cache._entries[f.service.cache_key].value
+        body = (FIXTURES / "stop_times.csv").read_bytes()
+        body = (body + b"W;S1;1;08:11:00;08:11:00;1;0\n" if failure == "duplicate"
+                else body.replace(b"08:15:00", b"07:15:00"))
+        f.bodies["stop_times"] = zipped(body)
+        next(r for r in f.resources if r["name"] == "stop_times")["size"] = len(f.bodies["stop_times"])
+        # feed() freezes by_url at creation; replace the HTTP transport for refresh.
+        by_url = {r["url"]: f.bodies[r["name"]] for r in f.resources}
+        async with httpx.AsyncClient(transport=httpx.MockTransport(
+            lambda req: httpx.Response(200, content=by_url[str(req.url)])
+        )) as http:
+            f.client._client = http
+            source_cache._entries[f.service.cache_key].expires_at_monotonic = 0
+            stale = await f.service.next_departures(stop_id="S1", at=AT, limit=3)
+    assert stale["ok"] and stale["freshness"]["status"] == "stale"
+    assert stale["data"] == original["data"]
+    assert source_cache._entries[f.service.cache_key].value == before
+    assert not list(tmp_path.glob(".gtfs-stage-*"))
+
+
+@pytest.mark.asyncio
 async def test_blank_route_id_rows_are_excluded_without_dropping_referenced_routes(tmp_path):
     routes = (FIXTURES / "routes.csv").read_bytes() + b"\n;KM43_G_D2081;\n"
     f = feed(tmp_path, changes={"routes": routes})

@@ -44,6 +44,28 @@ MAX_DEPARTURE_SECONDS = 72 * 3600 - 1
 TABLE_ROW_CAPS = {"agency": 100, "calendar": 1000, "calendar_dates": 10000,
                   "routes": 20000, "stops": 100000, "trips": 500000, "stop_times": 10000000}
 
+# Arrival times are needed for validation but not for departure queries. Keep
+# them only in the disposable staging DB; the published schema stays unchanged.
+STAGING_VALIDATION_SCHEMA = """
+ALTER TABLE gtfs_schedule_stop_times ADD COLUMN arrival_seconds INTEGER;
+CREATE TRIGGER reject_conflicting_stop_times BEFORE INSERT ON gtfs_schedule_stop_times
+WHEN EXISTS (
+ SELECT 1 FROM gtfs_schedule_stop_times s
+ WHERE s.trip_id=NEW.trip_id AND s.stop_sequence=NEW.stop_sequence
+ AND NOT (
+  s.timepoint=NEW.timepoint AND s.pickup_type=NEW.pickup_type AND (
+   (s.stop_id=NEW.stop_id AND s.arrival_seconds IS NEW.arrival_seconds
+    AND s.departure_seconds IS NEW.departure_seconds)
+   OR (s.timepoint=0 AND s.arrival_seconds IS NULL AND s.departure_seconds IS NULL
+       AND NEW.arrival_seconds IS NULL AND NEW.departure_seconds IS NULL)
+  )
+ )
+)
+BEGIN
+ SELECT RAISE(ABORT, 'Conflicting GTFS stop-time key');
+END;
+"""
+
 
 class GtfsScheduleError(ValueError):
     """Invalid, incomplete or over-budget timetable; never a checked-empty result."""
@@ -180,6 +202,7 @@ class GtfsScheduleClient:
                 conn = sqlite3.connect(stage_path)
                 try:
                     conn.executescript(SCHEMA)
+                    conn.executescript(STAGING_VALIDATION_SCHEMA)
                     counts, skipped, downloaded, expanded = {}, {}, 0, 0
                     async with ibb_http_client(timeout=settings.request_timeout_seconds) as owned:
                         client = self._client or owned
@@ -313,7 +336,11 @@ class GtfsScheduleClient:
         marks = ",".join("?" for _ in batch[0])
         if kind == "stop_times":
             before = conn.total_changes
-            conn.executemany(f"INSERT OR IGNORE INTO gtfs_schedule_{kind} VALUES ({marks})", batch)
+            # The staging trigger rejects conflicting values, including across
+            # batches. Only identical records and the known untimed source
+            # duplicates may reach this targeted primary-key no-op.
+            conn.executemany(f"INSERT INTO gtfs_schedule_{kind} VALUES ({marks}) "
+                             "ON CONFLICT(trip_id, stop_sequence) DO NOTHING", batch)
             return conn.total_changes - before
         conn.executemany(f"INSERT INTO gtfs_schedule_{kind} VALUES ({marks})", batch)
         return len(batch)
@@ -354,7 +381,7 @@ class GtfsScheduleClient:
         if timepoint == 1 and (arrival is None or departure is None):
             raise GtfsScheduleError("Exact timepoint is missing arrival or departure time")
         return (get("trip_id"), get("stop_id"), int(sequence), departure, timepoint,
-                _enum(get("pickup_type", required=False), {"0", "1", "2", "3"}, "0"))
+                _enum(get("pickup_type", required=False), {"0", "1", "2", "3"}, "0"), arrival)
 
     @staticmethod
     def _validate_relations(conn):
@@ -369,3 +396,17 @@ class GtfsScheduleClient:
             raise GtfsScheduleError("Incomplete GTFS schedule or broken foreign IDs")
         if not conn.execute("SELECT 1 FROM gtfs_schedule_stop_times WHERE departure_seconds IS NOT NULL LIMIT 1").fetchone():
             raise GtfsScheduleError("GTFS has no timed departures")
+        # Compare known times in stop_sequence order, not CSV order. Filtering
+        # untimed rows before the window preserves the constraint across gaps.
+        # Arrival-only rows constrain later stops too; equal times are valid.
+        backwards = conn.execute("""SELECT 1 FROM (
+            SELECT arrival_seconds, departure_seconds,
+                   MAX(COALESCE(departure_seconds, arrival_seconds)) OVER (
+                       PARTITION BY trip_id ORDER BY stop_sequence
+                       ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+                   ) AS previous_time
+            FROM gtfs_schedule_stop_times
+            WHERE arrival_seconds IS NOT NULL OR departure_seconds IS NOT NULL
+        ) WHERE COALESCE(arrival_seconds, departure_seconds) < previous_time LIMIT 1""").fetchone()
+        if backwards:
+            raise GtfsScheduleError("GTFS trip times run backwards in stop_sequence order")

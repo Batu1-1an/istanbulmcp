@@ -9,6 +9,7 @@ from app.storage.db import connect
 
 # Identifiers below are internal constants, never caller-supplied SQL.
 TABLES = ("calendar", "calendar_dates", "routes", "stops", "trips", "stop_times")
+STOP_TIME_COLUMNS = "trip_id, stop_id, stop_sequence, departure_seconds, timepoint, pickup_type"
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS gtfs_schedule_calendar (
  service_id TEXT PRIMARY KEY, weekdays TEXT NOT NULL, start_date TEXT NOT NULL, end_date TEXT NOT NULL
@@ -49,7 +50,11 @@ def publish_schedule(database_path: Path, staged_path: Path, *, snapshot_id: str
             conn.execute("BEGIN IMMEDIATE")
             for table in TABLES:
                 conn.execute(f"DELETE FROM gtfs_schedule_{table}")
-                conn.execute(f"INSERT INTO gtfs_schedule_{table} SELECT * FROM staged.gtfs_schedule_{table}")
+                # Staging retains arrival_seconds for validation only. Publish
+                # the existing six departure columns, without a DB migration.
+                columns = f"({STOP_TIME_COLUMNS})" if table == "stop_times" else ""
+                selected = STOP_TIME_COLUMNS if table == "stop_times" else "*"
+                conn.execute(f"INSERT INTO gtfs_schedule_{table}{columns} SELECT {selected} FROM staged.gtfs_schedule_{table}")
             conn.execute("DELETE FROM gtfs_schedule_meta")
             conn.execute("INSERT INTO gtfs_schedule_meta VALUES (1, ?, ?)", (snapshot_id, profile))
             conn.commit()

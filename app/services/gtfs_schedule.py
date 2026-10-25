@@ -146,7 +146,7 @@ class GtfsScheduleService:
                 warnings.append(f"{skipped_routes} route row(s) without route_id were excluded; no trip referenced them.")
             skipped_stop_times = metadata.get("skipped", {}).get("stop_times", 0)
             if skipped_stop_times:
-                warnings.append(f"{skipped_stop_times} duplicate (trip_id, stop_sequence) stop-time row(s) were excluded; the first row was kept.")
+                warnings.append(f"{skipped_stop_times} identical or fully untimed duplicate (trip_id, stop_sequence) stop-time row(s) were excluded; the first row was kept. Conflicting timed rows reject the snapshot.")
             if untimed:
                 warnings.append(f"{untimed} untimed stop-time row(s) have no departure time; no interpolation performed.")
             if invalid_coords:
