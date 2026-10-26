@@ -447,6 +447,77 @@ async def test_iski_stale_relay_dams_do_not_shadow_fresh_official_api() -> None:
 
 
 @pytest.mark.asyncio
+async def test_iski_empty_dam_responses_do_not_shadow_stale_relay() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "relay.example":
+            return httpx.Response(200, json=STALE_RELAY_DAMS)
+        return httpx.Response(200, json={"data": []})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        iski = stale_relay_iski(http_client)
+        dams = await iski.dams()
+
+    assert dams == STALE_RELAY_DAMS["data"]
+    assert iski.last_dams_source == "relay_edevlet"
+    assert iski.last_dams_source_stale is True
+    assert iski.last_dams_source_updated_at == STALE_RELAY_DAMS["relay_cached_at"]
+
+
+@pytest.mark.asyncio
+async def test_iski_empty_live_dam_sources_fall_back_to_snapshot() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": []})
+
+    snapshot = {
+        "captured_at": "2026-07-23T10:30:00Z",
+        "payload": {"data": [{"kaynakAdi": "Omerli", "dolulukOrani": "77.55"}]},
+    }
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        iski = IskiClient(
+            base_url="https://map.example/data",
+            api_base_url="https://api.example/api",
+            api_bearer_token="api-token",
+            relay_base_url="https://relay.example",
+            relay_token="relay-secret",
+            dams_snapshot_json=json.dumps(snapshot),
+            now=lambda: datetime(2026, 7, 23, 11, 0, tzinfo=timezone.utc),
+            attempts=1,
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+        dams = await iski.dams()
+
+    assert dams == snapshot["payload"]["data"]
+    assert iski.last_dams_source == "snapshot"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("snapshot", [None, {"data": []}], ids=["no-snapshot", "empty-snapshot"])
+async def test_iski_empty_dam_sources_raise_without_valid_fallback(snapshot) -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": []})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        iski = IskiClient(
+            base_url="https://map.example/data",
+            api_base_url="https://api.example/api",
+            api_bearer_token="api-token",
+            relay_base_url="https://relay.example",
+            relay_token="relay-secret",
+            dams_snapshot_json=json.dumps(snapshot) if snapshot is not None else None,
+            dams_snapshot_captured_at="2026-07-23T10:30:00Z",
+            now=lambda: datetime(2026, 7, 23, 11, 0, tzinfo=timezone.utc),
+            attempts=1,
+            http_client=http_client,
+            rate_limiter=RecordingLimiter(),
+        )
+        with pytest.raises(IskiPayloadError, match="at least one record"):
+            await iski.dams()
+
+    assert iski.last_dams_source is None
+
+
+@pytest.mark.asyncio
 async def test_iski_stale_relay_faults_do_not_shadow_fresh_official_api() -> None:
     async with httpx.AsyncClient(transport=httpx.MockTransport(stale_relay_then_api_handler(STALE_RELAY_FAULTS))) as http_client:
         iski = stale_relay_iski(http_client)
@@ -600,11 +671,14 @@ async def test_iski_active_faults_fall_back_when_relay_feature_is_invalid() -> N
 
 
 @pytest.mark.asyncio
-async def test_iski_dams_fall_back_when_relay_row_is_invalid() -> None:
+@pytest.mark.parametrize("relay_rows", [[], ["invalid"]], ids=["empty", "invalid-row"])
+async def test_iski_dams_fall_back_when_relay_rows_are_invalid(relay_rows) -> None:
+    payload = {"data": [{"kaynakAdi": "Omerli", "dolulukOrani": "77.55"}]}
+
     async def handler(request: httpx.Request) -> httpx.Response:
         if request.url.host == "relay.example":
-            return httpx.Response(200, json={"data": ["invalid"]})
-        return httpx.Response(200, json={"data": []})
+            return httpx.Response(200, json={"data": relay_rows})
+        return httpx.Response(200, json=payload)
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
         iski = IskiClient(
@@ -617,7 +691,7 @@ async def test_iski_dams_fall_back_when_relay_row_is_invalid() -> None:
         )
         dams = await iski.dams()
 
-    assert dams == []
+    assert dams == payload["data"]
     assert iski.last_dams_source == "live_json"
 
 

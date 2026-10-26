@@ -1,5 +1,7 @@
+import httpx
 import pytest
 
+from app.connectors.iski import IskiClient
 from app.core.settings import Settings
 from app.core.source_cache import clear_source_cache, source_cache_snapshot
 from app.services.iski import IskiService
@@ -236,6 +238,61 @@ async def test_dam_occupancy_filters_name_and_minimum():
     assert [row["name"] for row in result["data"]] == ["Omerli"]
     assert result["data"][0]["occupancy_rate"] == 75.5
     assert result["data"][0]["capacity"] == 235.37
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("filters", [{"dam_name": "Unknown Dam"}, {"min_occupancy": 100}])
+async def test_dam_occupancy_can_return_empty_after_filtering_valid_data(filters):
+    result = await service().dam_occupancy(**filters)
+
+    assert result["ok"] is True
+    assert result["data"] == []
+    assert result["freshness"]["status"] == "fresh"
+
+
+@pytest.mark.asyncio
+async def test_iski_empty_dam_source_preserves_cached_data():
+    clear_source_cache()
+    calls = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, json={"data": DAMS if calls == 1 else []})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        svc = IskiService(
+            settings=Settings(iski_dams_cache_ttl_seconds=0, iski_dams_stale_if_error_seconds=60),
+            client=IskiClient(http_client=http_client, attempts=1),
+        )
+        first = await svc.dam_occupancy()
+        second = await svc.dam_occupancy()
+
+    assert first["ok"] is True
+    assert first["freshness"]["status"] == "fresh"
+    assert first["data"]
+    assert second["ok"] is True
+    assert second["data"] == first["data"]
+    assert second["freshness"]["status"] == "stale"
+    assert any("returning cached snapshot" in warning for warning in second["warnings"])
+    assert calls == 2
+
+
+@pytest.mark.asyncio
+async def test_iski_empty_dam_source_without_cache_returns_unavailable():
+    clear_source_cache()
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": []})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        svc = IskiService(settings=Settings(), client=IskiClient(http_client=http_client, attempts=1))
+        result = await svc.dam_occupancy()
+
+    assert result["ok"] is False
+    assert result["data"][0]["error_code"] == "source_unavailable"
+    assert result["freshness"]["status"] == "broken"
+    assert not any(row["source"] == "iski.dams" for row in source_cache_snapshot())
 
 
 @pytest.mark.asyncio

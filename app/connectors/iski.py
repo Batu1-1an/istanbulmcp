@@ -257,10 +257,7 @@ class IskiClient:
             base_url=self.api_base_url,
             headers={"Authorization": f"Bearer {self.api_bearer_token}"},
         )
-        rows = body.get("data") if isinstance(body, dict) else None
-        if not isinstance(rows, list):
-            raise IskiPayloadError("ISKI dam API payload must include a data list")
-        return rows
+        return self._dam_rows(body)
 
     def _snapshot_payload(
         self,
@@ -367,6 +364,9 @@ class IskiClient:
         rows = body.get("data") if isinstance(body, dict) else None
         if not isinstance(rows, list):
             raise IskiPayloadError("ISKI dam payload must include a data list")
+        # Unlike active faults, the full dam inventory cannot legitimately be empty.
+        if not rows:
+            raise IskiPayloadError("ISKI dam payload must include at least one record")
         if any(not isinstance(row, dict) for row in rows):
             raise IskiPayloadError("ISKI dam payload contains an invalid row")
         return rows
