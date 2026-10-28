@@ -126,13 +126,14 @@ render akışları test edilir; belirli bir Claude/Cursor menüsünün görünü
 GTFS açıkken `istanbul_next_departures` ve `istanbul_gtfs_snapshot_status` da
 aynı zarfın şemasını yayımlar; toplam araç sayısı 18 olur.
 
-Varsayılan **beş** araç `ResponseEnvelope` JSON şeması yayımlar:
+Varsayılan **altı** araç `ResponseEnvelope` JSON şeması yayımlar:
 
 1. `istanbul_nearby` — `kind="pharmacy"` dahil bütün dispatch yolları.
 2. `istanbul_traffic_status`.
 3. `istanbul_water_status`.
 4. `istanbul_transit_line`.
 5. `istanbul_transport_disruptions`.
+6. `istanbul_market_schedule` — haftalık pazar takvimi.
 
 Ayrı varsayılan `pharmacy` aracı yoktur; eczane `istanbul_nearby` içindedir.
 Legacy araçlar açıldığında iki eczane alias'ı da aynı şemayı kullanır.
@@ -157,14 +158,14 @@ tiplendiği veya şemanın veri doğruluğunu ispatladığı iddia edilmez.
 
 `python -m scripts.eval_tools` model çağırmadan gerçek kayıtlı yüzeyi ölçer:
 
-| Ölçü | Güncel yüzey (2026-10-23) |
+| Ölçü | Güncel yüzey (2026-10-28) |
 |---|---:|
 | Tool sayısı | 16 |
 | Şemalı varsayılan tool sayısı | 6 |
 | Resource / prompt | 3 / 4 |
-| Output şemaları hariç tool tanımları | 12.356 UTF-8 byte |
-| Output şemaları dahil tool tanımları | 33.746 UTF-8 byte |
-| Output şemalarının ek maliyeti | 21.390 UTF-8 byte |
+| Output şemaları hariç tool tanımları | 13.169 UTF-8 byte |
+| Output şemaları dahil tool tanımları | 45.353 UTF-8 byte |
+| Output şemalarının ek maliyeti | 32.184 UTF-8 byte |
 
 A2 discovery kaynakları tool sayısını veya tools/list boyutunu artırmaz.
 A3 şemaları ise boyutu artırır; azaltılmış token maliyeti/iyileşmiş model başarısı

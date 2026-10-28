@@ -5,7 +5,7 @@
 Sunucu **anahtarsız** çalışır. İstemci yalnız URL'i ekler:
 
 ```bash
-claude mcp add istanbul --url https://istanbulmcp-production.up.railway.app/mcp/
+claude mcp add --transport http istanbul https://istanbulmcp-production.up.railway.app/mcp/
 codex mcp add istanbul --url https://istanbulmcp-production.up.railway.app/mcp/
 ```
 

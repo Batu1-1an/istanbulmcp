@@ -3,9 +3,11 @@
 The default surface has **16 read-only tools**. Legacy names are opt-in via
 `MCP_LEGACY_TOOLS_ENABLED=true`; see the [migration table](tool-migration.md).
 The target count is a product decision, not a protocol limit. The optional
-`istanbul_next_departures` adds one tool only with `GTFS_SCHEDULE_ENABLED=true`;
-its full-ZIP live acceptance is still pending. All registered tools have explicit
-human-readable titles and read-only annotations.
+`istanbul_next_departures` and `istanbul_gtfs_snapshot_status` add two tools only
+with `GTFS_SCHEDULE_ENABLED=true` (18 with GTFS on, 16 by default). Full-ZIP live
+acceptance passed on 2026-10-25 and the production deployment enables them; the
+source default stays `false`. All registered tools have explicit human-readable
+titles and read-only annotations.
 
 All results preserve `ok`, `summary`, `data`, `freshness`, `sources`,
 `limits`, `warnings`, and optional `pagination`, `geojson`, `next_queries`.
@@ -273,6 +275,14 @@ abbreviations. Scenario records are **not real-time risk or emergency guidance**
 Display names and `source_names` repair the known Turkish source-encoding variants
 (`CAFERAÐA` → `CAFERAĞA`). `raw_source_names` retains the original source spellings
 for provenance; numeric indicators and source record IDs are unchanged.
+
+The building-stock and earthquake-scenario resources store district names in the
+same legacy encoding (`ŞİŞLİ` → `ÞÝÞLÝ`) and Eyüpsultan under its former name `EYÜP`.
+CKAN filters are exact, so every resource is queried with the correct spelling, the
+legacy spelling and known former names. Neighborhood matching also ignores spaces and
+a trailing `Mahallesi`/`Mah.` (`RUMELİHİSARI` = `RUMELİ HİSARI`). A source that returns
+no rows for the district, or has no row for the selected neighborhood, adds an explicit
+warning: `coverage:false` means "not matched", never "the source has no data".
 
 ## Transit
 

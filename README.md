@@ -43,7 +43,7 @@ codex mcp list
 Claude Code ile eklemek için:
 
 ```bash
-claude mcp add istanbul --url https://istanbulmcp-production.up.railway.app/mcp/
+claude mcp add --transport http istanbul https://istanbulmcp-production.up.railway.app/mcp/
 ```
 
 Claude Desktop ve Claude.ai (Settings > Connectors > Add custom connector):
@@ -51,6 +51,9 @@ Claude Desktop ve Claude.ai (Settings > Connectors > Add custom connector):
 ```text
 URL: https://istanbulmcp-production.up.railway.app/mcp/
 ```
+
+ChatGPT kullanıyorsanız **Plugins → Add custom MCP server** yolunu izleyin;
+plan koşulları ve adımlar [ChatGPT](#chatgpt) bölümündedir.
 
 Sonra yeni bir oturum açıp örnek bir soru sorun:
 
@@ -260,7 +263,7 @@ Tam `stop_times.zip`, servis takvimi ve tarife dosyalarını kullanır;
 `stop_times.csv` yalnız önizleme olduğu için kabul edilmez. Servis günü, takvim
 istisnaları ve `25:xx` saatleri işlenir; canlı ETA veya rota planlayıcı değildir.
 Açılışta arka plan ön ısıtma çalışır. Isınma sırasında araç `warming_up`
-döndürür; ilk yükleme yaklaşık iki dakika sürer. 0.2.4'te GTFS açıkken yüzey 18 araçtır;
+döndürür; ilk yükleme yaklaşık iki dakika sürer. GTFS açıkken yüzey 18 araçtır;
 [kapsam, ayarlar ve kabul adımları](docs/gtfs-schedule.md).
 
 Durak kimliğini bilmiyorsanız `{"stop_query":"kadikoy","limit":10}` ile
@@ -281,7 +284,7 @@ Hata ve sonuç kesilmesi için ortak [yanıt sözleşmesi](docs/response-contrac
 
 Python MCP SDK **2.3+** ile aynı `/mcp/` endpoint'i hem eski `initialize`
 istemiyle hem `2026-07-28` sürümündeki `server/discover` akışıyla çalışır.
-0.2.4 yüzeyi GTFS açıkken **18**, kapalıyken **16** araçtır. Sunucu talimatlarına ek olarak:
+Yüzey GTFS açıkken **18**, kapalıyken **16** araçtır. Sunucu talimatlarına ek olarak:
 
 | Resource URI | İçerik |
 |---|---|
@@ -300,9 +303,11 @@ kanıtlamaz**. Asıl güncellik ve kaynak hataları tool sonuçlarından okunmal
 - `yolculuk_plani(origin, destination, line_code?)` — ulaşım bilgisi; rota motoru veya canlı ETA değildir.
 
 Prompt seçmek tool çalıştırmaz; yalnız iş akışı mesajını üretir.
-`istanbul_nearby` (eczane dahil), `istanbul_traffic_status`, `istanbul_water_status`,
-`istanbul_transit_line` ve `istanbul_transport_disruptions` ayrıca `outputSchema` ve
-`structuredContent` sunar. Geriye uyumlu JSON metni ve Python dict dönüşleri korunur.
+Varsayılan altı araç `outputSchema` ve `structuredContent` sunar: `istanbul_nearby`
+(eczane dahil), `istanbul_traffic_status`, `istanbul_water_status`,
+`istanbul_transit_line`, `istanbul_transport_disruptions` ve `istanbul_market_schedule`.
+GTFS açıkken `istanbul_next_departures` ve `istanbul_gtfs_snapshot_status` da aynı
+şemayı yayımlar. Geriye uyumlu JSON metni ve Python dict dönüşleri korunur.
 
 Protokol ayrıntıları, şema maliyeti ve doğrulama için [MCP arayüzü](docs/mcp-interface.md).
 
@@ -361,6 +366,46 @@ Claude Desktop ile kullanım için ücretli abonelik gerekir.
    - **URL:** `https://istanbulmcp-production.up.railway.app/mcp/`
 4. **Add** butonuna tıklayın.
 5. İstanbul MCP araçlarını kullanmaya başlayın.
+
+### ChatGPT
+
+ChatGPT'de salt okunur custom MCP sunucusu **Plus, Pro, Business, Enterprise ve Edu**
+planlarında kullanılabilir; Free planda yoktur. Business, Enterprise ve Edu
+çalışma alanlarında yönetici izni gerekebilir. Kurulum için web veya desktop
+uygulamasını kullanın.
+
+Business, Enterprise ve Edu için güncel **Plugins** ekranı Developer mode
+gerektirmez. Plus veya Pro kullanıyorsanız Developer mode gerekebilir:
+
+1. [ChatGPT Plugins](https://chatgpt.com/plugins) sayfasını açın. Bazı hesaplarda bu ekran **Settings → Apps & Connectors** altındadır.
+2. **+** düğmesine, ardından **Add custom MCP server** seçeneğine tıklayın.
+3. Bilgileri girin:
+   - **Name:** `İstanbul MCP`
+   - **Description:** isteğe bağlı
+   - **Connection → Server URL:** `https://istanbulmcp-production.up.railway.app/mcp/`
+4. **Authentication:** `No authentication` seçin. Sunucu public modda anahtarsız çalışır.
+5. Risk uyarısını okuyun, **I understand and want to continue** kutusunu işaretleyin ve **Create as a plugin** düğmesine tıklayın.
+6. Keşfedilen araçları ve metadata'yı kontrol edin. Plugin'i kurun.
+7. Yeni bir sohbet açın, istem kutusuna `@` yazın ve `İstanbul MCP` plugin'ini seçin. Sonra soruyu sorun.
+
+Notlar:
+
+- Tüm Istanbul MCP araçları salt okunurdur ve `readOnlyHint` taşır.
+- `MCP_API_KEYS` veya `MCP_AUTH_REQUIRED=true` açıksa ChatGPT web bağlanamaz. Bu ekran statik Bearer anahtarı kabul etmez; sunucuda OAuth desteği yoktur. Public modu kullanın.
+- Araç listesi değiştiğinde plugin ayarlarından araçları yenileyin.
+- Business, Enterprise ve Edu planlarında yönetici **Create plugins with MCPs** iznini vermeli ve plugin'i yayımlamalıdır.
+- **Add custom MCP server** seçeneği görünmüyorsa **Settings → Apps → Advanced settings** yolundan Developer mode'u açın. Plus ve Pro planlarında bu adım gerekebilir.
+
+ChatGPT desktop uygulaması ayrı bir MCP yolu sunar:
+
+1. **Settings → MCP servers → Add server** yolunu izleyin.
+2. **Streamable HTTP** seçin ve URL olarak aynı endpoint'i girin.
+3. Kaydedin ve **Restart** seçin. İstem kutusunda `/mcp` ile bağlantıyı kontrol edin.
+
+Resmî kaynaklar:
+[ChatGPT'ye custom MCP sunucusu ekleme](https://developers.openai.com/api/docs/guides/custom-mcp-server) ·
+[ChatGPT MCP belgesi](https://learn.chatgpt.com/docs/extend/mcp) ·
+[Custom MCP bağlantıları](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt)
 
 ### Cursor
 
@@ -468,6 +513,9 @@ Uygulamadaki raw config `mcpServers` ve `serverUrl` biçimini istiyorsa şu yap�
 Kontrol edilen resmi kaynaklar:
 
 - [Codex MCP dokümanı](https://developers.openai.com/codex/mcp)
+- [ChatGPT custom MCP server dokümanı](https://developers.openai.com/api/docs/guides/custom-mcp-server)
+- [ChatGPT MCP dokümanı](https://learn.chatgpt.com/docs/extend/mcp)
+- [ChatGPT custom MCP bağlantıları](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt)
 - [Claude Code MCP dokümanı](https://code.claude.com/docs/en/mcp)
 - [Cursor MCP dokümanı](https://cursor.com/docs/mcp)
 - [OpenCode MCP servers dokümanı](https://opencode.ai/docs/mcp-servers/)
@@ -477,10 +525,11 @@ Kontrol edilen resmi kaynaklar:
 
 ## Registry ve veri işleme
 
-[`server.json`](server.json) remote-only MCP Registry manifestidir. **0.2.4**,
-2026-10-25'te [resmî MCP Registry'ye kaydedildi](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.Batu1-1an%2Fistanbul-mcp/versions/0.2.4)
-ve kaydın `active` durumu API'den doğrulandı. Public/legacy/optional tool'ların tamamı
-`title` ve salt okunur annotation taşır. [Yayın öncesi kontrol ve komutlar](docs/registry.md).
+[`server.json`](server.json) remote-only MCP Registry manifestidir ve **0.2.6**
+sürümünü taşır. İlk kayıt 2026-10-25'te 0.2.4 ile yapıldı; şu anda
+[0.2.6 kaydı](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.Batu1-1an%2Fistanbul-mcp/versions/0.2.6)
+`active` ve `latest` durumdadır (2026-10-25T18:43Z; 0.2.4 ve 0.2.5 de active).
+Public/legacy/optional tool'ların tamamı `title` ve salt okunur annotation taşır. [Yayın öncesi kontrol ve komutlar](docs/registry.md).
 Registry yayını, Railway deploy ve Claude directory başvurusu ayrı adımlardır.
 [Güncel Registry kaydı](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.Batu1-1an%2Fistanbul-mcp&version=latest).
 

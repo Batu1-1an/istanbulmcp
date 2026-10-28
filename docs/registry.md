@@ -7,23 +7,27 @@ gelmez. Gerçek yayın sonucu aşağıda ayrıca kaydedilmiştir.
 
 ## Doğrulanmış yayın — 2026-10-25
 
+En son yayımlanan sürüm **0.2.6**'dır; kayıt `active` ve `isLatest:true` durumundadır.
+0.2.4 ve 0.2.5 kayıtları da `active` kalır.
+
 - Ad: `io.github.Batu1-1an/istanbul-mcp`
-- Sürüm: **0.2.4**
-- Durum: **active**, ilk doğrulamada `isLatest:true`
-- Registry yayın zamanı: `2026-10-25T15:06:16.615963Z`
+- Sürüm: **0.2.6** (`server.json` ile aynı)
+- Durum: **active**, `isLatest:true`
+- Registry yayın zamanı: `2026-10-25T18:43:36.251008Z`
 - Transport: `streamable-http`
 - Remote URL: `https://istanbulmcp-production.up.railway.app/mcp/`
-- [Sürüme özgü resmî kayıt](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.Batu1-1an%2Fistanbul-mcp/versions/0.2.4)
+- [Sürüme özgü resmî kayıt](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.Batu1-1an%2Fistanbul-mcp/versions/0.2.6)
+- [Sürüm listesi](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.Batu1-1an%2Fistanbul-mcp/versions)
 - [En son yayımlanmış sürümü sorgula](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.Batu1-1an%2Fistanbul-mcp&version=latest)
 
-Kayıt, `mcp-publisher` **v1.8.4** ile yayımlandı. Yayından sonra Registry API'sinden
-ad, sürüm, durum ve remote URL tekrar okundu. Yayın öncesi canlı sunucunun 0.2.4
-çalıştırdığı ve 18 araç sunduğu doğrulandı. `search=istanbul&version=latest`
-aramasında da kayıt görüldü. Bu, her şehir kaynağının o anda sağlıklı
-olduğu, belediye onayı veya Claude/ChatGPT directory kabulü anlamına gelmez.
+İlk kayıt 2026-10-25T15:06:16.615963Z'de **0.2.4** ile yayımlandı; o tarihte canlı
+sunucunun 0.2.4 çalıştırdığı ve 18 araç sunduğu doğrulanmıştı. Kayıtlar
+`mcp-publisher` **v1.8.4** ile yayımlandı. Her yayından sonra Registry API'sinden ad,
+sürüm, durum ve remote URL tekrar okundu. Bu, her şehir kaynağının o anda sağlıklı
+olduğu, production'ın bu commit'i çalıştırdığı, belediye onayı veya Claude/ChatGPT
+directory kabulü anlamına gelmez.
 
-Bu çalışma dokümantasyon ve metadata yayınıdır; uygulama sürümü artırılmadı.
-Kod lisansı seçilmediği için LICENSE eklenmedi ve lisans hakkı iddia edilmedi.
+0.2.5 ve 0.2.6 yayınları kendi sürüm artışlarıyla yayımlandı; Registry kaydı uygulamayı deploy etmez. Kod lisansı seçilmediği için LICENSE eklenmedi ve lisans hakkı iddia edilmedi.
 Şehir verilerinin koşulları ayrı değerlendirilir. [Sürüm geçmişi](../CHANGELOG.md).
 
 ## Yerel doğrulama
