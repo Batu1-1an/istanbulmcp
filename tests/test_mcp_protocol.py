@@ -1,5 +1,7 @@
 """Both protocol eras share the guarded, stateless HTTP endpoint."""
+import asyncio
 import json
+import threading
 import tomllib
 from pathlib import Path
 
@@ -92,6 +94,56 @@ def test_modern_discovery_uses_the_same_optional_bearer_auth(monkeypatch):
         assert modern_request(client, "server/discover").status_code == 401
         client.headers["authorization"] = "Bearer fixture-only-not-a-real-key-1234567890"
         assert modern_request(client, "server/discover").status_code == 200
+
+
+def test_modern_listen_stream_ends_on_client_disconnect_without_freezing_the_server():
+    # Production outage: a modern client opens subscriptions/listen; the SDK
+    # waits for http.disconnect. Our body-replaying guard answered every later
+    # receive() at once with an empty request, so the watcher spun at 100% CPU
+    # and froze the event loop. Run in a thread so a spin fails, not hangs.
+    app = create_app()
+    params = {"notifications": {"toolsListChanged": True}, "_meta": {
+        "io.modelcontextprotocol/protocolVersion": MODERN_VERSION,
+        "io.modelcontextprotocol/clientCapabilities": {},
+    }}
+    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "subscriptions/listen", "params": params}).encode()
+    scope = {
+        "type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": "POST",
+        "scheme": "http", "path": "/mcp/", "raw_path": b"/mcp/", "query_string": b"", "root_path": "",
+        "client": ("127.0.0.1", 50000), "server": ("localhost", 80),
+        "headers": [
+            (b"host", b"localhost"), (b"content-type", b"application/json"),
+            (b"accept", b"application/json, text/event-stream"),
+            (b"mcp-protocol-version", MODERN_VERSION.encode()), (b"mcp-method", b"subscriptions/listen"),
+        ],
+    }
+    sent = []
+
+    async def serve_until_client_disconnects():
+        disconnected = asyncio.Event()
+        pending = [{"type": "http.request", "body": body, "more_body": False}]
+
+        async def receive():
+            if pending:
+                return pending.pop()
+            await disconnected.wait()
+            return {"type": "http.disconnect"}
+
+        async def send(message):
+            sent.append(message)
+
+        async with app.router.lifespan_context(app):
+            asyncio.get_running_loop().call_later(0.5, disconnected.set)
+            await app(scope, receive, send)
+
+    worker = threading.Thread(target=asyncio.run, args=(serve_until_client_disconnects(),), daemon=True)
+    worker.start()
+    worker.join(timeout=10)
+
+    assert not worker.is_alive(), "event loop stuck after the listen client disconnected"
+    start = next(message for message in sent if message["type"] == "http.response.start")
+    assert start["status"] == 200
+    assert (b"content-type", b"text/event-stream") in [(k.lower(), v.split(b";")[0]) for k, v in start["headers"]]
 
 
 def test_modern_requests_still_obey_the_body_limit(monkeypatch):

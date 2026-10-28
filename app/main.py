@@ -20,6 +20,7 @@ from app.connectors.gtfs import validate_gtfs_settings
 from app.connectors.gtfs_schedule import validate_schedule_settings
 from app.connectors.city_open_data import validate_open_data_settings
 from app.connectors.ibb_relay import validate_ibb_relay_settings
+from app.core.loop_watchdog import EventLoopWatchdog, validate_watchdog_settings
 from app.core.mcp_transport import McpJsonRpcGuard
 from app.core.settings import get_settings
 from app.core.status import build_status
@@ -64,6 +65,7 @@ def create_app() -> Starlette:
     validate_schedule_settings(settings)
     validate_open_data_settings(settings)
     validate_ibb_relay_settings(settings)
+    validate_watchdog_settings(settings)
     auth_enabled = validate_auth_settings(settings)
     if not auth_enabled and settings.ckan_sql_allowed_resource_ids:
         logger.warning(
@@ -81,6 +83,10 @@ def create_app() -> Starlette:
 
     @contextlib.asynccontextmanager
     async def lifespan(_app: Starlette):
+        watchdog = None
+        if settings.event_loop_watchdog_seconds:
+            watchdog = EventLoopWatchdog(asyncio.get_running_loop(), timeout_seconds=settings.event_loop_watchdog_seconds)
+            watchdog.start()
         warmup_task = None
         if settings.gtfs_schedule_enabled and begin_warmup():
             warmup_task = asyncio.create_task(run_warmup(settings))
@@ -88,6 +94,8 @@ def create_app() -> Starlette:
             async with mcp.session_manager.run():
                 yield
         finally:
+            if watchdog is not None:
+                watchdog.stop()
             if warmup_task is not None and not warmup_task.done():
                 warmup_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):

@@ -6,6 +6,8 @@ import pytest
 # app.main creates its default ASGI app at import time, before fixtures run.
 os.environ["MCP_AUTH_REQUIRED"] = "false"
 os.environ["GTFS_SCHEDULE_ENABLED"] = "false"
+# The production watchdog exits the process; never let it kill pytest.
+os.environ["EVENT_LOOP_WATCHDOG_SECONDS"] = "0"
 os.environ.pop("MCP_API_KEYS", None)
 os.environ.pop("MCP_CORS_ALLOWED_ORIGINS", None)
 os.environ.pop("FORWARDED_ALLOW_IPS", None)

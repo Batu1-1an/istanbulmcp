@@ -40,7 +40,10 @@ class McpJsonRpcGuard:
         async def replay_receive() -> Message:
             if messages:
                 return messages.pop(0)
-            return {"type": "http.request", "body": b"", "more_body": False}
+            # After the replayed body, wait for the real http.disconnect. SDK
+            # stream watchers loop on receive(); an immediate fabricated message
+            # never yields and freezes the event loop at 100% CPU.
+            return await receive()
 
         await self.app(scope, replay_receive, send)
 
