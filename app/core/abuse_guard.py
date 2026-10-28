@@ -98,11 +98,16 @@ class McpAbuseGuardMiddleware:
         max_body_bytes: int,
         rate_limiter: ClientRateLimiter,
         concurrency_limiter: ConcurrencyLimiter,
+        listen_limiter: ConcurrencyLimiter | None = None,
     ):
         self.app = app
         self.max_body_bytes = max(1, int(max_body_bytes))
         self.rate_limiter = rate_limiter
         self.concurrency_limiter = concurrency_limiter
+        # Notification streams (modern subscriptions/listen, legacy GET) stay
+        # open for a whole client session; a separate cap keeps idle streams
+        # from using request slots and bounds how many can pile up.
+        self.listen_limiter = listen_limiter or concurrency_limiter
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if not self._should_guard(scope):
@@ -127,13 +132,16 @@ class McpAbuseGuardMiddleware:
             )
             return
 
-        if not await self.concurrency_limiter.acquire():
+        listen = self._is_notification_stream(scope)
+        limiter = self.listen_limiter if listen else self.concurrency_limiter
+        if not await limiter.acquire():
             await self._reject(
                 scope,
                 receive,
                 send,
                 status_code=429,
-                summary="MCP service is busy. Please retry shortly.",
+                summary="Too many open MCP notification streams. Please retry shortly." if listen
+                else "MCP service is busy. Please retry shortly.",
                 retry_after_seconds=1.0,
             )
             return
@@ -154,10 +162,19 @@ class McpAbuseGuardMiddleware:
         except RequestBodyTooLarge:
             await self._reject(scope, receive, send, status_code=413, summary="Request body is too large.")
         finally:
-            await self.concurrency_limiter.release()
+            await limiter.release()
 
     def _should_guard(self, scope: Scope) -> bool:
-        return scope.get("type") == "http" and scope.get("method") == "POST" and scope.get("path") in {"/mcp", "/mcp/"}
+        return (scope.get("type") == "http" and scope.get("method") in {"POST", "GET"}
+                and scope.get("path") in {"/mcp", "/mcp/"})
+
+    def _is_notification_stream(self, scope: Scope) -> bool:
+        if scope.get("method") == "GET":
+            return True
+        # The SDK rejects a modern request whose Mcp-Method header differs from
+        # its body. A spoofed legacy header only moves it to this bounded cap.
+        return any(key.lower() == b"mcp-method" and value == b"subscriptions/listen"
+                   for key, value in scope.get("headers", []))
 
     def _content_length(self, scope: Scope) -> int | None:
         for key, value in scope.get("headers", []):

@@ -68,6 +68,7 @@ def test_status_returns_tool_inventory(monkeypatch, tmp_path):
     assert body["limits"]["istanbulkart"]["dataset_id"] == "istanbulkart-dolum-merkezi-bilgileri"
     assert body["abuse_guard"]["rate_limit"]["capacity"] > 0
     assert body["abuse_guard"]["concurrency"]["max_concurrent"] > 0
+    assert body["abuse_guard"]["listen_streams"]["max_concurrent"] > 0
     assert "database_path" not in body["database"]
     tool_names = {tool["name"] for tool in body["tools"]}
     assert body["tool_count"] == len(body["tools"])

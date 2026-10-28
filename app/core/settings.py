@@ -141,6 +141,7 @@ class Settings:
     mcp_rate_limit_refill_per_second: float = 1.0
     mcp_rate_limit_max_clients: int = 2048
     mcp_max_concurrent_requests: int = 25
+    mcp_max_listen_streams: int = 200
     event_loop_watchdog_seconds: float = 60.0
 
 
@@ -368,5 +369,6 @@ def get_settings() -> Settings:
         mcp_rate_limit_refill_per_second=_float_env("MCP_RATE_LIMIT_REFILL_PER_SECOND", 1.0),
         mcp_rate_limit_max_clients=_int_env("MCP_RATE_LIMIT_MAX_CLIENTS", 2048),
         mcp_max_concurrent_requests=_int_env("MCP_MAX_CONCURRENT_REQUESTS", 25),
+        mcp_max_listen_streams=_int_env("MCP_MAX_LISTEN_STREAMS", 200),
         event_loop_watchdog_seconds=_float_env("EVENT_LOOP_WATCHDOG_SECONDS", 60.0),
     )

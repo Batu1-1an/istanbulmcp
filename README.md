@@ -726,6 +726,7 @@ Herkese açık MCP koruma limitleri:
 - `MCP_RATE_LIMIT_REFILL_PER_SECOND`
 - `MCP_RATE_LIMIT_MAX_CLIENTS`
 - `MCP_MAX_CONCURRENT_REQUESTS`
+- `MCP_MAX_LISTEN_STREAMS` — istemcilerin oturum boyunca açık tuttuğu bildirim akışları (yeni protokolde `subscriptions/listen`, eski protokolde `GET /mcp/`) için ayrı üst sınır; varsayılan `200`. Bu akışlar araç isteklerinin eşzamanlılık kotasını kullanmaz.
 - `EVENT_LOOP_WATCHDOG_SECONDS` — event loop bu kadar saniye yanıt vermezse tüm thread stack'leri stderr'e yazılır ve süreç `70` koduyla çıkar; Railway `ON_FAILURE` politikası servisi yeniden başlatır. Varsayılan `60`, `0` kapatır.
 
 İSKİ kaynak erişimi ve fallback değişkenleri:

@@ -47,6 +47,8 @@ async def status(request):
         abuse_guard["rate_limit"] = request.app.state.mcp_rate_limiter.snapshot()
     if hasattr(request.app.state, "mcp_concurrency_limiter"):
         abuse_guard["concurrency"] = request.app.state.mcp_concurrency_limiter.snapshot()
+    if hasattr(request.app.state, "mcp_listen_limiter"):
+        abuse_guard["listen_streams"] = request.app.state.mcp_listen_limiter.snapshot()
     tools = await request.app.state.mcp_server.list_tools()
     telemetry = request.app.state.mcp_server.telemetry
     return JSONResponse(build_status(request.app.state.settings, abuse_guard=abuse_guard, tools=tools,
@@ -80,6 +82,7 @@ def create_app() -> Starlette:
         max_clients=max(settings.mcp_rate_limit_max_clients, len(settings.mcp_api_keys)),
     )
     mcp_concurrency_limiter = ConcurrencyLimiter(max_concurrent=settings.mcp_max_concurrent_requests)
+    mcp_listen_limiter = ConcurrencyLimiter(max_concurrent=settings.mcp_max_listen_streams)
 
     @contextlib.asynccontextmanager
     async def lifespan(_app: Starlette):
@@ -122,6 +125,7 @@ def create_app() -> Starlette:
                 max_body_bytes=settings.mcp_max_body_bytes,
                 rate_limiter=mcp_rate_limiter,
                 concurrency_limiter=mcp_concurrency_limiter,
+                listen_limiter=mcp_listen_limiter,
             ),
             Middleware(ApiKeyQuotaMiddleware, quota=quota),
             Middleware(McpJsonRpcGuard),
@@ -132,6 +136,7 @@ def create_app() -> Starlette:
     app.state.mcp_server = mcp
     app.state.mcp_rate_limiter = mcp_rate_limiter
     app.state.mcp_concurrency_limiter = mcp_concurrency_limiter
+    app.state.mcp_listen_limiter = mcp_listen_limiter
     return app
 
 
