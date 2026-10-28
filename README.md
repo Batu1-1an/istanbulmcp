@@ -592,6 +592,16 @@ curl -fsS https://istanbulmcp-production.up.railway.app/status
 
 `/mcp` path'i `/mcp/` adresine yönlenir. MCP istemci yapılandırmalarında doğrudan `/mcp/` kullanın. MCP işlemleri JSON-RPC POST çağrılarıdır; düz GET isteği genel bir sağlık testi değildir. Liveness/readiness için yukarıdaki HTTP sağlık uçlarını kullanın.
 
+### Otomatik uptime izleme
+
+[`.github/workflows/uptime.yml`](.github/workflows/uptime.yml) canlı endpoint'i 10 dakikada bir `/healthz` ve gerçek bir MCP `initialize` + `tools/list` çağrısıyla kontrol eder; tek ağ aksaklığında alarm vermemek için 3 kez dener. Endpoint ulaşılamazsa repo sahibini etiketleyen tek bir `uptime-incident` issue'su açılır; servis düzelince issue'ya süre yazılıp kapatılır. GitHub zamanlanmış çalışmaları birkaç dakika geciktirebilir.
+
+```bash
+python -m scripts.uptime_check                     # production
+python -m scripts.uptime_check --url http://127.0.0.1:8000
+gh workflow run uptime.yml                          # elle tetikleme
+```
+
 ## Cevap Modeli
 
 Araçlar standart envelope döndürür:

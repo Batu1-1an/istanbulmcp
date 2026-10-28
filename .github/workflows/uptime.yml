@@ -1,0 +1,87 @@
+name: Uptime
+
+# Probes the live endpoint every 10 minutes. A failure opens one incident issue
+# that mentions the repository owner; recovery comments and closes it. Only the
+# run that opens the incident fails, so an outage does not send an email per run.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Base URL to probe (empty = production)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Probe live endpoint
+        id: probe
+        continue-on-error: true
+        env:
+          UPTIME_URL: ${{ inputs.url }}
+        run: python3 -m scripts.uptime_check
+
+      - name: Open or close the incident issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEALTHY: ${{ steps.probe.outputs.healthy }}
+          REASON: ${{ steps.probe.outputs.reason }}
+          TARGET: ${{ steps.probe.outputs.url }}
+          OWNER: ${{ github.repository_owner }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          label=uptime-incident
+          now=$(TZ=Europe/Istanbul date '+%Y-%m-%d %H:%M (TR)')
+          open_issue=$(gh issue list --label "$label" --state open --json number --jq '.[0].number // empty' 2>/dev/null || true)
+
+          if [ "$HEALTHY" = "true" ]; then
+            if [ -n "$open_issue" ]; then
+              created=$(gh issue view "$open_issue" --json createdAt --jq .createdAt)
+              minutes=$(( ($(date +%s) - $(date -d "$created" +%s)) / 60 ))
+              gh issue comment "$open_issue" --body "Servis tekrar yanıt veriyor: $now. Issue açıldıktan yaklaşık $minutes dakika sonra düzeldi. [Kontrol]($RUN_URL)"
+              gh issue close "$open_issue" --reason completed
+            fi
+            echo "Healthy: $TARGET" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if [ "$HEALTHY" != "false" ]; then
+            echo "Monitor error: the probe produced no result." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          if [ -n "$open_issue" ]; then
+            echo "Still down; incident #$open_issue is already open. Reason: $REASON" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          gh label create "$label" --color B60205 --description "Otomatik izleme: canlı endpoint yanıt vermiyor" --force
+          body=$(printf '%s\n' \
+            "@$OWNER otomatik izleme canlı MCP endpoint'ine ulaşamadı." \
+            "" \
+            "- Hedef: $TARGET" \
+            "- Tespit: $now (3 deneme, yaklaşık 1 dakika)" \
+            "- Sebep: \`$REASON\`" \
+            "- Kontrol: $RUN_URL" \
+            "" \
+            "Kontrol 10 dakikada bir tekrarlanır; servis yanıt verince bu issue otomatik kapanır." \
+            "İlk bakılacak yerler: \`railway status\`, \`railway logs\` (watchdog stack dökümü: \`event_loop_stalled\`) ve Railway CPU metrikleri.")
+          gh issue create --label "$label" --title "Canlı MCP endpoint'i yanıt vermiyor: $TARGET" --body "$body"
+          echo "Incident opened: $REASON" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
