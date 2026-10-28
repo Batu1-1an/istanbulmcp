@@ -151,6 +151,22 @@ def _text(row: dict[str, str], key: str, *, required: bool = True, cap: int = 50
     return value
 
 
+def repair_mojibake(value: str) -> str:
+    """Undo UTF-8 text that was decoded as Windows-1254 and re-encoded.
+
+    İBB publishes routes.csv this way ("KADIKÃ–Y"); bytes undefined in 1254
+    (Ğ/Ş continuation 0x9E) survive as C1 controls. Anything that does not
+    round-trip to valid UTF-8, including correct Turkish text, is unchanged.
+    """
+    if "Ã" not in value and "Ä" not in value and "Å" not in value:
+        return value
+    try:
+        raw = b"".join(bytes([ord(char)]) if "\x80" <= char <= "\x9f" else char.encode("cp1254") for char in value)
+        return raw.decode("utf-8")
+    except UnicodeError:
+        return value
+
+
 def _date(value: str) -> str:
     if not re.fullmatch(r"[0-9]{8}", value):
         raise GtfsScheduleError("Invalid GTFS service date")
@@ -353,6 +369,7 @@ class GtfsScheduleClient:
     @staticmethod
     def _values(kind, row):
         get = lambda key, **kw: _text(row, key, **kw)
+        name = lambda key, **kw: repair_mojibake(get(key, **kw))
         if kind == "agency":
             if get("agency_timezone") != "Europe/Istanbul":
                 raise GtfsScheduleError("Only Europe/Istanbul timetables are supported")
@@ -366,19 +383,19 @@ class GtfsScheduleClient:
         if kind == "calendar_dates":
             return get("service_id"), _date(get("date")), _enum(get("exception_type"), {"1", "2"})
         if kind == "routes":
-            return get("route_id"), get("route_short_name", required=False), get("route_long_name", required=False)
+            return get("route_id"), name("route_short_name", required=False), name("route_long_name", required=False)
         if kind == "stops":
             lat = parse_gtfs_coordinate(get("stop_lat", required=False), axis="lat")
             lon = parse_gtfs_coordinate(get("stop_lon", required=False), axis="lon")
             if lat is None or lon is None:
                 lat = lon = None
             location_type = get("location_type", required=False)
-            return (get("stop_id"), get("stop_name"), lat, lon,
-                    get("stop_code", required=False) or None, get("stop_desc", required=False) or None,
+            return (get("stop_id"), name("stop_name"), lat, lon,
+                    get("stop_code", required=False) or None, name("stop_desc", required=False) or None,
                     int(location_type) if location_type in {"0", "1", "2", "3", "4"} else None,
                     location_type or None)
         if kind == "trips":
-            return get("trip_id"), get("route_id"), get("service_id"), get("trip_headsign", required=False), get("direction_id", required=False) or None
+            return get("trip_id"), get("route_id"), get("service_id"), name("trip_headsign", required=False), get("direction_id", required=False) or None
         arrival = parse_schedule_time(get("arrival_time", required=False))
         departure = parse_schedule_time(get("departure_time", required=False))
         if arrival is not None and departure is not None and arrival > departure:

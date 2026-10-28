@@ -13,7 +13,7 @@ import httpx
 import pytest
 from starlette.testclient import TestClient
 
-from app.connectors.gtfs_schedule import GtfsScheduleClient, GtfsScheduleError, KINDS, parse_schedule_time, select_resources, validate_schedule_settings
+from app.connectors.gtfs_schedule import GtfsScheduleClient, GtfsScheduleError, KINDS, parse_schedule_time, repair_mojibake, select_resources, validate_schedule_settings
 from app.core.settings import Settings
 from app.core.source_cache import clear_source_cache, source_cache
 from app.main import create_app
@@ -229,6 +229,50 @@ async def test_blank_route_id_rows_are_excluded_without_dropping_referenced_rout
     assert source["accepted_total"] == 3
     assert source["skipped_total"] == 1
     assert any("without route_id" in warning for warning in result["warnings"])
+
+
+def mojibake(text: str) -> str:
+    # Like İBB routes.csv: UTF-8 read as Windows-1254, undefined bytes kept as C1 controls.
+    return "".join(bytes([b]).decode("cp1254", errors="ignore") or chr(b) for b in text.encode("utf-8"))
+
+
+@pytest.mark.parametrize("text", [
+    "YEDİTEPE ÜNİVERSİTESİ ALT KAPI - KADIKÖY", "KADIKÖY - KİRAZLITEPE",
+    "ŞİŞLİ ÇAĞLAYAN ığüşöç", "SAATLER FERAH CADDESİNDEN GİDER.",
+])
+def test_repair_mojibake_restores_double_encoded_turkish(text):
+    assert mojibake(text) != text
+    assert repair_mojibake(mojibake(text)) == text
+
+
+@pytest.mark.parametrize("published,expected", [
+    ("ÃœMRANÄ°YE EÄ\x9eÄ°TÄ°M ARAÅ\x9eTIRMA HASTANESÄ°", "ÜMRANİYE EĞİTİM ARAŞTIRMA HASTANESİ"),
+    ("ATAÅ\x9eEHÄ°R TIP MERKEZÄ° - ESATPAÅ\x9eA", "ATAŞEHİR TIP MERKEZİ - ESATPAŞA"),
+])
+def test_repair_mojibake_handles_published_ibb_route_names(published, expected):
+    assert repair_mojibake(published) == expected
+
+
+@pytest.mark.parametrize("text", [
+    "KADIKÖY", "İSTANBUL", "ÇAĞLAYAN", "ÜSKÜDAR - ŞİŞLİ", "500T", "", "Ã alone", "Å", "ÄŸ with ş",
+])
+def test_repair_mojibake_leaves_correct_or_unrepairable_text_unchanged(text):
+    assert repair_mojibake(text) == text
+
+
+@pytest.mark.asyncio
+async def test_double_encoded_route_and_headsign_names_are_repaired(tmp_path):
+    routes = (FIXTURES / "routes.csv").read_text().replace(
+        "Synthetic first route", mojibake("YEDİTEPE ÜNİVERSİTESİ ALT KAPI - KADIKÖY"))
+    trips = (FIXTURES / "trips.csv").read_text().replace("Weekday", mojibake("ATAŞEHİR"))
+    f = feed(tmp_path, changes={"routes": routes.encode(), "trips": trips.encode()})
+    async with f.http:
+        result = await f.service.next_departures(stop_id="S1", at=AT, limit=3)
+
+    assert result["ok"], result
+    first = next(row for row in result["data"] if row["line"] == "500T")
+    assert first["route_name"] == "YEDİTEPE ÜNİVERSİTESİ ALT KAPI - KADIKÖY"
+    assert first["trip_headsign"] == "ATAŞEHİR"
 
 
 @pytest.mark.asyncio
