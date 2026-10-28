@@ -2,6 +2,7 @@ import os
 
 import pytest
 
+from app.services.neighborhood import ISTANBUL_DISTRICTS
 from scripts.live_mcp_uat import DEFAULT_BASE_URL, rpc_call
 
 pytestmark = pytest.mark.skipif(
@@ -236,6 +237,36 @@ def test_live_mcp_neighborhood_profile_tool():
     assert payload["data"][0]["coverage"]["earthquake_scenario"] is True
 
 
+def test_live_mcp_neighborhood_profile_joins_legacy_encoded_sisli_rows():
+    payload, error, _elapsed = rpc_call(
+        os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
+        9007,
+        "istanbul_neighborhood_profile",
+        {"district": "Şişli", "neighborhood": "Gülbahar"},
+    )
+
+    assert error is None
+    assert payload["ok"] is True
+    assert payload["data"][0]["coverage"] == {
+        "social_assistance": True, "building_stock": True, "earthquake_scenario": True,
+    }
+    assert payload["data"][0]["source_record_ids"]["earthquake_uavt"] == 40695
+
+
+@pytest.mark.parametrize("district", ISTANBUL_DISTRICTS)
+def test_live_mcp_neighborhood_profile_reads_every_source_for_every_district(district):
+    payload, error, _elapsed = rpc_call(
+        os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
+        9100 + ISTANBUL_DISTRICTS.index(district),
+        "istanbul_neighborhood_profile",
+        {"district": district, "limit": 1},
+    )
+
+    assert error is None
+    assert payload["ok"] is True
+    assert not [warning for warning in payload["warnings"] if "returned no rows" in warning]
+
+
 def test_live_mcp_transit_disruptions_tool():
     payload, error, _elapsed = rpc_call(
         os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
@@ -254,7 +285,7 @@ def test_live_mcp_transit_disruptions_line_filter_preserves_line_code():
         os.getenv("MCP_LIVE_BASE_URL", DEFAULT_BASE_URL),
         9012,
         "istanbul_transport_disruptions",
-        {"operator":"iett","line_code":"34A","limit":5},
+        {"operator":"iett","line":"34A","limit":5},
     )
 
     assert error is None

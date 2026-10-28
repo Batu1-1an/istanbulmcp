@@ -22,6 +22,25 @@ BUILDING_STOCK_RESOURCE_ID = "cef193d5-0bd2-4e8d-8a69-275c50288875"
 EARTHQUAKE_SCENARIO_DATASET_ID = "c13514d9-86b1-4b83-a9b9-1a15cb5f254c"
 EARTHQUAKE_SCENARIO_RESOURCE_ID = "9c3ac492-de4b-4245-b418-7ad3df67a193"
 
+SOURCE_KEYS = ("social_assistance", "building_stock", "earthquake_scenario")
+SOURCE_FIELDS = {
+    "social_assistance": ("ILCE", "MAHALLE"),
+    "building_stock": ("ilce_adi", "mahalle_adi"),
+    "earthquake_scenario": ("ilce_adi", "mahalle_adi"),
+}
+SOURCE_DISTRICT_ALIASES = {"EYÜPSULTAN": ("EYÜP",)}
+NEIGHBORHOOD_SUFFIXES = ("mahallesi", "mahalle", "mah", "mh")
+SOURCE_LABELS = {
+    "social_assistance": "social assistance",
+    "building_stock": "building stock",
+    "earthquake_scenario": "earthquake scenario",
+}
+SOURCE_RESOURCE_IDS = {
+    "social_assistance": SOCIAL_ASSISTANCE_RESOURCE_ID,
+    "building_stock": BUILDING_STOCK_RESOURCE_ID,
+    "earthquake_scenario": EARTHQUAKE_SCENARIO_RESOURCE_ID,
+}
+
 NEIGHBORHOOD_PREFETCH_LIMIT = 2000
 NEIGHBORHOOD_CACHE_TTL_SECONDS = 60 * 60 * 24
 ISTANBUL_DISTRICTS = [
@@ -129,19 +148,27 @@ class NeighborhoodService:
                 sources=NEIGHBORHOOD_SOURCES,
             )
 
+        empty_sources = [key for key in SOURCE_KEYS if not rows[key]]
         if neighborhood and neighborhood.strip():
             return self._single_profile(
                 district_query=district,
                 neighborhood_query=neighborhood,
                 district_entries=district_entries,
+                source_district=source_district,
+                empty_sources=empty_sources,
             )
-        return self._district_list(district_query=district, district_entries=district_entries, limit=safe_limit)
+        return self._district_list(
+            district_query=district, district_entries=district_entries, limit=safe_limit,
+            source_district=source_district, empty_sources=empty_sources,
+        )
 
     async def _district_source_rows(self, source_district: str) -> dict[str, list[dict[str, Any]]]:
+        district_filter = source_district_filter(source_district)
+
         async def load_social() -> list[dict[str, Any]]:
             result = await self.ckan.datastore_search(
                 resource_id=SOCIAL_ASSISTANCE_RESOURCE_ID,
-                filters={"ILCE": source_district},
+                filters={"ILCE": district_filter},
                 limit=NEIGHBORHOOD_PREFETCH_LIMIT,
             )
             return result.get("records", [])
@@ -149,7 +176,7 @@ class NeighborhoodService:
         async def load_buildings() -> list[dict[str, Any]]:
             result = await self.ckan.datastore_search(
                 resource_id=BUILDING_STOCK_RESOURCE_ID,
-                filters={"ilce_adi": source_district},
+                filters={"ilce_adi": district_filter},
                 limit=NEIGHBORHOOD_PREFETCH_LIMIT,
             )
             return result.get("records", [])
@@ -157,7 +184,7 @@ class NeighborhoodService:
         async def load_earthquake() -> list[dict[str, Any]]:
             result = await self.ckan.datastore_search(
                 resource_id=EARTHQUAKE_SCENARIO_RESOURCE_ID,
-                filters={"ilce_adi": source_district},
+                filters={"ilce_adi": district_filter},
                 limit=NEIGHBORHOOD_PREFETCH_LIMIT,
             )
             return result.get("records", [])
@@ -187,22 +214,16 @@ class NeighborhoodService:
         }
 
     def _index_rows(self, rows: dict[str, list[dict[str, Any]]]) -> dict[str, dict[str, dict[str, dict[str, Any]]]]:
-        index: dict[str, dict[str, dict[str, dict[str, Any]]]] = defaultdict(lambda: defaultdict(dict))
-        for row in rows["social_assistance"]:
-            district_key = normalize_neighborhood_text(row.get("ILCE"))
-            neighborhood_key = normalize_neighborhood_text(row.get("MAHALLE"))
-            if district_key and neighborhood_key:
-                index[district_key][neighborhood_key]["social_assistance"] = row
-        for row in rows["building_stock"]:
-            district_key = normalize_neighborhood_text(row.get("ilce_adi"))
-            neighborhood_key = normalize_neighborhood_text(row.get("mahalle_adi"))
-            if district_key and neighborhood_key:
-                index[district_key][neighborhood_key]["building_stock"] = row
-        for row in rows["earthquake_scenario"]:
-            district_key = normalize_neighborhood_text(row.get("ilce_adi"))
-            neighborhood_key = normalize_neighborhood_text(row.get("mahalle_adi"))
-            if district_key and neighborhood_key:
-                index[district_key][neighborhood_key]["earthquake_scenario"] = row
+        index: dict[str, dict[str, dict[str, dict[str, Any]]]] = defaultdict(dict)
+        keys: dict[tuple[str, str], str] = {}
+        for source, (district_field, name_field) in SOURCE_FIELDS.items():
+            for row in rows[source]:
+                district_key = canonical_district_key(row.get(district_field))
+                neighborhood_key = normalize_neighborhood_text(row.get(name_field))
+                if not district_key or not re.search("[a-z]", neighborhood_key):
+                    continue
+                key = keys.setdefault((district_key, neighborhood_match_key(neighborhood_key)), neighborhood_key)
+                index[district_key].setdefault(key, {})[source] = row
         return index
 
     def _single_profile(
@@ -211,9 +232,14 @@ class NeighborhoodService:
         district_query: str,
         neighborhood_query: str,
         district_entries: dict[str, dict[str, dict[str, Any]]],
+        source_district: str,
+        empty_sources: list[str],
     ) -> dict[str, Any]:
         neighborhood_key = normalize_neighborhood_text(neighborhood_query)
-        rows = district_entries.get(neighborhood_key)
+        match_key = neighborhood_match_key(neighborhood_key)
+        rows = district_entries.get(neighborhood_key) or next(
+            (entry for key, entry in district_entries.items() if neighborhood_match_key(key) == match_key), None,
+        )
         if not rows:
             examples = ", ".join(self._neighborhood_examples(district_entries))
             return validation_error_envelope(
@@ -240,7 +266,10 @@ class NeighborhoodService:
                 f"prefetch_limit_per_resource={NEIGHBORHOOD_PREFETCH_LIMIT}",
                 "read_only=true",
             ],
-            warnings=self._warnings(),
+            warnings=self._warnings(
+                source_district=source_district, empty_sources=empty_sources,
+                unmatched_sources=[key for key in SOURCE_KEYS if not profile["coverage"][key] and key not in empty_sources],
+            ),
             next_queries=[
                 "Omit neighborhood to list covered neighborhoods for a district.",
                 "Use istanbul_query_resource for raw source rows when exact field-level inspection is needed.",
@@ -253,6 +282,8 @@ class NeighborhoodService:
         district_query: str,
         district_entries: dict[str, dict[str, dict[str, Any]]],
         limit: int,
+        source_district: str,
+        empty_sources: list[str],
     ) -> dict[str, Any]:
         profiles = [
             self._district_row(neighborhood_key=neighborhood_key, rows=rows)
@@ -273,7 +304,7 @@ class NeighborhoodService:
                 "source=CKAN datastore_search",
                 f"prefetch_limit_per_resource={NEIGHBORHOOD_PREFETCH_LIMIT}",
             ],
-            warnings=self._warnings(),
+            warnings=self._warnings(source_district=source_district, empty_sources=empty_sources),
             next_queries=["Pass one returned neighborhood name to get the joined profile."],
         )
 
@@ -412,11 +443,49 @@ class NeighborhoodService:
         value = row.get(key)
         return str(value) if value not in (None, "") else None
 
-    def _warnings(self) -> list[str]:
-        return [
+    def _warnings(
+        self, *, source_district: str, empty_sources: list[str], unmatched_sources: list[str] | None = None,
+    ) -> list[str]:
+        warnings = [
             "Neighborhood names are normalized across Turkish and source-encoding variants.",
             "Earthquake scenario values are source scenario records, not real-time risk, incident, or guidance data.",
         ]
+        warnings.extend(
+            f"The {SOURCE_LABELS[key]} source returned no rows for {source_district}; its values are unchecked, "
+            "not zero or absent."
+            for key in empty_sources
+        )
+        warnings.extend(
+            f"No {SOURCE_LABELS[key]} record matched this neighborhood name. This does not prove the source lacks it; "
+            f"inspect istanbul_query_resource(resource_id={SOURCE_RESOURCE_IDS[key]}) before saying the data is missing."
+            for key in unmatched_sources or []
+        )
+        return warnings
+
+
+def source_district_filter(name: str) -> str | list[str]:
+    values: list[str] = []
+    for spelling in (name, *SOURCE_DISTRICT_ALIASES.get(name, ())):
+        for value in (spelling, spelling.encode("iso-8859-9").decode("latin-1")):
+            if value not in values:
+                values.append(value)
+    return values[0] if len(values) == 1 else values
+
+
+def canonical_district_key(value: Any) -> str:
+    key = normalize_neighborhood_text(value)
+    return DISTRICT_KEYS_BY_ALIAS.get(key, key)
+
+
+def neighborhood_match_key(normalized: str) -> str:
+    tokens = normalized.split()
+    if len(tokens) > 1 and tokens[-1] in NEIGHBORHOOD_SUFFIXES:
+        tokens.pop()
+    compact = "".join(tokens)
+    for suffix in NEIGHBORHOOD_SUFFIXES[:2]:
+        if compact.endswith(suffix) and len(compact) > len(suffix):
+            return compact.removesuffix(suffix)
+    return compact
 
 
 def repair_neighborhood_name(value: str | None) -> str | None:
@@ -452,6 +521,10 @@ def normalize_neighborhood_text(value: Any) -> str:
 
 
 DISTRICTS_BY_NORMALIZED = {normalize_neighborhood_text(name): name for name in ISTANBUL_DISTRICTS}
+DISTRICT_KEYS_BY_ALIAS = {
+    normalize_neighborhood_text(alias): normalize_neighborhood_text(name)
+    for name, aliases in SOURCE_DISTRICT_ALIASES.items() for alias in aliases
+}
 
 
 def _int_or_none(value: Any) -> int | None:

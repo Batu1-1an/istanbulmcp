@@ -16,6 +16,23 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 ### Security
 - İSKİ relay adresi artık tool sonucunda kaynak URL'i olarak görünmez.
 
+### Fixed
+- `istanbul_neighborhood_profile`, adında Ş/İ/Ğ geçen 19 ilçe ve Eyüpsultan için bina
+  stoku ve deprem senaryosunu hiç bulamıyordu (ör. Şişli/Gülbahar). Bu iki kaynak ilçe
+  adını eski kodlamayla (`ÞÝÞLÝ`), Eyüpsultan'ı eski adıyla (`EYÜP`) tutuyor. CKAN
+  sorgusu artık doğru yazımı, eski yazımı ve eski adı birlikte ister. Üç kaynağı birden
+  eşleşen mahalle sayısı 448'den 912'ye çıktı.
+- Mahalle eşleştirmesi boşluk farkını (`RUMELİHİSARI` / `RUMELİ HİSARI`) ve
+  `Mahallesi`/`Mah.` ekini tolere eder; ad içermeyen `0.0` satırı listelenmez.
+- Kaynak ilçe için hiç satır döndürmezse veya seçilen mahalle bir kaynakta
+  eşleşmezse cevap açık uyarı taşır; `coverage:false` "veri yok" diye sunulmaz.
+
+### Tests
+- Testlerdeki sahte CKAN, filtreleri gerçek CKAN gibi birebir uygular. Gülbahar
+  (deprem kaydı 846) ve 39 ilçenin her biri için canlı regresyon testleri eklendi.
+- Canlı `istanbul_transport_disruptions` hat testi yanlış parametre adı (`line_code`)
+  yerine aracın gerçek parametresi `line` ile çağrılır.
+
 ## [0.2.6] - 2026-10-25
 
 ### Added
