@@ -102,8 +102,7 @@ class GtfsScheduleService:
                 repair=Repair(next_step="Check snapshot status again after warm-up.", tool="istanbul_gtfs_snapshot_status", arguments={}),
             )
         try:
-            with closing(connect(self.settings.database_path)) as conn:
-                require_snapshot(conn, cached.value, self.profile)
+            await asyncio.to_thread(self._verify_snapshot, cached.value)
             metadata = cached.metadata or {}
             now = datetime.now(ISTANBUL)
             start, end = metadata["calendar_start"], metadata["calendar_end"]
@@ -200,16 +199,10 @@ class GtfsScheduleService:
         try:
             cached = await self._snapshot()
             metadata = cached.metadata or {}
-            with closing(connect(self.settings.database_path)) as conn:
-                # Protect queries against another worker/profile replacing this DB.
-                conn.execute("BEGIN")
-                require_snapshot(conn, cached.value, self.profile)
-                deadline = monotonic_time.monotonic() + 1
-                conn.set_progress_handler(lambda: int(monotonic_time.monotonic() > deadline), 1000)
-                if searching:
-                    found = search_stops(conn, stop_query, safe_limit)
-                else:
-                    data = self._query(conn, stop_id, lat, lon, radius_m, line, when, safe_limit + 1, metadata["max_departure_seconds"])
+            found, data = await asyncio.to_thread(
+                self._snapshot_query, cached.value, searching, stop_query, stop_id,
+                lat, lon, radius_m, line, when, safe_limit, metadata["max_departure_seconds"],
+            )
             untimed = metadata.get("untimed_total", 0)
             invalid_coords = metadata.get("invalid_coordinate_total", 0)
             sources = [Source(
@@ -269,6 +262,25 @@ class GtfsScheduleService:
                                    warning=f"Complete timetable lookup failed ({type(exc).__name__}). {STATIC_WARNING}",
                                    sources=[unavailable], limits=limits,
                                    code="source_timeout" if isinstance(exc, TimeoutError) else "source_unavailable")
+
+    def _verify_snapshot(self, snapshot_id: str) -> None:
+        with closing(connect(self.settings.database_path)) as conn:
+            require_snapshot(conn, snapshot_id, self.profile)
+
+    def _snapshot_query(self, snapshot_id: str, searching: bool, stop_query: str | None,
+                        stop_id: str | None, lat: float | None, lon: float | None,
+                        radius_m: int, line: str | None, when, safe_limit: int,
+                        max_seconds: int | None) -> tuple[StopSearchResult | None, list | None]:
+        # SQLite work stays off the event loop; the same one-second budget applies.
+        with closing(connect(self.settings.database_path)) as conn:
+            # Protect queries against another worker/profile replacing this DB.
+            conn.execute("BEGIN")
+            require_snapshot(conn, snapshot_id, self.profile)
+            deadline = monotonic_time.monotonic() + 1
+            conn.set_progress_handler(lambda: int(monotonic_time.monotonic() > deadline), 1000)
+            if searching:
+                return search_stops(conn, stop_query, safe_limit), None
+            return None, self._query(conn, stop_id, lat, lon, radius_m, line, when, safe_limit + 1, max_seconds)
 
     def _stop_search_envelope(self, found: StopSearchResult, cached, sources: list[Source],
                               limits: list[str], limit: int) -> dict:

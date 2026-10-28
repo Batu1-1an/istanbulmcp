@@ -7,6 +7,7 @@ validated as a complete capture.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 import re
@@ -195,7 +196,8 @@ class CityOpenDataClient:
             },
         )
         try:
-            rows = read_first_sheet_rows(body, max_rows=self.settings.open_data_layers_max_rows)
+            rows = await asyncio.to_thread(
+                read_first_sheet_rows, body, max_rows=self.settings.open_data_layers_max_rows)
         except ValueError as exc:
             raise OpenDataLayerError("Malformed cultural-centre XLSX") from exc
         if len(rows) < 2:

@@ -200,7 +200,9 @@ class GtfsScheduleClient:
             # Temporary files live on the configured data volume, not in RAM.
             with tempfile.TemporaryDirectory(prefix=".gtfs-stage-", dir=settings.database_path.parent) as directory:
                 stage_path = Path(directory) / "schedule.sqlite3"
-                conn = sqlite3.connect(stage_path)
+                # Validation, aggregation and publish run in worker threads;
+                # access stays serialized because each call is awaited.
+                conn = sqlite3.connect(stage_path, check_same_thread=False)
                 try:
                     conn.executescript(SCHEMA)
                     conn.executescript(STAGING_VALIDATION_SCHEMA)
@@ -229,16 +231,9 @@ class GtfsScheduleClient:
                                         raise GtfsScheduleError("GTFS uncompressed byte budget exceeded")
                                     counts[kind], skipped[kind] = await self._ingest(conn, stream, kind, settings.gtfs_schedule_max_rows - sum(counts.values()) - sum(skipped.values()), deadline)
                             path.unlink()
-                    self._validate_relations(conn)
-                    max_seconds = conn.execute("SELECT MAX(departure_seconds) FROM gtfs_schedule_stop_times").fetchone()[0]
-                    untimed = conn.execute("SELECT COUNT(*) FROM gtfs_schedule_stop_times WHERE departure_seconds IS NULL").fetchone()[0]
-                    invalid_coords = conn.execute("SELECT COUNT(*) FROM gtfs_schedule_stops WHERE lat IS NULL OR lon IS NULL").fetchone()[0]
-                    invalid_location_types = conn.execute("SELECT COUNT(*) FROM gtfs_schedule_stops WHERE source_location_type IS NOT NULL AND location_type IS NULL").fetchone()[0]
-                    calendar_bounds = conn.execute("""SELECT MIN(first), MAX(last) FROM (
-                        SELECT MIN(start_date) AS first, MAX(end_date) AS last FROM gtfs_schedule_calendar
-                        UNION ALL SELECT MIN(date), MAX(date) FROM gtfs_schedule_calendar_dates WHERE exception_type=1
-                    )""").fetchone()
-                    conn.commit()
+                    await asyncio.to_thread(self._validate_relations, conn)
+                    max_seconds, untimed, invalid_coords, invalid_location_types, calendar_bounds = (
+                        await asyncio.to_thread(self._finalize, conn))
                 except (csv.Error, UnicodeError, sqlite3.IntegrityError, zipfile.BadZipFile, NotImplementedError) as exc:
                     raise GtfsScheduleError("Malformed or inconsistent GTFS schedule") from exc
                 finally:
@@ -247,7 +242,9 @@ class GtfsScheduleClient:
                 if loop.time() >= deadline:
                     raise TimeoutError("GTFS schedule load deadline exceeded")
                 snapshot_id = uuid.uuid4().hex
-                publish_schedule(settings.database_path, stage_path, snapshot_id=snapshot_id, profile=profile)
+                await asyncio.to_thread(
+                    publish_schedule, settings.database_path, stage_path,
+                    snapshot_id=snapshot_id, profile=profile)
                 return {"snapshot_id": snapshot_id, "counts": counts, "skipped": skipped, "received_bytes": downloaded,
                         "uncompressed_bytes": expanded, "max_departure_seconds": max_seconds, "untimed_total": untimed,
                         "invalid_coordinate_total": invalid_coords, "resources": list(resources.values()),
@@ -394,6 +391,19 @@ class GtfsScheduleClient:
             raise GtfsScheduleError("Exact timepoint is missing arrival or departure time")
         return (get("trip_id"), get("stop_id"), int(sequence), departure, timepoint,
                 _enum(get("pickup_type", required=False), {"0", "1", "2", "3"}, "0"), arrival)
+
+    @staticmethod
+    def _finalize(conn):
+        max_seconds = conn.execute("SELECT MAX(departure_seconds) FROM gtfs_schedule_stop_times").fetchone()[0]
+        untimed = conn.execute("SELECT COUNT(*) FROM gtfs_schedule_stop_times WHERE departure_seconds IS NULL").fetchone()[0]
+        invalid_coords = conn.execute("SELECT COUNT(*) FROM gtfs_schedule_stops WHERE lat IS NULL OR lon IS NULL").fetchone()[0]
+        invalid_location_types = conn.execute("SELECT COUNT(*) FROM gtfs_schedule_stops WHERE source_location_type IS NOT NULL AND location_type IS NULL").fetchone()[0]
+        calendar_bounds = conn.execute("""SELECT MIN(first), MAX(last) FROM (
+            SELECT MIN(start_date) AS first, MAX(end_date) AS last FROM gtfs_schedule_calendar
+            UNION ALL SELECT MIN(date), MAX(date) FROM gtfs_schedule_calendar_dates WHERE exception_type=1
+        )""").fetchone()
+        conn.commit()
+        return max_seconds, untimed, invalid_coords, invalid_location_types, calendar_bounds
 
     @staticmethod
     def _validate_relations(conn):
