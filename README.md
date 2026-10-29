@@ -8,6 +8,7 @@
 - [Kurulum](#i̇stemci-kurulumları)
 - [Geliştirme](#geliştirme)
 - [Dağıtım](#dağıtım)
+- [Lisans](#lisans-ve-sorumluluk-reddi)
 
 ---
 
@@ -533,8 +534,8 @@ Public/legacy/optional tool'ların tamamı `title` ve salt okunur annotation ta�
 Registry yayını, Railway deploy ve Claude directory başvurusu ayrı adımlardır.
 [Güncel Registry kaydı](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.Batu1-1an%2Fistanbul-mcp&version=latest).
 
-[Sürüm geçmişi](CHANGELOG.md). Kod lisansı henüz seçilmedi; LICENSE dosyası
-eklenmedi. Şehir verilerinin lisansları ve kullanım koşulları kod lisansından ayrıdır.
+[Sürüm geçmişi](CHANGELOG.md). Kod ve veri lisansları için
+[Lisans ve Sorumluluk Reddi](#lisans-ve-sorumluluk-reddi) bölümüne bakın.
 
 Resmî yayıncı CLI'si kurulduktan sonra manifest kontrolü ve yayın:
 
@@ -776,3 +777,11 @@ Merge sonrası yerel testler ve `railway config plan --detailed-exit-code` başa
 ## Proje Planı
 
 Proje bağlamı, roadmap ve GSD faz çıktıları `.planning/` altında tutulur.
+
+## Lisans ve Sorumluluk Reddi
+
+Kod [MIT Lisansı](LICENSE) ile lisanslanmıştır. Bu lisans yalnızca kodu kapsar; veriler yayıncı kurumlara aittir. İBB Açık Veri Portalı verileri [İBB Açık Veri Lisansı](https://data.ibb.gov.tr/license) ile, diğer kaynaklar kendi kullanım koşullarıyla yayımlanır.
+
+Istanbul MCP resmî olmayan, bağımsız bir projedir; İBB, İSKİ, İETT, Metro İstanbul, Şehir Hatları veya TCDD ile bağlantılı değildir.
+
+Veriler gecikmeli, eksik veya hatalı olabilir. Nöbetçi eczane, su arızası ve ulaşım gibi kritik bilgileri resmî kaynaktan teyit edin. Acil durumlarda **112**'yi arayın.
