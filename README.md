@@ -1,68 +1,132 @@
 # Istanbul MCP
 
-## İçindekiler
-
-- [Başlangıç](#hızlı-başlangıç)
-- [Kullanım](#ne-yapabilir)
-- [MCP keşfi](#mcp-keşfi-ve-promptlar)
-- [Kurulum](#i̇stemci-kurulumları)
-- [Geliştirme](#geliştirme)
-- [Dağıtım](#dağıtım)
-- [Lisans](#lisans-ve-sorumluluk-reddi)
-
----
-
-Istanbul MCP, İstanbul'a dair açık verileri MCP destekleyen yapay zekâ araçları, geliştirici ortamları ve ajan tabanlı iş akışları için erişilebilir hale getiren uzak bir Model Context Protocol sunucusudur.
-
-Uzak endpoint:
+Istanbul MCP, İstanbul'a dair açık verileri Claude, ChatGPT, Codex, Cursor gibi MCP destekleyen yapay zekâ araçlarına bağlayan, salt okunur ve uzak bir Model Context Protocol sunucusudur.
 
 ```text
 https://istanbulmcp-production.up.railway.app/mcp/
 ```
 
+## İçindekiler
+
+- [Hızlı başlangıç](#hızlı-başlangıç)
+- [Ne yapabilir?](#ne-yapabilir)
+- [Örnek sorular](#örnek-sorular)
+- [MCP araçları](#mcp-araçları)
+- [İstemci kurulumları](#i̇stemci-kurulumları)
+- [Bilinen sınırlar](#bilinen-sınırlar)
+- [Geliştirme](#geliştirme)
+- [Lisans](#lisans-ve-sorumluluk-reddi)
+
 ## Neden Var?
 
-İstanbul'da otopark, ulaşım, trafik, su kesintisi, baraj doluluğu, kütüphane, WiFi, müze, mahalle profili ve açık veri gibi konularda çok sayıda kamusal veri var. Bu veriler portallarda ve farklı servislerde duruyor; ancak yapay zekâ destekli araçlar veya ajanlar içinden doğrudan kullanmak çoğu zaman pratik değil.
+İstanbul'da otopark, ulaşım, trafik, su kesintisi, baraj doluluğu, nöbetçi eczane, kütüphane ve mahalle profili gibi konularda çok sayıda kamusal veri var. Bu veriler farklı portallarda ve servislerde duruyor; yapay zekâ araçları veya ajanlar içinden doğrudan kullanmak çoğu zaman pratik değil.
 
-Istanbul MCP bu boşluğu kapatır. Codex, Claude, Cursor, OpenCode, Windsurf, Antigravity gibi araçlar veya MCP destekleyen farklı ajan sistemleri tek bir endpoint üzerinden İstanbul verisiyle çalışabilir.
-
-Kullanım alanı yalnızca sohbet arayüzleri değildir. Kod yazan bir ajan, araştırma yapan bir iş akışı, veri analizi çıkaran bir sistem veya kendi otomasyonunuz da aynı endpoint'i kullanabilir.
+Istanbul MCP bu boşluğu kapatır: MCP destekleyen her sohbet uygulaması, kod yazan ajan, araştırma iş akışı veya kendi otomasyonunuz tek bir endpoint üzerinden İstanbul verisiyle çalışabilir.
 
 ## Hızlı Başlangıç
 
-Kurulum anahtar gerektirmez: URL'i ekleyin, çalışır. İstemci başına burst
-sınırı uygulanır; isteğe bağlı anahtar/kota ve SQL kısıtları için
-[erişim rehberine](docs/api-access.md) bakın.
+Kurulum anahtar gerektirmez: endpoint'i istemcinize ekleyin, çalışır. İstemci başına hız sınırı uygulanır; isteğe bağlı anahtar ve kota için [erişim rehberine](docs/api-access.md) bakın.
 
-Codex CLI ile eklemek için:
-
-```bash
-codex mcp add istanbul --url https://istanbulmcp-production.up.railway.app/mcp/
-codex mcp list
-```
-
-Claude Code ile eklemek için:
-
-```bash
-claude mcp add --transport http istanbul https://istanbulmcp-production.up.railway.app/mcp/
-```
-
-Claude Desktop ve Claude.ai (Settings > Connectors > Add custom connector):
-
-```text
-URL: https://istanbulmcp-production.up.railway.app/mcp/
-```
-
-ChatGPT kullanıyorsanız **Plugins → Add custom MCP server** yolunu izleyin;
-plan koşulları ve adımlar [ChatGPT](#chatgpt) bölümündedir.
-
-Sonra yeni bir oturum açıp örnek bir soru sorun:
+1. Endpoint'i istemcinize ekleyin. İstemciye özel adımlar [İstemci Kurulumları](#i̇stemci-kurulumları) bölümündedir.
+2. Yeni bir oturum açıp sorun:
 
 ```text
 Taksim'e arabayla gideceğim. Yakındaki otoparkların boş yer sayısını, çalışma saatini ve haritadaki yerlerini gösterir misin?
 ```
 
-Genel MCP istemci yapılandırması:
+## Ne Yapabilir?
+
+**Ulaşım**
+
+- İETT hat bilgisi, yönlerine göre sıralı duraklar ve ana duraktan planlı kalkış saatleri.
+- Durak adıyla arama ve seçilen duraktan geçen hatların tarifeli kalkışları (İETT GTFS).
+- İETT, Metro İstanbul, Şehir Hatları ve Marmaray'ın güncel aksaklık ve duyuruları.
+- Metro İstanbul asansör, yürüyen merdiven ve diğer ekipmanların çalışma ve arıza durumu.
+- Yakındaki metro istasyonları ve toplu taşıma durakları; `Kadıköy Rıhtım`, `Taksim`, `Levent` gibi yerler için ulaşım özeti.
+- Şehir geneli trafik yoğunluğu indeksi.
+
+**Şehir hizmetleri**
+
+- Konuma veya ilçeye göre nöbetçi eczaneler: adres, telefon ve harita linki.
+- İSPARK otoparkları: kapasite, boş yer, açık/kapalı durumu ve çalışma saati.
+- İstanbulkart dolum merkezleri ve İBB sosyal tesisleri.
+- WiFi noktaları, kütüphaneler ve kültür merkezleri.
+- EV şarj istasyonları, taksi durakları ve ilçe ile güne göre haftalık semt pazarları.
+- Yakındaki hava kalitesi ölçümleri.
+
+**Su**
+
+- Aktif İSKİ su arızaları (ilçe, arıza numarası veya konuma göre) ve baraj doluluk oranları.
+
+**Mahalle ve açık veri**
+
+- Sosyal yardım, bina stoku ve deprem senaryosu verileriyle mahalle profili.
+- İBB Açık Veri kataloğunda veri seti arama, şema inceleme ve güvenli filtrelerle kayıt sorgulama.
+
+Koordinatı olan kayıtlarda harita linki (`maps_url`) döner. Yalnız adresi bilinen kayıtlarda adres araması linki (`maps_search_url`) verilir; bu kayıtlar kesin konum gibi sunulmaz.
+
+## Örnek Sorular
+
+```text
+Üsküdar'da şu an nöbetçi eczane var mı?
+Kadıköy'deki duraklardan bir sonraki planlı otobüs kalkışları ne zaman?
+500T hattı hangi duraklardan geçiyor? Durakları yönlerine göre sıralı göster.
+Bugün Marmaray'da veya metroda aksaklık var mı?
+Taksim metro istasyonunda arızalı asansör veya yürüyen merdiven var mı?
+Şişli civarında aktif su kesintisi veya İSKİ arızası var mı?
+Baraj doluluk oranları şu an nasıl? En dolu 5 barajı listele.
+Kadıköy'de yarın hangi pazar kuruluyor?
+Levent yakınındaki EV şarj istasyonlarını listele.
+Beşiktaş iskelesine en yakın İstanbulkart dolum noktası nerede?
+Kadıköy Caferağa mahalle profili nedir?
+İstanbul trafik yoğunluğu şu an hangi seviyede?
+İBB açık veri kataloğunda müzelerle ilgili hangi veri setleri var?
+```
+
+## Veri Kaynakları
+
+- İBB Açık Veri Portalı (`data.ibb.gov.tr`): katalog, İETT GTFS tarifesi, İstanbulkart, pazar, EV şarj, taksi durağı, kültür merkezi ve mahalle verileri
+- İBB şehir API'leri (`api.ibb.gov.tr`): İSPARK, trafik, hava kalitesi, Metro İstanbul ve İETT
+- İBB Şehir Haritası nöbetçi eczane listesi ve İBB Sosyal Tesisler kataloğu
+- Metro İstanbul arıza ve duyuru sayfaları
+- İSKİ arıza ve baraj kaynakları
+- Şehir Hatları ve TCDD Taşımacılık (Marmaray) resmî duyuruları
+- Wikidata yer referansları (CC0)
+
+Her sonuç standart bir yapıyla döner: `ok`, `summary`, `data`, `freshness`, `sources`, `limits`, `warnings` ve gerektiğinde `next_queries`. Sunucu salt okunurdur: rezervasyon yapmaz, kamu verisini değiştirmez, acil durum yönlendirmesi vermez ve kaynakta olmayan alanları üretmez.
+
+## MCP Araçları
+
+Production yüzeyi **18 salt okunur araçtır**: aşağıdaki 16 araç ve GTFS tarifesi açıkken eklenen 2 araç. Daha önce yayımlanmış araç adları listede görünmese de çağrılabilir kalır; eski → yeni karşılıklar için [geçiş tablosuna](docs/tool-migration.md) bakın.
+
+| Araç | İşlev |
+|---|---|
+| `istanbul_health` | Servis hazırlığı. |
+| `istanbul_search_datasets` | Konuya göre İBB katalog araması. |
+| `istanbul_get_dataset` | Veri seti metadata'sı ve kaynakları. |
+| `istanbul_get_resource_schema` | Resource kolonları. |
+| `istanbul_query_resource` | CKAN kayıtlarını güvenli filtre ve limitle getirir. |
+| `istanbul_datastore_query` | Operatörün izin verdiği resource'larda sınırlı SQL; izin listesi varsayılan boştur. [SQL rehberi](docs/datastore-sql.md) |
+| `istanbul_nearby` | Otopark, nöbetçi eczane, İstanbulkart, sosyal tesis, metro istasyonu, hava kalitesi, su arızası ve şehir katmanları için konum, ilçe veya harita alanı araması. |
+| `istanbul_market_schedule` | İlçe ve güne göre haftalık pazar takvimi; canlı açılış durumu değildir. |
+| `istanbul_traffic_status` | Şehir geneli trafik indeksi; yol bazlı değildir. |
+| `istanbul_water_status` | İSKİ arızaları (ilçe veya arıza numarası) ve baraj dolulukları. |
+| `istanbul_mobility_nearby` | Yer veya koordinat için ulaşım özeti; 39 ilçede ilçe geneli otopark listesi. |
+| `istanbul_city_services_nearby` | Nokta çevresinde WiFi; 39 ilçede kütüphane ve kültür merkezi adresleri. |
+| `istanbul_neighborhood_profile` | Sosyal yardım, bina stoku ve deprem **senaryosu**; anlık risk değildir. |
+| `istanbul_transit_line` | İETT hat bilgisi, durakları ve ana duraktan planlı kalkışlar; ETA değildir. |
+| `istanbul_transport_disruptions` | İETT, Metro İstanbul, Şehir Hatları ve Marmaray aksaklık ve duyuruları. |
+| `istanbul_metro_accessibility_status` | Metro ekipman toplamları ve arıza ayrıntıları; yolculuk erişilebilirliği garantisi değildir. |
+| `istanbul_next_departures` | Durak adı arama veya seçilen durağın planlı GTFS kalkışları; canlı ETA değildir. |
+| `istanbul_gtfs_snapshot_status` | Yerel tarife verisinin yaşı ve takvim geçerliliği. |
+
+Sunucu hem eski (`initialize`) hem yeni (`2026-07-28`, `server/discover`) MCP protokolüyle çalışır. Ayrıca üç bilgi kaynağı (`istanbul://coverage`, `istanbul://sources`, `istanbul://schema/catalog`) ve dört Türkçe prompt (`gunun_ozeti`, `mahalle_ozeti`, `veri_kesfi`, `yolculuk_plani`) sunar.
+
+Parametreler ve davranışlar: [araç referansı](docs/tool-reference.md) · Protokol, prompt ve output schema ayrıntıları: [MCP arayüzü](docs/mcp-interface.md) · Durak ve tarife: [GTFS durakları](docs/gtfs-stops.md), [GTFS planlı kalkışlar](docs/gtfs-schedule.md) · [Yer ve ilçe çözümleme](docs/place-resolution.md) · [Statik şehir katmanları](docs/city-static-layers.md) · [Yanıt sözleşmesi](docs/response-contract.md)
+
+## İstemci Kurulumları
+
+Endpoint'i sondaki `/mcp/` ile kullanın. Genel yapılandırma:
 
 ```json
 {
@@ -74,253 +138,7 @@ Genel MCP istemci yapılandırması:
 }
 ```
 
-Bazı istemciler `url` yerine `serverUrl`, `"type": "remote"` veya `"transport": "http"` ister. Endpoint'i sondaki `/mcp/` ile kullanın.
-
-## Ne Yapabilir?
-
-- İBB Açık Veri kataloğunda veri seti arayabilir.
-- Veri seti metadata bilgisi, resource listesi ve DataStore şeması döndürebilir.
-- Seçili CKAN DataStore resource'larını güvenli filtreler ve limitlerle sorgulayabilir.
-- İstanbul geneli trafik yoğunluğu indeksini döndürebilir.
-- Aktif İSKİ su arızalarını ilçe, arıza numarası veya koordinata yakınlıkla sorgulayabilir.
-- İSKİ baraj doluluk oranlarını ve baraj hacim bilgilerini listeleyebilir.
-- Yakındaki İSPARK otoparklarını kapasite, boş kapasite, açık/kapalı durumu, çalışma saati ve harita linkiyle listeleyebilir.
-- İlçe bazlı otopark sorularında sahte merkez mesafesi üretmeden ilçe kayıtlarını döndürebilir.
-- Yakındaki Metro İstanbul istasyonlarını, toplu taşıma duraklarını, WiFi noktalarını ve hava kalitesi istasyonlarını bulabilir.
-- `Kadıköy Rıhtım`, `Taksim`, `Levent` gibi bilinen yerler için mobilite özeti çıkarabilir.
-- İETT hat bilgisi ve hat duraklarını yönlerine göre sıralı döndürebilir.
-- Kütüphane kayıtlarında adres, telefon, çalışma saatleri ve harita arama linki verebilir.
-- Mahalle profillerini sosyal yardım, bina stoku ve deprem senaryosu açık verileriyle oluşturabilir.
-- Yakındaki EV şarj istasyonlarını, taksi duraklarını ve pazar yerlerini listeleyebilir.
-- İlçe ve güne göre haftalık pazar takvimini döndürebilir.
-
-Konum bilgisi olan kayıtlarda `maps_url` döner. Yalnızca adres bilgisi olan kayıtlarda `maps_search_url` ve `location_precision=address_search` kullanılabilir; bu kayıtlar kesin koordinat gibi sunulmaz.
-
-Nöbetçi eczane araçlarının yanıt talimatı, gösterilen her eczaneye tıklanabilir harita bağlantısı eklenmesini ister. Koordinat eksikse eczane adı ve adresiyle harita arama bağlantısı döner. İBB kaynak adı ve bağlantısı, kullanıcı özellikle kaynak istemedikçe son yanıtta gösterilmez; `sources` alanı teknik izlenebilirlik için korunur. Güncellik, sonuç sınırları ve telefonla teyit uyarıları yanıtta korunur. Son yanıtın biçimlendirilmesi MCP istemcisine bağlıdır.
-
-## Veri Seti Keşfi
-
-Veri seti araştırması projenin ana kullanım alanlarından biridir. Bir konu hakkında İBB Açık Veri kataloğunda hangi veri setleri var, formatları ne, DataStore üzerinden sorgulanabilir resource'ları var mı gibi sorular doğrudan sorulabilir.
-
-Örnek:
-
-```text
-İBB açık veri kataloğunda müzelerle ilgili hangi veri setleri var?
-```
-
-Örnek sonuçlar:
-
-- `Kültür ve Turizm Bakanlığına Bağlı Müze Ziyaretçi Sayısı`
-- `Müzelerimiz ve Ziyaretçi Sayıları`
-- `İBB Müzeleri Lokasyon Çalışma Gün ve Saatleri`
-
-Bu resource'lar ayrıca sorgulanabilir. Örneğin müze lokasyon resource'u müze adı, ilçe, adres, telefon, çalışma saatleri ve çalışma günleri gibi alanlar döndürür.
-
-## Örnek Sorular
-
-```text
-Taksim'e arabayla gideceğim. Yakındaki otoparkların boş yer sayısını, çalışma saatini ve haritadaki yerlerini gösterir misin?
-Levent yakınındaki metro istasyonları hangileri? Hat bilgisi ve harita linkleriyle listele.
-500T hattı hangi duraklardan geçiyor? Durakları yönlerine göre sıralı ve harita linkleriyle göster.
-İstanbul trafik yoğunluğu şu an hangi seviyede?
-Şişli civarında aktif su kesintisi veya İSKİ arızası var mı?
-10000511943 numaralı İSKİ arızasının detayını gösterir misin?
-Baraj doluluk oranları şu an nasıl? En dolu 5 barajı listele.
-İBB açık veri kataloğunda müzelerle ilgili hangi veri setleri var?
-Beşiktaş'ta hangi kütüphaneler var?
-Kadıköy Rıhtım çevresinde ulaşım seçenekleri neler?
-Kadıköy Caferağa mahalle profili nedir?
-Kadıköy'de yarın hangi pazar var?
-Levent yakınındaki EV şarj istasyonlarını listele.
-```
-
-## Örnek Çıktılar
-
-Taksim yakınındaki otopark sorusu; otopark adı, mesafe, kapasite, boş kapasite, çalışma saati, açık/kapalı durumu ve Google Maps linki döndürür.
-
-500T hat sorusu; hat adı, tarife, hat uzunluğu, tahmini yolculuk süresi ve iki yöndeki durakları sıra numarasıyla döndürür.
-
-Trafik sorusu; şehir geneli trafik indeksini, ölçüm zamanını ve bu kaynağın yol bazlı kaza/olay detayı sağlamadığını belirten sınır bilgisini döndürür.
-
-İSKİ arıza sorusu; aktif arızanın ilçe, mahalle, açıklama, başlangıç zamanı, tahmini bitiş zamanı, yaklaşık geometri merkezi ve Google Maps linkini döndürür. Railway ortamından İSKİ canlı harita kaynağına erişilemediğinde yapılandırılmış snapshot fallback kullanılır ve sonuç `freshness.status=stale` olarak işaretlenir.
-
-Baraj doluluk sorusu; baraj adı, doluluk oranı, mevcut su hacmi, kapasite ve maksimum su seviyesi alanlarını döndürür. Canlı kaynak erişilemezse resmi İSKİ API veya snapshot fallback devreye girer.
-
-## Veri Kaynakları
-
-Istanbul MCP şu kaynaklardan gelen verileri kullanır:
-
-- İBB Açık Veri Portalı (`data.ibb.gov.tr`)
-- İBB City APIs (`api.ibb.gov.tr`)
-- İSPARK otopark servisleri
-- Metro İstanbul istasyon verileri
-- İETT SOAP servisleri
-- İSKİ harita ve baraj kaynakları
-- İBB Şehir Haritası nöbetçi eczane servisi (`cbsproxy.ibb.gov.tr/?eczanews&ilceID=all`)
-- İBB Açık Veri Portalı İstanbulkart dolum merkezi DataStore kaynağı (yıllık konum verisi)
-- İBB WiFi, kütüphane, hava kalitesi ve mahalle profili kaynakları
-- İBB EV şarj istasyonları ve taksi durakları GeoJSON katmanları
-- İBB haftalık pazar yerleri ve kültür merkezleri açık veri snapshot'ları
-
-Tüm araç sonuçları standart bir cevap modeliyle döner: `summary`, `data`, `freshness`, `sources`, `limits`, `warnings` ve gerektiğinde `next_queries`.
-
-## MCP Araçları
-
-Varsayılan yüzey **16 salt okunur araçtır**. Daha önce yayımlanmış her araç adı
-listede görünmese de çağrılabilir kalır; `MCP_LEGACY_TOOLS_ENABLED=true` eski
-adları listede de yayımlar. Yetenekler kaldırılmadı,
-yakınlık/ilçe sorguları, su verileri ve İETT hat işlemleri birleştirildi.
-[Geçiş tablosu](docs/tool-migration.md) eski → yeni çağrıları gösterir.
-
-```text
-istanbul_health
-istanbul_search_datasets
-istanbul_get_dataset
-istanbul_get_resource_schema
-istanbul_query_resource
-istanbul_datastore_query
-istanbul_nearby
-istanbul_traffic_status
-istanbul_water_status
-istanbul_mobility_nearby
-istanbul_city_services_nearby
-istanbul_neighborhood_profile
-istanbul_transit_line
-istanbul_transport_disruptions
-istanbul_metro_accessibility_status
-istanbul_market_schedule
-```
-
-| Araç | İşlev ve örnek |
-|---|---|
-| `istanbul_health` | Servis ve SQLite hazırlığı. |
-| `istanbul_search_datasets` | Konuya göre İBB katalog araması. |
-| `istanbul_get_dataset` | Veri seti metadata ve kaynakları. |
-| `istanbul_get_resource_schema` | Resource kolonları. |
-| `istanbul_query_resource` | CKAN kayıtlarını güvenli filtre ve limitle getirir. |
-| `istanbul_datastore_query` | İzin verilen resource'un tam ve sınırlı kopyası üzerinde SELECT/GROUP BY. [SQL rehberi](docs/datastore-sql.md). |
-| `istanbul_nearby` | `kind=parking,pharmacy,istanbulkart,social_facility,metro_station,air_quality,water_fault,city_feature`. `city_feature` türleri: `parking, metro_station, air_quality_station, public_transport_stop, wifi, ev_charging, taxi_stand, market`. Koordinatla yakınlık; parking/pharmacy için ilçe; city_feature için bbox. |
-| `istanbul_market_schedule` | Haftalık pazar takvimi; `district`, `day` (Türkçe/İngilizce gün, bugün/yarın veya ISO tarih) ve `limit`. Statik haftalık tarife; canlı açılış durumu değildir. |
-| `istanbul_traffic_status` | Şehir geneli trafik indeksi; yol bazlı değildir. |
-| `istanbul_water_status` | `kind=faults`: ilçe veya arıza numarası; `kind=dams`: baraj dolulukları. |
-| `istanbul_mobility_nearby` | Yer/koordinat için ulaşım özeti; 39 ilçede mesafesiz otopark listesi. |
-| `istanbul_city_services_nearby` | Nokta çevresinde WiFi; 39 ilçede kütüphane ve kültür merkezi adresleri. |
-| `istanbul_neighborhood_profile` | Sosyal yardım, bina stoku, deprem **senaryosu**; anlık risk değildir. |
-| `istanbul_transit_line` | `action=info,stops,departures`; planlı kalkışlar ana durak içindir, ETA değildir. |
-| `istanbul_transport_disruptions` | Desteklenen işletmelerin güncel durumları ve resmî duyuruları. |
-| `istanbul_metro_accessibility_status` | Ekipman toplamları ve arıza ayrıntıları; yolculuk erişilebilirliği garantisi değildir. |
-
-`istanbul_ferry_schedules` varsayılan kapalıdır (`FERRY_SCHEDULES_ENABLED=false`).
-Kontrol edilen çıkıştan Şehir Hatları tarife kaynağı HTTP 403 challenge döndürdü.
-Deploy ortamından erişim doğrulanmadan açmayın; mevcut iptal-duyurusu relay'i
-tarifeyi taşımaz. İptal duyuruları aksaklık aracında kalır; kaynak hatası
-`unavailable` olarak raporlanır.
-
-`istanbul_transport_disruptions` yalnızca dört doğrulanmış resmî aksaklık kapsamını kontrol eder: İETT ve Metro İstanbul canlı durumları ile Metro resmî planlı duyuruları; Şehir Hatları iptal/sefer düzenlemesi duyuruları; Marmaray resmî son dakika duyuruları. Metro canlı durum ve planlı duyurular ayrı `sources[]` coverage kayıtlarıdır; biri okunamazsa genel “aksaklık yok” özeti verilmez. `istanbul_ferry_schedules` normal tarife için ayrı çalışır: önce resmî tarife indeksinden tam rota eşleşmesi yapar, sonra canonical rota HTML tablosunu parse eder. Bu sonuç `coverage_kind=published_timetable` ve statik tarife uyarısı taşır; canlı kalkış, gecikme veya ETA değildir. `mode`, `operator`, `line` ve `limit` isteğe bağlıdır. `line`, `line_code` veya `route_label` üzerinde büyük/küçük harften bağımsız tam eşleşir. Kaynaklar 120 saniye önbelleklenir; kısmi kaynak hataları `sources[].coverage_status=unavailable`, `freshness=unknown` ve `warnings` ile görünür. Şehir Hatları sayfası genel ve tarihli bir duyuru verirse sistem hat kodu uydurmaz; relay veya doğrudan resmi sayfa erişimi `403` ile engellenirse bunu açıkça `unavailable` bildirir. Marmaray Angular kabuğu döndürdüğünde, yapılandırılmış `MARMARAY_API_BASIC_TOKEN` ile resmi frontend API’si kullanılır; API boş liste döndürürse bu checked empty sonucudur. İDO, Turyol, Dentur, minibüs ve taksi-dolmuş canlı kapsama dahil değildir ve cevap `limits[]` içinde belirtilir. Metro ekipman arızası, rota motoru, ETA ve GTFS `stop_times` arşivi bu araçların kapsamı değildir.
-
-`istanbul_metro_accessibility_status` resmî Metro İstanbul ekipman/tesis toplamlarını ve güncel ekipman arıza ayrıntılarını iki bağımsız resmî kaynaktan okur: (1) `GetFaultyEquipments` JSON servisinden kategori bazlı çalışan/arızalı toplamlar ve (2) resmî Metro İstanbul arıza sayfasından hat/istasyon/ekipman konumu, neden ve planlanan dönüş metni. Her kaynak ayrı önbelleklenir: 120 saniye güncel, ilk başarılı gözlemden itibaren toplam en fazla 15 dakika eski-veri. İsteğe bağlı `line` (tam hat kodu veya resmî hat etiketi), `station` ve `equipment_type` (canonical anahtar veya kaynak etiketi) filtreleri yalnız ayrıntı listesine uygulanır; `limit` (varsayılan 50, en fazla 100) yalnız filtrelenmiş ayrıntı listesini kırpar. Özet toplamları `limit`'ten etkilenmez. Bir kaynak başarısız olursa diğerinin doğrulanmış verisi `partial_source` uyarısıyla korunur; ikisi birden başarısız olursa `ok=false`/`broken` zarf döner. `İnceleniyor` gibi açık-uçlu dönüş metinleri olduğu gibi korunur; kesin dönüş tarihi üretilmez. Cevaplar `source`, `observed_at`, `fresh/stale/partial/broken` durumu ve şu açık sınırları taşır: tekil ekipman kaydı kesin istasyon/yolculuk erişilebilirliği, alternatif rota veya çalışan yedek ekipman sonucu üretmez.
-
-Parametreler, davranışlar ve sınırlar için [docs/tool-reference.md](docs/tool-reference.md) dosyasına bakın.
-
-### GTFS durak konumları
-
-`istanbul_nearby(lat=...,lon=...,types=["public_transport_stop"])` ve
-`istanbul_mobility_nearby`, resmî İBB `stops.csv` dosyasını kullanır;
-`stop_times` durak konumu olarak taranmaz ve DataStore aktivasyonu gerekmez.
-BOM/`;` ve bilinen nokta-gruplamalı koordinat biçimi kaynak-özel olarak işlenir.
-Varsayılan bütçe **5 MiB / 50.000 satır / 20 saniye**; başarısız veya eksik
-yükleme mevcut indeksi değiştirmez. Eski veri yalnız sınırlı stale penceresinde
-uyarıyla sunulur; kaynağa erişilememesi “yakında durak yok” anlamına gelmez.
-
-Bunlar **statik durak konumlarıdır**; canlı varış, işletilme durumu veya yeni bir
-`next_departures` özelliği değildir. EV şarj, taksi durağı, haftalık pazar ve
-kültür merkezi katmanları için [statik şehir katmanları](docs/city-static-layers.md). Kaynak zamanı, alınan/kabul edilen/atlanan
-sayıları cevapta korunur. Ayrıntılar ve canlı kabul komutu:
-[GTFS durak katmanı](docs/gtfs-stops.md).
-
-### Yer ve ilçe çözümleme
-
-İki özet aracı da `district="Pendik"` gibi **39 ilçe** adını kabul eder.
-`district`, `place` ve koordinatlarla birlikte kullanılamaz. Yalnız ilçe adı
-verilen `place="Pendik"` sorgusu da ilçe moduna girer:
-
-- Mobilite: yalnız ilçe geneli otopark; mesafe veya diğer ulaşım bileşenleri yok.
-- Şehir hizmetleri: kütüphane ve kültür merkezi adresleri; WiFi sorgulanmaz.
-- İlçe modunda `radius_m` uygulanmaz; sonuç limiti uygulanır.
-
-`Bostancı`, `Karaköy`, `Nişantaşı`, `Acıbadem, Kadıköy` ve `Acıbadem, Üsküdar`
-artık kaynak sürümü belirtilen statik referans noktalarıyla çözülür. Tek başına
-`Acıbadem`, `error_code=ambiguous_place` döndürür; araç ilçe seçmez.
-Mesafeler verilen adresin değil, referans noktasının çevresindedir. Tam sokak/bina
-adresi çözümleme ve tüm mahalleleri kapsama henüz yoktur.
-[Kaynak, lisans ve kapsam](docs/place-resolution.md).
-
-### GTFS planlı durak kalkışları
-
-`istanbul_next_departures(stop_query? | stop_id? | lat/lon?, line?, at?, radius_m?, limit?)`
-uygulandı ve 2026-10-25 canlı kabulünden sonra production'da açıldı. Kaynak
-varsayılanı `GTFS_SCHEDULE_ENABLED=false`; canlı deployment `true` kullanır.
-Tam `stop_times.zip`, servis takvimi ve tarife dosyalarını kullanır;
-`stop_times.csv` yalnız önizleme olduğu için kabul edilmez. Servis günü, takvim
-istisnaları ve `25:xx` saatleri işlenir; canlı ETA veya rota planlayıcı değildir.
-Açılışta arka plan ön ısıtma çalışır. Isınma sırasında araç `warming_up`
-döndürür; ilk yükleme yaklaşık iki dakika sürer. GTFS açıkken yüzey 18 araçtır;
-[kapsam, ayarlar ve kabul adımları](docs/gtfs-schedule.md).
-
-Durak kimliğini bilmiyorsanız `{"stop_query":"kadikoy","limit":10}` ile
-isimden arayın. Türkçe/ASCII ve kısmi ad desteklenir. Bu mod **kalkış değil,
-durak adayları** döndürür. Aynı adlı duraklar kimlik ve konumlarıyla ayrı kalır;
-isim/haritaya göre durak seçildikten sonra `stop_id` ile kalkış sorgulanır.
-Yazım önerileri `match_kind=suggestion` taşır; doğrulanmış eşleşme değildir.
-`stop_query` yalnız `limit` ile kullanılır. İlçe/yön bilgisi türetilmez.
-Kaynakta varsa durak tabela kodu (`stop_code`), açıklaması (`stop_desc` /
-`platform_direction_text`) ve `location_type` korunur; eksikler `null` kalır.
-Her kalkış `realtime:false`, `schedule_relationship:STATIC` ve `data_source` taşır.
-
-`istanbul_gtfs_snapshot_status()` mevcut yerel tarifenin yaşını, takvim aralığını,
-kayıt ve atlanan satır sayılarını gösterir. İndirme veya canlı kaynak kontrolü yapmaz.
-Hata ve sonuç kesilmesi için ortak [yanıt sözleşmesi](docs/response-contract.md) kullanılır.
-
-## MCP Keşfi ve Promptlar
-
-Python MCP SDK **2.3+** ile aynı `/mcp/` endpoint'i hem eski `initialize`
-istemiyle hem `2026-07-28` sürümündeki `server/discover` akışıyla çalışır.
-Yüzey GTFS açıkken **18**, kapalıyken **16** araçtır. Sunucu talimatlarına ek olarak:
-
-| Resource URI | İçerik |
-|---|---|
-| `istanbul://coverage` | Desteklenen yetenekler, yapılandırma kapıları ve kapsam sınırları |
-| `istanbul://sources` | Canonical veri kaynakları, yayıncılar, lisans/güncellik açıklamaları |
-| `istanbul://schema/catalog` | Katalog keşif akışı, araç input şemaları ve sorgu sınırları |
-
-Bunlar yerel metadata'dır; okunmaları dış API çağırmaz ve **canlı kaynak sağlığını
-kanıtlamaz**. Asıl güncellik ve kaynak hataları tool sonuçlarından okunmalıdır.
-
-İstemci destekliyorsa `prompts/list` / `prompts/get` ile dört Türkçe iş akışı seçilebilir:
-
-- `gunun_ozeti(district?)` — trafik, su ve ulaşım uyarıları.
-- `mahalle_ozeti(district, neighborhood?)` — tarihsel mahalle profili ve sınırları.
-- `veri_kesfi(query)` — veri seti → şema → sınırlı kayıt sorgusu.
-- `yolculuk_plani(origin, destination, line_code?)` — ulaşım bilgisi; rota motoru veya canlı ETA değildir.
-
-Prompt seçmek tool çalıştırmaz; yalnız iş akışı mesajını üretir.
-Varsayılan altı araç `outputSchema` ve `structuredContent` sunar: `istanbul_nearby`
-(eczane dahil), `istanbul_traffic_status`, `istanbul_water_status`,
-`istanbul_transit_line`, `istanbul_transport_disruptions` ve `istanbul_market_schedule`.
-GTFS açıkken `istanbul_next_departures` ve `istanbul_gtfs_snapshot_status` da aynı
-şemayı yayımlar. Geriye uyumlu JSON metni ve Python dict dönüşleri korunur.
-
-Protokol ayrıntıları, şema maliyeti ve doğrulama için [MCP arayüzü](docs/mcp-interface.md).
-
-## İstemci Kurulumları
-
-Istanbul MCP uzak bir Streamable HTTP MCP endpoint'i sunar:
-
-```text
-https://istanbulmcp-production.up.railway.app/mcp/
-```
-
-Aşağıdaki örnekler resmi istemci dokümanlarıyla kontrol edilmiştir. İstemci farklı bir alan adı istiyorsa aynı endpoint'i kullanın; örneğin bazıları `url`, bazıları `serverUrl`, bazıları da CLI üzerinde `--transport http` ister.
+Bazı istemciler `url` yerine `serverUrl` ya da ek olarak `"type": "http"`, `"type": "remote"` veya `"transport": "http"` ister. Kendi istemcinizin MCP ekranını esas alın.
 
 ### Codex CLI
 
@@ -329,12 +147,7 @@ codex mcp add istanbul --url https://istanbulmcp-production.up.railway.app/mcp/
 codex mcp list
 ```
 
-Manuel `~/.codex/config.toml` örneği:
-
-```toml
-[mcp_servers.istanbul]
-url = "https://istanbulmcp-production.up.railway.app/mcp/"
-```
+Manuel yapılandırma için `~/.codex/config.toml` dosyasına `[mcp_servers.istanbul]` başlığı altında `url = "https://istanbulmcp-production.up.railway.app/mcp/"` ekleyin.
 
 ### Claude Code
 
@@ -343,30 +156,13 @@ claude mcp add --transport http istanbul https://istanbulmcp-production.up.railw
 claude mcp list
 ```
 
-JSON yapılandırma örneği:
-
-```json
-{
-  "mcpServers": {
-    "istanbul": {
-      "type": "http",
-      "url": "https://istanbulmcp-production.up.railway.app/mcp/"
-    }
-  }
-}
-```
-
-### Claude Desktop
+### Claude Desktop ve Claude.ai
 
 Claude Desktop ile kullanım için ücretli abonelik gerekir.
 
-1. Claude Desktop'ı açın.
-2. **Settings → Connectors → Add Custom Connector** yolunu izleyin.
-3. Bilgileri girin:
-   - **Name:** `İstanbul MCP`
-   - **URL:** `https://istanbulmcp-production.up.railway.app/mcp/`
-4. **Add** butonuna tıklayın.
-5. İstanbul MCP araçlarını kullanmaya başlayın.
+1. **Settings → Connectors → Add custom connector** yolunu izleyin.
+2. **Name:** `İstanbul MCP`, **URL:** `https://istanbulmcp-production.up.railway.app/mcp/`
+3. **Add** butonuna tıklayın.
 
 ### ChatGPT
 
@@ -403,24 +199,9 @@ ChatGPT desktop uygulaması ayrı bir MCP yolu sunar:
 2. **Streamable HTTP** seçin ve URL olarak aynı endpoint'i girin.
 3. Kaydedin ve **Restart** seçin. İstem kutusunda `/mcp` ile bağlantıyı kontrol edin.
 
-Resmî kaynaklar:
-[ChatGPT'ye custom MCP sunucusu ekleme](https://developers.openai.com/api/docs/guides/custom-mcp-server) ·
-[ChatGPT MCP belgesi](https://learn.chatgpt.com/docs/extend/mcp) ·
-[Custom MCP bağlantıları](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt)
-
 ### Cursor
 
-Global kurulum için `~/.cursor/mcp.json`, proje bazlı kurulum için repo içinde `.cursor/mcp.json` kullanın. Cursor remote MCP sunucuları için `url` alanını destekler:
-
-```json
-{
-  "mcpServers": {
-    "istanbul": {
-      "url": "https://istanbulmcp-production.up.railway.app/mcp/"
-    }
-  }
-}
-```
+Global kurulum için `~/.cursor/mcp.json`, proje bazlı kurulum için `.cursor/mcp.json` dosyasına genel yapılandırmayı ekleyin.
 
 ### OpenCode
 
@@ -438,197 +219,44 @@ Global kurulum için `~/.cursor/mcp.json`, proje bazlı kurulum için repo için
 }
 ```
 
-Kontrol:
-
-```bash
-opencode mcp list
-```
-
 ### Windsurf
 
-Windsurf/Cascade yapılandırması `~/.codeium/windsurf/mcp_config.json` dosyasındadır. HTTP MCP için `serverUrl` veya `url` alanı kullanılabilir:
+`~/.codeium/windsurf/mcp_config.json` dosyasında genel yapılandırmayı kullanın; Windsurf `url` yanında `serverUrl` alanını da kabul eder.
 
-```json
-{
-  "mcpServers": {
-    "istanbul": {
-      "serverUrl": "https://istanbulmcp-production.up.railway.app/mcp/"
-    }
-  }
-}
-```
-
-### Devin / Devin CLI
-
-Devin CLI, remote HTTP MCP sunucularını `devin mcp` komutlarıyla veya JSON config dosyalarıyla ekleyebilir. Istanbul MCP herkese açık olduğu için API key veya özel header gerekmez:
+### Devin CLI
 
 ```bash
 devin mcp add istanbul --transport http --url https://istanbulmcp-production.up.railway.app/mcp/
 devin mcp list
-devin mcp get istanbul
 ```
 
-Devin CLI config dosyasında (`.devin/config.json`, `.devin/config.local.json` veya `~/.config/devin/config.json`) remote HTTP yapılandırması:
+Config dosyası kullanıyorsanız (`.devin/config.json`, `.devin/config.local.json` veya `~/.config/devin/config.json`) genel yapılandırmaya `"transport": "http"` ekleyin.
 
-```json
-{
-  "mcpServers": {
-    "istanbul": {
-      "url": "https://istanbulmcp-production.up.railway.app/mcp/",
-      "transport": "http"
-    }
-  }
-}
-```
-
-Devin uygulamasında veya `serverUrl` isteyen MCP ekranlarında aynı endpoint şu şekilde verilebilir:
-
-```json
-{
-  "mcpServers": {
-    "istanbul": {
-      "serverUrl": "https://istanbulmcp-production.up.railway.app/mcp/"
-    }
-  }
-}
-```
-
-Kurumsal Devin çalışma alanlarında MCP sunucuları veya tool kullanımı yönetici politikalarıyla sınırlandırılmış olabilir. Devin tool izni isterse Istanbul MCP araçlarını onaylayın.
-
-### Google Antigravity
-
-Google Antigravity'nin herkese açık resmi sitesinde bu kontrolde MCP için stabil bir JSON şeması veya dosya yolu doğrulanamadı. Antigravity kullanıyorsanız uygulamanın kendi **MCP / raw config** ekranını esas alın.
-
-Uygulamadaki raw config `mcpServers` ve `serverUrl` biçimini istiyorsa şu yapılandırmayı kullanın; ekran farklı alan adı gösteriyorsa Antigravity'nin kendi şemasını takip edin:
-
-```json
-{
-  "mcpServers": {
-    "istanbul": {
-      "serverUrl": "https://istanbulmcp-production.up.railway.app/mcp/"
-    }
-  }
-}
-```
-
-Kontrol edilen resmi kaynaklar:
-
-- [Codex MCP dokümanı](https://developers.openai.com/codex/mcp)
-- [ChatGPT custom MCP server dokümanı](https://developers.openai.com/api/docs/guides/custom-mcp-server)
-- [ChatGPT MCP dokümanı](https://learn.chatgpt.com/docs/extend/mcp)
-- [ChatGPT custom MCP bağlantıları](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt)
-- [Claude Code MCP dokümanı](https://code.claude.com/docs/en/mcp)
-- [Cursor MCP dokümanı](https://cursor.com/docs/mcp)
-- [OpenCode MCP servers dokümanı](https://opencode.ai/docs/mcp-servers/)
-- [Windsurf/Cascade MCP dokümanı](https://docs.windsurf.com/windsurf/cascade/mcp.md)
-- [Devin CLI MCP dokümanı](https://cli.devin.ai/docs/extensibility/mcp/configuration)
-- [Devin MCP dokümanı](https://docs.devin.ai/work-with-devin/devin-mcp)
-
-## Registry ve veri işleme
-
-[`server.json`](server.json) remote-only MCP Registry manifestidir ve **0.2.6**
-sürümünü taşır. İlk kayıt 2026-10-25'te 0.2.4 ile yapıldı; şu anda
-[0.2.6 kaydı](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.Batu1-1an%2Fistanbul-mcp/versions/0.2.6)
-`active` ve `latest` durumdadır (2026-10-25T18:43Z; 0.2.4 ve 0.2.5 de active).
-Public/legacy/optional tool'ların tamamı `title` ve salt okunur annotation taşır. [Yayın öncesi kontrol ve komutlar](docs/registry.md).
-Registry yayını, Railway deploy ve Claude directory başvurusu ayrı adımlardır.
-[Güncel Registry kaydı](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.Batu1-1an%2Fistanbul-mcp&version=latest).
-
-[Sürüm geçmişi](CHANGELOG.md). Kod ve veri lisansları için
-[Lisans ve Sorumluluk Reddi](#lisans-ve-sorumluluk-reddi) bölümüne bakın.
-
-Resmî yayıncı CLI'si kurulduktan sonra manifest kontrolü ve yayın:
-
-```bash
-mcp-publisher validate server.json
-mcp-publisher login github
-mcp-publisher publish server.json
-# Yayımlanmış sürümü Registry'den ayrıca doğrulayın
-curl -fsS 'https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.Batu1-1an%2Fistanbul-mcp&version=latest'
-```
-
-Yayın için GitHub namespace sahipliğinin doğrulanması gerekir. Kurulum,
-kimlik bilgisi güvenliği ve Registry'den sonuç kontrolü [yayın rehberindedir](docs/registry.md).
-
-[Veri işleme/gizlilik notu](docs/privacy.md) ·
-[Destek / sorun bildirimi](https://github.com/Batu1-1an/istanbulmcp/issues)
-
-## HTTP Sağlık Kontrolleri
-
-### Araç izleme ve protokol kontrolü
-
-0.2.6 ile `/status` içindeki `tool_metrics`, araç başına süre, hata türü ve ortak
-önbellek olaylarını gösterir. Argüman/konum/anahtar yazılmaz; sayaçlar restart ile
-sıfırlanır. [Alanlar ve sınırlar](docs/monitoring.md).
-
-CI ayrıca sabitlenmiş resmî MCP paketinden beş uygulanabilir senaryoyu gerçek
-yerel sunucuda çalıştırır. Bu seçilmiş 2025 dönemi profilidir; tam sertifika veya
-2026 protokol testi değildir. [Kapsam ve raporlar](tests/conformance/README.md).
-
-```bash
-pytest tests/test_tool_telemetry.py tests/test_conformance_runner.py
-npm ci --prefix tests/conformance --ignore-scripts --no-audit --no-fund
-python -m scripts.check_mcp_conformance
-```
-
-### Tarayıcıdan doğrudan MCP bağlantısı
-
-0.2.5'te `MCP_CORS_ALLOWED_ORIGINS` ile yalnız seçilen sitelere izin verilebilir.
-Örnek: `https://uygulamaniz.example,http://localhost:5173`. Varsayılan liste boştur;
-site adresi eklenmeden tarayıcı origin'ine izin verilmez. Origin göndermeyen
-ChatGPT/sunucu istemcileri değişmez. API anahtarı, kota ve hız sınırları korunur;
-uzun ömürlü anahtarı web sayfasına gömmeyin. [Ayarlar ve sınırlar](docs/browser-cors.md).
-
-```bash
-pytest tests/test_cors.py tests/test_api_auth.py tests/test_abuse_guard.py
-```
-
-### Liveness / readiness
-
-```bash
-curl -fsS https://istanbulmcp-production.up.railway.app/healthz
-curl -fsS https://istanbulmcp-production.up.railway.app/readyz
-curl -fsS https://istanbulmcp-production.up.railway.app/status
-```
-
-`/mcp` path'i `/mcp/` adresine yönlenir. MCP istemci yapılandırmalarında doğrudan `/mcp/` kullanın. MCP işlemleri JSON-RPC POST çağrılarıdır; düz GET isteği genel bir sağlık testi değildir. Liveness/readiness için yukarıdaki HTTP sağlık uçlarını kullanın.
-
-### Otomatik uptime izleme
-
-[`.github/workflows/uptime.yml`](.github/workflows/uptime.yml) canlı endpoint'i 10 dakikada bir `/healthz` ve gerçek bir MCP `initialize` + `tools/list` çağrısıyla kontrol eder; tek ağ aksaklığında alarm vermemek için 3 kez dener. Endpoint ulaşılamazsa repo sahibini etiketleyen tek bir `uptime-incident` issue'su açılır; servis düzelince issue'ya süre yazılıp kapatılır. GitHub zamanlanmış çalışmaları birkaç dakika geciktirebilir.
-
-```bash
-python -m scripts.uptime_check                     # production
-python -m scripts.uptime_check --url http://127.0.0.1:8000
-gh workflow run uptime.yml                          # elle tetikleme
-```
-
-## Cevap Modeli
-
-Araçlar standart envelope döndürür:
-
-- `ok`
-- `summary`
-- `data`
-- `freshness`
-- `sources`
-- `limits`
-- `warnings`
-- `next_queries`
-
-Sunucu salt okunur çalışır. Otopark rezervasyonu yapmaz, kamu verisini değiştirmez, acil durum yönlendirmesi vermez ve kaynakta olmayan alanları üretmez.
+Kontrol edilen resmî kaynaklar:
+[Codex](https://developers.openai.com/codex/mcp) ·
+[ChatGPT custom MCP](https://developers.openai.com/api/docs/guides/custom-mcp-server) ·
+[ChatGPT MCP](https://learn.chatgpt.com/docs/extend/mcp) ·
+[ChatGPT bağlantıları](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt) ·
+[Claude Code](https://code.claude.com/docs/en/mcp) ·
+[Cursor](https://cursor.com/docs/mcp) ·
+[OpenCode](https://opencode.ai/docs/mcp-servers/) ·
+[Windsurf](https://docs.windsurf.com/windsurf/cascade/mcp.md) ·
+[Devin CLI](https://cli.devin.ai/docs/extensibility/mcp/configuration) ·
+[Devin](https://docs.devin.ai/work-with-devin/devin-mcp)
 
 ## Bilinen Sınırlar
 
 - Trafik aracı şehir geneli indeks döndürür; yol bazlı yoğunluk, kaza veya olay detayı sağlamaz.
-- Hava kalitesi kaynağı bazı istasyonlarda son okuma zamanı verdiği halde AQI veya concentration değerini boş döndürebilir.
-- İETT SOAP servisleri bakım saatlerinde veya kaynak kesintilerinde geçici olarak yanıt vermeyebilir.
-- İSKİ canlı kaynakları bazı Railway çıkışlarından zaman aşımına düşebilir. Üretim kurulumu bu trafiği sabit hedefli ve kimlik doğrulamalı Cloudflare Worker relay üzerinden geçirir. Relay, resmi e-Devlet tablolarını ve İSKİ JSON kaynaklarını kullanır; başarılı yanıtları Workers KV'de global olarak paylaşır ve stale-while-revalidate ile yeniler. Relay ve doğrudan kaynaklar kullanılamazsa yalnızca capture zamanı bulunan ve azami yaş sınırını aşmamış snapshot döndürülebilir.
-- 2026-10-23 itibarıyla `api.ibb.gov.tr`, `data.ibb.gov.tr`, `cbsproxy.ibb.gov.tr`, `tesislerimiz.ibb.istanbul`, `www.metro.istanbul` ve İSKİ host'ları Türkiye dışındaki çıkışlardan (Railway EU, Cloudflare, Avrupa/ABD ev internetleri) TCP bağlantısını kabul etmiyor; Türkiye'deki ölçüm noktalarından erişilebiliyor. Üretimde bu trafik `IBB_RELAY_*` ile İstanbul'daki relay'den çıkar. Kaynak bağlantıları en fazla 5 saniye bekler, bağlantı zaman aşımında yeniden denenmez ve aynı host 60 saniye boyunca hızlıca `unavailable` döner.
-- İSKİ arıza mesafeleri adres noktası değil, kaynak geometrinin yaklaşık merkezi üzerinden hesaplanır.
-- Tam rota planlama, gerçek zamanlı varış tahmini ve harita UI bu sürümün kapsamı dışındadır.
-- Kütüphane gibi bazı kayıtlar koordinat değil adres içerir; bu durumda kesin koordinat yerine harita arama linki döner.
-- Tüm İBB veri setleri normalize edilmez; katalog araması geniş, özel araçlar ise MVP kapsamındaki alanlara odaklıdır.
+- Kalkış saatleri yayımlanmış tarifelerdir; canlı varış tahmini (ETA), gecikme bilgisi veya rota planlama yoktur.
+- İstanbulkart, sosyal tesis, EV şarj, taksi durağı ve pazar verileri yayımlanmış konumlardır; canlı açık/kapalı durumu değildir.
+- Yer çözümleme 39 ilçe ve seçili statik referans noktalarıyla çalışır; tam sokak/bina adresi çözümlenmez.
+- Hava kalitesi kaynağı bazı istasyonlarda son okuma zamanı verdiği halde değeri boş döndürebilir.
+- İETT servisleri bakım saatlerinde geçici olarak yanıt vermeyebilir.
+- İSKİ arıza mesafeleri adres noktasına değil, arıza alanının yaklaşık merkezine göre hesaplanır.
+- Kütüphane gibi bazı kayıtlar yalnız adres içerir; bu durumda harita arama linki döner.
+- İBB, Metro İstanbul, İSKİ, Şehir Hatları ve Marmaray kaynakları Türkiye dışından gelen bağlantıları kabul etmediği için üretimde İstanbul'daki bir relay kullanılır. Bir kaynağa erişilemezse sonuç `unavailable` veya `stale` olarak işaretlenir; bu "veri yok" anlamına gelmez. [Ayrıntılar](docs/deploy-railway.md)
+- Vapur tarifesi aracı varsayılan olarak kapalıdır. İDO, Turyol, Dentur, minibüs ve taksi-dolmuş kapsam dışıdır.
+- Tüm İBB veri setleri normalize edilmez; özel araçlar seçili alanlara odaklanır.
 
 ## Geliştirme
 
@@ -636,147 +264,29 @@ Sunucu salt okunur çalışır. Otopark rezervasyonu yapmaz, kamu verisini deği
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-python -m pip check
 pytest
-# SDK/protokol, yerel discovery ve output schema sözleşmeleri
-pytest tests/test_mcp_protocol.py tests/test_mcp_discovery.py tests/test_mcp_structured.py
-# İsteğe bağlı anahtarlı mod; değeri terminale yazdırmadan üretin:
-export MCP_API_KEYS="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
-# 20 soru × fresh/stale/broken × compact/legacy dispatch ve envelope sözleşmesi
-pytest tests/test_tool_evals.py
-# Tool tanımları, output schema ek maliyeti ve resource/prompt sayıları (byte, token değil)
-python -m scripts.eval_tools
-# GTFS kaynak/CSV/byte-row-timeout/stale ve gerçek registry regresyonları (offline)
-pytest tests/test_gtfs.py tests/test_gtfs_regression.py tests/test_city_service.py tests/test_ckan_bounded.py
-# Tam GTFS tarife ZIP, takvim/geceyarısı, bütçe/rollback ve opt-in MCP testleri
-pytest tests/test_gtfs_schedule.py
-# Ortak hata/kesilme sözleşmesi, durak metadata'sı ve yerel tarife sağlığı
-pytest tests/test_response_contract.py tests/test_gtfs_snapshot_status.py
-# EV/taksi/pazar/kültür statik katmanları ve pazar takvimi
-pytest tests/test_city_open_data.py tests/test_city_service.py
-# Yalnız erişebilen ortamda, tam GTFS ZIP indirir (opt-in; geçici DB kullanır)
-RUN_LIVE_GTFS_SCHEDULE_TESTS=1 pytest -s tests/live/test_gtfs_schedule_source_live.py
-# Resmî pinned registry şeması ve tüm tool yüzeylerinde title/readOnlyHint
-pytest tests/test_registry_metadata.py
-# SQL güvenlik/tamlık ve bounded HTTP testleri
-pytest tests/test_guarded_sql.py tests/test_datastore_sql.py tests/test_ckan_bounded.py
-# Dış kaynağa bağlanmadan gerçek yerel süreç + auth/kota/restart smoke testi
-python -m scripts.smoke_mcp
 python -m app.main
-```
-
-Minimum Python sürümünü temiz ortamda doğrulamak için (opsiyonel `uv`):
-
-```bash
-uv run --isolated --no-project --python 3.11 --with-editable '.[dev]' python -m pytest
-```
-
-Container kurulumunu doğrulamak için:
-
-```bash
 docker build -t istanbul-mcp:local .
 ```
 
-Katman A'nın Python 3.11/3.12, gerçek süreç ve container doğrulama sonuçları
-[MCP arayüzü belgesinde](docs/mcp-interface.md#6-doğrulama) kayıtlıdır.
+Yerel sunucu `GET /healthz`, `GET /readyz`, `GET /status` ve `POST /mcp/` uçlarını sunar. Odaklı test komutları, conformance ve opt-in canlı testler için [geliştirme rehberine](docs/development.md); ortam değişkenleri için [.env.example](.env.example) dosyasına ve [konfigürasyon](docs/configuration.md) sayfasına bakın.
 
-Lokal server şunları sunar:
+## Dağıtım ve İzleme
 
-- `GET /healthz`
-- `GET /readyz`
-- `GET /status`
-- `POST /mcp/`
-
-Canlı MCP regresyon testleri opt-in çalışır:
+Production servisi Railway üzerinde çalışır ([dağıtım notları](docs/deploy-railway.md)).
 
 ```bash
-RUN_LIVE_MCP_TESTS=1 pytest tests/live
-python scripts/live_mcp_uat.py
-# Ayrı opt-in: yerel ASGI MCP + gerçek GTFS kaynağı; geçici DB, deploy yok
-RUN_LIVE_GTFS_TESTS=1 pytest -s tests/live/test_gtfs_source_live.py
+curl -fsS https://istanbulmcp-production.up.railway.app/healthz
+curl -fsS https://istanbulmcp-production.up.railway.app/readyz
+curl -fsS https://istanbulmcp-production.up.railway.app/status
 ```
 
-## Konfigürasyon
+Canlı endpoint 10 dakikada bir otomatik kontrol edilir; ulaşılamazsa repo sahibine issue açılır ([izleme](docs/monitoring.md)). Sunucu [MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.Batu1-1an%2Fistanbul-mcp&version=latest)'de `io.github.Batu1-1an/istanbul-mcp` adıyla yayımlıdır ([yayın rehberi](docs/registry.md)).
 
-Önemli önbellek TTL değişkenleri:
-
-- `CKAN_CATALOG_CACHE_TTL_SECONDS`
-- `CKAN_RESOURCE_CACHE_TTL_SECONDS`
-- `IETT_LINE_CACHE_TTL_SECONDS`
-- `IETT_STOPS_CACHE_TTL_SECONDS`
-- `GTFS_STOPS_MAX_BYTES` (5 MiB), `GTFS_STOPS_MAX_ROWS` (50.000), `GTFS_STOPS_LOAD_TIMEOUT_SECONDS` (20)
-- `GTFS_STOPS_CACHE_TTL_SECONDS` (86.400) ve `GTFS_STOPS_STALE_IF_ERROR_SECONDS` (604.800; 0 kapatır) — [sınırlar ve tazelik](docs/gtfs-stops.md)
-- `SOURCE_CACHE_MAX_ENTRIES`
-- `AIR_QUALITY_RATE_CAPACITY`
-- `AIR_QUALITY_RATE_REFILL_PER_SECOND`
-- `AIR_QUALITY_RATE_MAX_WAIT_SECONDS`
-- `ISKI_FAULTS_CACHE_TTL_SECONDS`
-- `ISKI_DAMS_CACHE_TTL_SECONDS`
-- `ISKI_FAULTS_STALE_IF_ERROR_SECONDS`
-- `ISKI_DAMS_STALE_IF_ERROR_SECONDS`
-- `IBB_PHARMACY_BASE_URL` (canonical default: `https://cbsproxy.ibb.gov.tr/?eczanews`)
-- `IBB_PHARMACY_REQUEST_TIMEOUT_SECONDS`, `IBB_PHARMACY_REQUEST_ATTEMPTS`
-- `IBB_PHARMACY_CACHE_TTL_SECONDS` (300) and `IBB_PHARMACY_MAX_CACHE_AGE_SECONDS` (1800)
-- `IBB_PHARMACY_STALE_IF_ERROR_SECONDS` and `IBB_PHARMACY_RATE_*`
-- `MARMARAY_API_BASIC_TOKEN`
-- `FERRY_SCHEDULES_ENABLED` — varsayılan `false`; yalnızca deploy ortamından tarife erişimi doğrulandıktan sonra açın. Mevcut iptal-duyurusu relay'i tarife desteği sağlamaz.
-- `SEHIR_HATLARI_RELAY_URL`
-- `SEHIR_HATLARI_RELAY_TOKEN`
-- `IBB_RELAY_BASE_URL`, `IBB_RELAY_TOKEN` — ikisi birlikte verilirse İBB, Metro İstanbul, İSKİ, Şehir Hatları ve TCDD Marmaray host'larına giden istekler Türkiye'deki relay üzerinden çıkar; URL `https` olmalı, token en az 32 karakter. Kurulum: [docs/deploy-railway.md](docs/deploy-railway.md) içindeki "İBB Relay" bölümü.
-
-Herkese açık MCP koruma limitleri:
-
-- `CKAN_SQL_ALLOWED_RESOURCE_IDS` — SQL için operatör allowlist'i; varsayılan boş. Boyut/süre/satır ayarları ve hard cap'ler [SQL rehberinde](docs/datastore-sql.md).
-- `MCP_AUTH_REQUIRED` — varsayılan `false` (public mod). `true` yaparsanız anahtar zorunlu olur ve anahtarsız sunucu başlamaz.
-- `MCP_API_KEYS` — virgülle ayrılmış rastgele Bearer anahtarları; doldurulduğunda doğrulama tek başına etkinleşir.
-- `MCP_API_KEY_DAILY_QUOTA` — auth etkinken anahtar başına UTC günlük kota; varsayılan `10000`, SQLite ile kalıcı.
-- `FORWARDED_ALLOW_IPS` — istemci IP'sinin okunacağı güvenilir proxy'ler; imajda `*`, dışarıdan çalıştırırken varsayılan `127.0.0.1`.
-- `MCP_LEGACY_TOOLS_ENABLED` — eski araç adlarını `tools/list` içinde de yayımlar; varsayılan `false`. Eski adlar bu ayardan bağımsız olarak her zaman çağrılabilir.
-- `MCP_MAX_BODY_BYTES`
-- `MCP_RATE_LIMIT_CAPACITY`
-- `MCP_RATE_LIMIT_REFILL_PER_SECOND`
-- `MCP_RATE_LIMIT_MAX_CLIENTS`
-- `MCP_MAX_CONCURRENT_REQUESTS`
-- `MCP_MAX_LISTEN_STREAMS` — istemcilerin oturum boyunca açık tuttuğu bildirim akışları (yeni protokolde `subscriptions/listen`, eski protokolde `GET /mcp/`) için ayrı üst sınır; varsayılan `200`. Bu akışlar araç isteklerinin eşzamanlılık kotasını kullanmaz.
-- `EVENT_LOOP_WATCHDOG_SECONDS` — event loop bu kadar saniye yanıt vermezse tüm thread stack'leri stderr'e yazılır ve süreç `70` koduyla çıkar; Railway `ON_FAILURE` politikası servisi yeniden başlatır. Varsayılan `60`, `0` kapatır.
-
-İSKİ kaynak erişimi ve fallback değişkenleri:
-
-- `ISKI_REQUEST_TIMEOUT_SECONDS`
-- `ISKI_REQUEST_ATTEMPTS`
-- `ISKI_API_BASE_URL`
-- `ISKI_API_BEARER_TOKEN`
-- `ISKI_RELAY_BASE_URL`
-- `ISKI_RELAY_TOKEN`
-- `ISKI_RELAY_TIMEOUT_SECONDS`
-- `ISKI_DAMS_SNAPSHOT_JSON`
-- `ISKI_FAULTS_SNAPSHOT_JSON`
-- `ISKI_FAULTS_SNAPSHOT_JSON_PART_1`, `ISKI_FAULTS_SNAPSHOT_JSON_PART_2`, ...
-- `ISKI_FAULTS_SNAPSHOT_CAPTURED_AT`
-- `ISKI_DAMS_SNAPSHOT_CAPTURED_AT`
-- `ISKI_FAULTS_SNAPSHOT_MAX_AGE_SECONDS`
-- `ISKI_DAMS_SNAPSHOT_MAX_AGE_SECONDS`
-
-`ISKI_RELAY_TOKEN`, Cloudflare Worker'daki `RELAY_TOKEN` secret değeriyle aynı olmalıdır. `ISKI_API_BEARER_TOKEN`, İSKİ'nin kendi web istemcisinin kullandığı resmi API fallback'i için gerekir. Snapshot JSON tercihen `{"captured_at":"...","payload":...}` zarfını kullanır; eski çıplak payload biçimi için ilgili `*_SNAPSHOT_CAPTURED_AT` değişkeni zorunludur. Süresi geçmiş veya tarihsiz snapshot aktif veri olarak sunulmaz.
-
-Örnek ortam değişkenleri için [.env.example](.env.example) dosyasına bakın.
-
-## Dağıtım
-
-Üretim ortamındaki servis Railway üzerinde çalışır. Railway dağıtım notları için [docs/deploy-railway.md](docs/deploy-railway.md) dosyasına bakın.
-
-Temel komutlar:
-
-```bash
-railway status
-railway config plan --detailed-exit-code
-```
-
-Merge sonrası yerel testler ve `railway config plan --detailed-exit-code` başarılıysa kontrollü deploy için `railway up --detach --yes` kullanılabilir. `railway config apply` ayrı altyapı değişiklikleri için ayrıca onay gerektirir; geçiş ve geri alma sınırı için [docs/deploy-railway.md](docs/deploy-railway.md) dosyasına bakın.
-
-## Proje Planı
-
-Proje bağlamı, roadmap ve GSD faz çıktıları `.planning/` altında tutulur.
+[Sürüm geçmişi](CHANGELOG.md) ·
+[Veri işleme/gizlilik](docs/privacy.md) ·
+[Tarayıcıdan bağlantı](docs/browser-cors.md) ·
+[Destek / sorun bildirimi](https://github.com/Batu1-1an/istanbulmcp/issues)
 
 ## Lisans ve Sorumluluk Reddi
 

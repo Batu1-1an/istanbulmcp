@@ -208,6 +208,8 @@ Rows include `source_id` (`ibb:` + deterministic hash), name, nullable phone,
 province, district, source-preserved district ID, address, coordinates and maps
 links. `duty_ends_at` is null because the source supplies no duty-end field.
 Show clickable maps links, preserve uncertainty, and advise calling first.
+Show the İBB source name and link in the final answer only when the user asks;
+`sources` stays for traceability. Final formatting depends on the MCP client.
 This is not a general pharmacy catalog or a working-hours guarantee.
 
 The roster is fresh for 5 minutes; on failure the last successful roster may
@@ -347,5 +349,6 @@ Source labels and canonical keys are normalized exactly, not substring-matched.
 Each result includes `equipment_summary`, `faults`, source, observed time,
 limits and freshness. Unknown return text such as `İnceleniyor` is preserved.
 No alternative route, working backup, guaranteed repair date or end-to-end
-station/journey accessibility is inferred. One failed source is partial;
-two failed sources give `ok=false`/broken; checked-empty remains successful.
+station/journey accessibility is inferred. One failed source is partial: the
+other source's verified data is kept with a `partial_source` warning. Two failed
+sources give `ok=false`/broken; checked-empty remains successful.

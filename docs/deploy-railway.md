@@ -173,6 +173,7 @@ Since 2026-10-23 İBB group hosts (`api.ibb.gov.tr`, `data.ibb.gov.tr`, `cbsprox
 - Requests are `/{host}/{path}?{query}` with an `X-Relay-Token` header; hosts outside the fixed allowlist return `404`, missing or wrong tokens return `401`.
 - Only `GET`, `HEAD` and `POST` are forwarded; request bodies are capped at 1 MiB and responses at 128 MiB (32 MiB without `Content-Length`).
 - Upstream connect failures return `X-Relay-Error: connect_timeout|connect_error` and read timeouts `read_timeout`; the app maps them back to the matching `httpx` errors so the unreachable-host cooldown still applies.
+- Source connections wait at most 5 seconds. A connect timeout is not retried, and the same host then fails fast as `unavailable` for 60 seconds.
 - Every response carries `Cache-Control: no-store`, and the endpoint's pull zone has Smart Cache off, a cache max-age override of `0` and query strings kept in the cache key.
 - Logs contain only method, host, status and duration.
 

@@ -72,3 +72,17 @@ Yerel doğrulama (2026-10-25): **1405 test geçti, 25 canlı test atlandı**.
 Gerçek süreç smoke testi, üretim kaynağına gitmeden başarı/domain-error sayaçlarını
 doğruladı. Gerçek süreç günlüğünde `mcp_tool_call` JSON olayı görüldü.
 Sabitlenen resmî profildeki beş senaryonun tamamı geçti.
+
+## Otomatik uptime izleme
+
+[`.github/workflows/uptime.yml`](../.github/workflows/uptime.yml) canlı endpoint'i 10 dakikada bir `/healthz` ve gerçek bir MCP `initialize` + `tools/list` çağrısıyla kontrol eder; tek ağ aksaklığında alarm vermemek için 3 kez dener. Endpoint ulaşılamazsa repo sahibini etiketleyen tek bir `uptime-incident` issue'su açılır; servis düzelince issue'ya süre yazılıp kapatılır. Kesinti sürerken yeni issue açılmaz. GitHub zamanlanmış çalışmaları birkaç dakika geciktirebilir.
+
+```bash
+python -m scripts.uptime_check                     # production
+python -m scripts.uptime_check --url http://127.0.0.1:8000
+gh workflow run uptime.yml                          # elle tetikleme
+```
+
+Public repoda standart GitHub runner kullanımı ücretsizdir. Repo private yapılırsa her çalışma en az 1 dakika sayılır; 10 dakikalık aralık ücretsiz kotayı aşacağından aralığı 30 dakikaya çıkarın.
+
+Event loop donarsa `EVENT_LOOP_WATCHDOG_SECONDS` (varsayılan 60) sonunda süreç tüm thread stack'lerini stderr'e yazıp `70` koduyla çıkar; Railway `ON_FAILURE` politikası servisi yeniden başlatır. Dökümü `railway logs` içinde `event_loop_stalled` ile arayın.
