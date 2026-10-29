@@ -294,4 +294,4 @@ Kod [MIT Lisansı](LICENSE) ile lisanslanmıştır. Bu lisans yalnızca kodu kap
 
 Istanbul MCP resmî olmayan, bağımsız bir projedir; İBB, İSKİ, İETT, Metro İstanbul, Şehir Hatları veya TCDD ile bağlantılı değildir.
 
-Veriler gecikmeli, eksik veya hatalı olabilir. Nöbetçi eczane, su arızası ve ulaşım gibi kritik bilgileri resmî kaynaktan teyit edin. Acil durumlarda **112**'yi arayın.
+Veriler gecikmeli, eksik veya hatalı olabilir. Nöbetçi eczane, su arızası ve ulaşım gibi kritik bilgileri resmî kaynaktan teyit edin.
