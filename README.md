@@ -8,11 +8,10 @@ https://istanbulmcp-production.up.railway.app/mcp/
 
 ## İçindekiler
 
-- [Hızlı başlangıç](#hızlı-başlangıç)
+- [Kurulum](#kurulum)
 - [Ne yapabilir?](#ne-yapabilir)
 - [Örnek sorular](#örnek-sorular)
 - [MCP araçları](#mcp-araçları)
-- [İstemci kurulumları](#i̇stemci-kurulumları)
 - [Bilinen sınırlar](#bilinen-sınırlar)
 - [Geliştirme](#geliştirme)
 - [Lisans](#lisans-ve-sorumluluk-reddi)
@@ -23,108 +22,9 @@ https://istanbulmcp-production.up.railway.app/mcp/
 
 Istanbul MCP bu boşluğu kapatır: MCP destekleyen her sohbet uygulaması, kod yazan ajan, araştırma iş akışı veya kendi otomasyonunuz tek bir endpoint üzerinden İstanbul verisiyle çalışabilir.
 
-## Hızlı Başlangıç
+## Kurulum
 
 Kurulum anahtar gerektirmez: endpoint'i istemcinize ekleyin, çalışır. İstemci başına hız sınırı uygulanır; isteğe bağlı anahtar ve kota için [erişim rehberine](docs/api-access.md) bakın.
-
-1. Endpoint'i istemcinize ekleyin. İstemciye özel adımlar [İstemci Kurulumları](#i̇stemci-kurulumları) bölümündedir.
-2. Yeni bir oturum açıp sorun:
-
-```text
-Taksim'e arabayla gideceğim. Yakındaki otoparkların boş yer sayısını, çalışma saatini ve haritadaki yerlerini gösterir misin?
-```
-
-## Ne Yapabilir?
-
-**Ulaşım**
-
-- İETT hat bilgisi, yönlerine göre sıralı duraklar ve ana duraktan planlı kalkış saatleri.
-- Durak adıyla arama ve seçilen duraktan geçen hatların tarifeli kalkışları (İETT GTFS).
-- İETT, Metro İstanbul, Şehir Hatları ve Marmaray'ın güncel aksaklık ve duyuruları.
-- Metro İstanbul asansör, yürüyen merdiven ve diğer ekipmanların çalışma ve arıza durumu.
-- Yakındaki metro istasyonları ve toplu taşıma durakları; `Kadıköy Rıhtım`, `Taksim`, `Levent` gibi yerler için ulaşım özeti.
-- Şehir geneli trafik yoğunluğu indeksi.
-
-**Şehir hizmetleri**
-
-- Konuma veya ilçeye göre nöbetçi eczaneler: adres, telefon ve harita linki.
-- İSPARK otoparkları: kapasite, boş yer, açık/kapalı durumu ve çalışma saati.
-- İstanbulkart dolum merkezleri ve İBB sosyal tesisleri.
-- WiFi noktaları, kütüphaneler ve kültür merkezleri.
-- EV şarj istasyonları, taksi durakları ve ilçe ile güne göre haftalık semt pazarları.
-- Yakındaki hava kalitesi ölçümleri.
-
-**Su**
-
-- Aktif İSKİ su arızaları (ilçe, arıza numarası veya konuma göre) ve baraj doluluk oranları.
-
-**Mahalle ve açık veri**
-
-- Sosyal yardım, bina stoku ve deprem senaryosu verileriyle mahalle profili.
-- İBB Açık Veri kataloğunda veri seti arama, şema inceleme ve güvenli filtrelerle kayıt sorgulama.
-
-Koordinatı olan kayıtlarda harita linki (`maps_url`) döner. Yalnız adresi bilinen kayıtlarda adres araması linki (`maps_search_url`) verilir; bu kayıtlar kesin konum gibi sunulmaz.
-
-## Örnek Sorular
-
-```text
-Üsküdar'da şu an nöbetçi eczane var mı?
-Kadıköy'deki duraklardan bir sonraki planlı otobüs kalkışları ne zaman?
-500T hattı hangi duraklardan geçiyor? Durakları yönlerine göre sıralı göster.
-Bugün Marmaray'da veya metroda aksaklık var mı?
-Taksim metro istasyonunda arızalı asansör veya yürüyen merdiven var mı?
-Şişli civarında aktif su kesintisi veya İSKİ arızası var mı?
-Baraj doluluk oranları şu an nasıl? En dolu 5 barajı listele.
-Kadıköy'de yarın hangi pazar kuruluyor?
-Levent yakınındaki EV şarj istasyonlarını listele.
-Beşiktaş iskelesine en yakın İstanbulkart dolum noktası nerede?
-Kadıköy Caferağa mahalle profili nedir?
-İstanbul trafik yoğunluğu şu an hangi seviyede?
-İBB açık veri kataloğunda müzelerle ilgili hangi veri setleri var?
-```
-
-## Veri Kaynakları
-
-- İBB Açık Veri Portalı (`data.ibb.gov.tr`): katalog, İETT GTFS tarifesi, İstanbulkart, pazar, EV şarj, taksi durağı, kültür merkezi ve mahalle verileri
-- İBB şehir API'leri (`api.ibb.gov.tr`): İSPARK, trafik, hava kalitesi, Metro İstanbul ve İETT
-- İBB Şehir Haritası nöbetçi eczane listesi ve İBB Sosyal Tesisler kataloğu
-- Metro İstanbul arıza ve duyuru sayfaları
-- İSKİ arıza ve baraj kaynakları
-- Şehir Hatları ve TCDD Taşımacılık (Marmaray) resmî duyuruları
-- Wikidata yer referansları (CC0)
-
-Her sonuç standart bir yapıyla döner: `ok`, `summary`, `data`, `freshness`, `sources`, `limits`, `warnings` ve gerektiğinde `next_queries`. Sunucu salt okunurdur: rezervasyon yapmaz, kamu verisini değiştirmez, acil durum yönlendirmesi vermez ve kaynakta olmayan alanları üretmez.
-
-## MCP Araçları
-
-Production yüzeyi **18 salt okunur araçtır**: aşağıdaki 16 araç ve GTFS tarifesi açıkken eklenen 2 araç. Daha önce yayımlanmış araç adları listede görünmese de çağrılabilir kalır; eski → yeni karşılıklar için [geçiş tablosuna](docs/tool-migration.md) bakın.
-
-| Araç | İşlev |
-|---|---|
-| `istanbul_health` | Servis hazırlığı. |
-| `istanbul_search_datasets` | Konuya göre İBB katalog araması. |
-| `istanbul_get_dataset` | Veri seti metadata'sı ve kaynakları. |
-| `istanbul_get_resource_schema` | Resource kolonları. |
-| `istanbul_query_resource` | CKAN kayıtlarını güvenli filtre ve limitle getirir. |
-| `istanbul_datastore_query` | Operatörün izin verdiği resource'larda sınırlı SQL; izin listesi varsayılan boştur. [SQL rehberi](docs/datastore-sql.md) |
-| `istanbul_nearby` | Otopark, nöbetçi eczane, İstanbulkart, sosyal tesis, metro istasyonu, hava kalitesi, su arızası ve şehir katmanları için konum, ilçe veya harita alanı araması. |
-| `istanbul_market_schedule` | İlçe ve güne göre haftalık pazar takvimi; canlı açılış durumu değildir. |
-| `istanbul_traffic_status` | Şehir geneli trafik indeksi; yol bazlı değildir. |
-| `istanbul_water_status` | İSKİ arızaları (ilçe veya arıza numarası) ve baraj dolulukları. |
-| `istanbul_mobility_nearby` | Yer veya koordinat için ulaşım özeti; 39 ilçede ilçe geneli otopark listesi. |
-| `istanbul_city_services_nearby` | Nokta çevresinde WiFi; 39 ilçede kütüphane ve kültür merkezi adresleri. |
-| `istanbul_neighborhood_profile` | Sosyal yardım, bina stoku ve deprem **senaryosu**; anlık risk değildir. |
-| `istanbul_transit_line` | İETT hat bilgisi, durakları ve ana duraktan planlı kalkışlar; ETA değildir. |
-| `istanbul_transport_disruptions` | İETT, Metro İstanbul, Şehir Hatları ve Marmaray aksaklık ve duyuruları. |
-| `istanbul_metro_accessibility_status` | Metro ekipman toplamları ve arıza ayrıntıları; yolculuk erişilebilirliği garantisi değildir. |
-| `istanbul_next_departures` | Durak adı arama veya seçilen durağın planlı GTFS kalkışları; canlı ETA değildir. |
-| `istanbul_gtfs_snapshot_status` | Yerel tarife verisinin yaşı ve takvim geçerliliği. |
-
-Sunucu hem eski (`initialize`) hem yeni (`2026-07-28`, `server/discover`) MCP protokolüyle çalışır. Ayrıca üç bilgi kaynağı (`istanbul://coverage`, `istanbul://sources`, `istanbul://schema/catalog`) ve dört Türkçe prompt (`gunun_ozeti`, `mahalle_ozeti`, `veri_kesfi`, `yolculuk_plani`) sunar.
-
-Parametreler ve davranışlar: [araç referansı](docs/tool-reference.md) · Protokol, prompt ve output schema ayrıntıları: [MCP arayüzü](docs/mcp-interface.md) · Durak ve tarife: [GTFS durakları](docs/gtfs-stops.md), [GTFS planlı kalkışlar](docs/gtfs-schedule.md) · [Yer ve ilçe çözümleme](docs/place-resolution.md) · [Statik şehir katmanları](docs/city-static-layers.md) · [Yanıt sözleşmesi](docs/response-contract.md)
-
-## İstemci Kurulumları
 
 Endpoint'i sondaki `/mcp/` ile kullanın. Genel yapılandırma:
 
@@ -243,6 +143,104 @@ Kontrol edilen resmî kaynaklar:
 [Windsurf](https://docs.windsurf.com/windsurf/cascade/mcp.md) ·
 [Devin CLI](https://cli.devin.ai/docs/extensibility/mcp/configuration) ·
 [Devin](https://docs.devin.ai/work-with-devin/devin-mcp)
+
+### İlk soru
+
+Kurulumdan sonra yeni bir oturum açıp deneyin:
+
+```text
+Taksim'e arabayla gideceğim. Yakındaki otoparkların boş yer sayısını, çalışma saatini ve haritadaki yerlerini gösterir misin?
+```
+
+## Ne Yapabilir?
+
+**Ulaşım**
+
+- İETT hat bilgisi, yönlerine göre sıralı duraklar ve ana duraktan planlı kalkış saatleri.
+- Durak adıyla arama ve seçilen duraktan geçen hatların tarifeli kalkışları (İETT GTFS).
+- İETT, Metro İstanbul, Şehir Hatları ve Marmaray'ın güncel aksaklık ve duyuruları.
+- Metro İstanbul asansör, yürüyen merdiven ve diğer ekipmanların çalışma ve arıza durumu.
+- Yakındaki metro istasyonları ve toplu taşıma durakları; `Kadıköy Rıhtım`, `Taksim`, `Levent` gibi yerler için ulaşım özeti.
+- Şehir geneli trafik yoğunluğu indeksi.
+
+**Şehir hizmetleri**
+
+- Konuma veya ilçeye göre nöbetçi eczaneler: adres, telefon ve harita linki.
+- İSPARK otoparkları: kapasite, boş yer, açık/kapalı durumu ve çalışma saati.
+- İstanbulkart dolum merkezleri ve İBB sosyal tesisleri.
+- WiFi noktaları, kütüphaneler ve kültür merkezleri.
+- EV şarj istasyonları, taksi durakları ve ilçe ile güne göre haftalık semt pazarları.
+- Yakındaki hava kalitesi ölçümleri.
+
+**Su**
+
+- Aktif İSKİ su arızaları (ilçe, arıza numarası veya konuma göre) ve baraj doluluk oranları.
+
+**Mahalle ve açık veri**
+
+- Sosyal yardım, bina stoku ve deprem senaryosu verileriyle mahalle profili.
+- İBB Açık Veri kataloğunda veri seti arama, şema inceleme ve güvenli filtrelerle kayıt sorgulama.
+
+Koordinatı olan kayıtlarda harita linki (`maps_url`) döner. Yalnız adresi bilinen kayıtlarda adres araması linki (`maps_search_url`) verilir; bu kayıtlar kesin konum gibi sunulmaz.
+
+## Örnek Sorular
+
+```text
+Üsküdar'da şu an nöbetçi eczane var mı?
+Kadıköy'deki duraklardan bir sonraki planlı otobüs kalkışları ne zaman?
+500T hattı hangi duraklardan geçiyor? Durakları yönlerine göre sıralı göster.
+Bugün Marmaray'da veya metroda aksaklık var mı?
+Taksim metro istasyonunda arızalı asansör veya yürüyen merdiven var mı?
+Şişli civarında aktif su kesintisi veya İSKİ arızası var mı?
+Baraj doluluk oranları şu an nasıl? En dolu 5 barajı listele.
+Kadıköy'de yarın hangi pazar kuruluyor?
+Levent yakınındaki EV şarj istasyonlarını listele.
+Beşiktaş iskelesine en yakın İstanbulkart dolum noktası nerede?
+Kadıköy Caferağa mahalle profili nedir?
+İstanbul trafik yoğunluğu şu an hangi seviyede?
+İBB açık veri kataloğunda müzelerle ilgili hangi veri setleri var?
+```
+
+## Veri Kaynakları
+
+- İBB Açık Veri Portalı (`data.ibb.gov.tr`): katalog, İETT GTFS tarifesi, İstanbulkart, pazar, EV şarj, taksi durağı, kültür merkezi ve mahalle verileri
+- İBB şehir API'leri (`api.ibb.gov.tr`): İSPARK, trafik, hava kalitesi, Metro İstanbul ve İETT
+- İBB Şehir Haritası nöbetçi eczane listesi ve İBB Sosyal Tesisler kataloğu
+- Metro İstanbul arıza ve duyuru sayfaları
+- İSKİ arıza ve baraj kaynakları
+- Şehir Hatları ve TCDD Taşımacılık (Marmaray) resmî duyuruları
+- Wikidata yer referansları (CC0)
+
+Her sonuç standart bir yapıyla döner: `ok`, `summary`, `data`, `freshness`, `sources`, `limits`, `warnings` ve gerektiğinde `next_queries`. Sunucu salt okunurdur: rezervasyon yapmaz, kamu verisini değiştirmez, acil durum yönlendirmesi vermez ve kaynakta olmayan alanları üretmez.
+
+## MCP Araçları
+
+Production yüzeyi **18 salt okunur araçtır**: aşağıdaki 16 araç ve GTFS tarifesi açıkken eklenen 2 araç. Daha önce yayımlanmış araç adları listede görünmese de çağrılabilir kalır; eski → yeni karşılıklar için [geçiş tablosuna](docs/tool-migration.md) bakın.
+
+| Araç | İşlev |
+|---|---|
+| `istanbul_health` | Servis hazırlığı. |
+| `istanbul_search_datasets` | Konuya göre İBB katalog araması. |
+| `istanbul_get_dataset` | Veri seti metadata'sı ve kaynakları. |
+| `istanbul_get_resource_schema` | Resource kolonları. |
+| `istanbul_query_resource` | CKAN kayıtlarını güvenli filtre ve limitle getirir. |
+| `istanbul_datastore_query` | Operatörün izin verdiği resource'larda sınırlı SQL; izin listesi varsayılan boştur. [SQL rehberi](docs/datastore-sql.md) |
+| `istanbul_nearby` | Otopark, nöbetçi eczane, İstanbulkart, sosyal tesis, metro istasyonu, hava kalitesi, su arızası ve şehir katmanları için konum, ilçe veya harita alanı araması. |
+| `istanbul_market_schedule` | İlçe ve güne göre haftalık pazar takvimi; canlı açılış durumu değildir. |
+| `istanbul_traffic_status` | Şehir geneli trafik indeksi; yol bazlı değildir. |
+| `istanbul_water_status` | İSKİ arızaları (ilçe veya arıza numarası) ve baraj dolulukları. |
+| `istanbul_mobility_nearby` | Yer veya koordinat için ulaşım özeti; 39 ilçede ilçe geneli otopark listesi. |
+| `istanbul_city_services_nearby` | Nokta çevresinde WiFi; 39 ilçede kütüphane ve kültür merkezi adresleri. |
+| `istanbul_neighborhood_profile` | Sosyal yardım, bina stoku ve deprem **senaryosu**; anlık risk değildir. |
+| `istanbul_transit_line` | İETT hat bilgisi, durakları ve ana duraktan planlı kalkışlar; ETA değildir. |
+| `istanbul_transport_disruptions` | İETT, Metro İstanbul, Şehir Hatları ve Marmaray aksaklık ve duyuruları. |
+| `istanbul_metro_accessibility_status` | Metro ekipman toplamları ve arıza ayrıntıları; yolculuk erişilebilirliği garantisi değildir. |
+| `istanbul_next_departures` | Durak adı arama veya seçilen durağın planlı GTFS kalkışları; canlı ETA değildir. |
+| `istanbul_gtfs_snapshot_status` | Yerel tarife verisinin yaşı ve takvim geçerliliği. |
+
+Sunucu hem eski (`initialize`) hem yeni (`2026-07-28`, `server/discover`) MCP protokolüyle çalışır. Ayrıca üç bilgi kaynağı (`istanbul://coverage`, `istanbul://sources`, `istanbul://schema/catalog`) ve dört Türkçe prompt (`gunun_ozeti`, `mahalle_ozeti`, `veri_kesfi`, `yolculuk_plani`) sunar.
+
+Parametreler ve davranışlar: [araç referansı](docs/tool-reference.md) · Protokol, prompt ve output schema ayrıntıları: [MCP arayüzü](docs/mcp-interface.md) · Durak ve tarife: [GTFS durakları](docs/gtfs-stops.md), [GTFS planlı kalkışlar](docs/gtfs-schedule.md) · [Yer ve ilçe çözümleme](docs/place-resolution.md) · [Statik şehir katmanları](docs/city-static-layers.md) · [Yanıt sözleşmesi](docs/response-contract.md)
 
 ## Bilinen Sınırlar
 
