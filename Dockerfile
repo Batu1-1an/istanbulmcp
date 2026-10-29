@@ -8,7 +8,7 @@ ENV PYTHONUNBUFFERED=1
 # IPs arrive in X-Forwarded-For. Narrow this if the container is exposed directly.
 ENV FORWARDED_ALLOW_IPS=*
 
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md LICENSE ./
 COPY app ./app
 
 RUN pip install --no-cache-dir .
