@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from datetime import datetime, time, timedelta
 from contextlib import closing
 import hashlib
@@ -24,6 +25,7 @@ from app.storage.db import connect
 from app.storage.gtfs_schedule import require_snapshot
 
 ISTANBUL = ZoneInfo("Europe/Istanbul")
+REFRESH_RETRY_SECONDS = 300
 logger = logging.getLogger("istanbul_mcp.gtfs_schedule")
 _warmup_active = False
 _warmup_done = asyncio.Event()
@@ -45,10 +47,10 @@ def begin_warmup() -> bool:
     return True
 
 
-async def run_warmup(settings: Settings) -> None:
+async def run_warmup(settings: Settings, *, service: GtfsScheduleService | None = None) -> None:
     global _warmup_active, _warmup_error
     try:
-        await GtfsScheduleService(settings)._snapshot()
+        await (service or GtfsScheduleService(settings))._snapshot()
         logger.info("GTFS timetable warm-up completed")
     except Exception as exc:
         _warmup_error = type(exc).__name__
@@ -56,6 +58,28 @@ async def run_warmup(settings: Settings) -> None:
     finally:
         _warmup_active = False
         _warmup_done.set()
+
+
+async def keep_snapshot_fresh(settings: Settings, *, service: GtfsScheduleService | None = None,
+                              sleep: Callable[[float], Awaitable[object]] = asyncio.sleep) -> None:
+    """Warm up, then reload the timetable while the cached snapshot is still fresh.
+
+    A refresh only starts after TTL expiry when a caller asks, and a cold load takes
+    minutes, so without this the first caller each day waits past client timeouts.
+    """
+    service = service or GtfsScheduleService(settings)
+    await run_warmup(settings, service=service)
+    lead = settings.gtfs_schedule_load_timeout_seconds + 3 * REFRESH_RETRY_SECONDS
+    while True:
+        remaining = source_cache.expires_in(service.cache_key)
+        if remaining is None or remaining <= lead:
+            try:
+                await service._snapshot(force=True)
+                logger.info("GTFS timetable refreshed")
+            except Exception as exc:
+                logger.warning("GTFS timetable refresh failed: %s", type(exc).__name__)
+            remaining = source_cache.expires_in(service.cache_key)
+        await sleep(max(REFRESH_RETRY_SECONDS, (remaining or 0) - lead))
 
 
 class ScheduleValidityError(GtfsScheduleError):
@@ -326,7 +350,7 @@ class GtfsScheduleService:
         return ([f"{count} stop(s) have an invalid optional location_type; it is null, not inferred. Stop identities and published times are preserved."]
                 if count else [])
 
-    async def _snapshot(self):
+    async def _snapshot(self, *, force: bool = False):
         async def load():
             metadata = await self.client.load(profile=self.profile)
             return SourceLoadResult(value=metadata["snapshot_id"], metadata=metadata,
@@ -334,7 +358,7 @@ class GtfsScheduleService:
 
         return await asyncio.wait_for(cached_source_data_with_status(
             self.cache_key, ttl_seconds=self.settings.gtfs_schedule_cache_ttl_seconds,
-            stale_if_error_seconds=self.settings.gtfs_schedule_stale_if_error_seconds, loader=load,
+            stale_if_error_seconds=self.settings.gtfs_schedule_stale_if_error_seconds, loader=load, force=force,
         ), timeout=self.settings.gtfs_schedule_load_timeout_seconds + 1)
 
     @staticmethod

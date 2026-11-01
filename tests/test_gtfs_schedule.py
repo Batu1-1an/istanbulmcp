@@ -89,6 +89,72 @@ def test_warmup_can_start_only_once():
         reset_warmup_state()
 
 
+def refresh_sleep(f, *, before_refresh=None):
+    """Fast-forward the first wait to near TTL expiry, then stop the refresh loop."""
+    delays = []
+
+    async def sleep(seconds):
+        delays.append(seconds)
+        if len(delays) > 1:
+            raise asyncio.CancelledError
+        source_cache._entries[f.service.cache_key].expires_at_monotonic = time.monotonic() + 10
+        if before_refresh:
+            before_refresh()
+
+    return delays, sleep
+
+
+@pytest.mark.asyncio
+async def test_background_refresh_reloads_timetable_before_ttl_expires(tmp_path):
+    from app.services.gtfs_schedule import keep_snapshot_fresh, reset_warmup_state
+
+    f = feed(tmp_path)
+    delays, sleep = refresh_sleep(f)
+    reset_warmup_state()
+    try:
+        async with f.http:
+            with pytest.raises(asyncio.CancelledError):
+                await keep_snapshot_fresh(f.service.settings, service=f.service, sleep=sleep)
+            warmed, refreshed = f.requests[:7], f.requests[7:]
+            entry = source_cache.peek_with_status(f.service.cache_key)
+            result = await f.service.next_departures(stop_id="S1", at=AT, limit=3)
+    finally:
+        reset_warmup_state()
+
+    lead = f.service.settings.gtfs_schedule_load_timeout_seconds + 3 * 300
+    ttl = f.service.settings.gtfs_schedule_cache_ttl_seconds
+    assert ttl - lead - 5 < delays[0] <= ttl - lead
+    assert len(warmed) == 7 and len(refreshed) == 7
+    assert entry.is_fresh and ttl - lead - 5 < delays[1] <= ttl - lead
+    assert result["ok"] and result["freshness"]["status"] == "fresh"
+
+
+@pytest.mark.asyncio
+async def test_failed_background_refresh_keeps_snapshot_and_retries(tmp_path):
+    from app.services.gtfs_schedule import keep_snapshot_fresh, reset_warmup_state
+
+    f = feed(tmp_path)
+
+    def break_catalog():
+        f.client.ckan.package_show_bounded.side_effect = RuntimeError("catalog down")
+
+    delays, sleep = refresh_sleep(f, before_refresh=break_catalog)
+    reset_warmup_state()
+    try:
+        async with f.http:
+            with pytest.raises(asyncio.CancelledError):
+                await keep_snapshot_fresh(f.service.settings, service=f.service, sleep=sleep)
+            before = source_cache._entries[f.service.cache_key].value
+            result = await f.service.next_departures(stop_id="S1", at=AT, limit=3)
+    finally:
+        reset_warmup_state()
+
+    assert delays[1] == 300
+    assert len(f.requests) == 7
+    assert source_cache._entries[f.service.cache_key].value == before
+    assert result["ok"] and result["freshness"]["status"] == "fresh"
+
+
 @pytest.mark.asyncio
 async def test_duplicate_stop_time_keys_are_ignored_with_warning(tmp_path):
     stop_times = (FIXTURES / "stop_times.csv").read_bytes() + b"W;S3;4;;;0;0\n"

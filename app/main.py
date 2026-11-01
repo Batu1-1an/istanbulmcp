@@ -25,7 +25,7 @@ from app.core.mcp_transport import McpJsonRpcGuard
 from app.core.settings import get_settings
 from app.core.status import build_status
 from app.mcp.registry import create_mcp_server
-from app.services.gtfs_schedule import begin_warmup, run_warmup
+from app.services.gtfs_schedule import begin_warmup, keep_snapshot_fresh
 from app.storage.db import public_readiness, readiness
 
 
@@ -92,7 +92,7 @@ def create_app() -> Starlette:
             watchdog.start()
         warmup_task = None
         if settings.gtfs_schedule_enabled and begin_warmup():
-            warmup_task = asyncio.create_task(run_warmup(settings))
+            warmup_task = asyncio.create_task(keep_snapshot_fresh(settings))
         try:
             async with mcp.session_manager.run():
                 yield

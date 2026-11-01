@@ -234,6 +234,13 @@ bloklanmaz. Isınma başarılıysa sonraki çağrılar sıcak snapshot'ı kullan
 başarısız olursa araç istek üzerine yeniden yüklemeyi dener ve hatayı yapılandırılmış
 zarf içinde bildirir. Bu davranış çoklu worker için dağıtık koordinasyon sağlamaz.
 
+Aynı görev ısınmadan sonra açık kalır ve snapshot TTL'i dolmadan
+`GTFS_SCHEDULE_LOAD_TIMEOUT_SECONDS + 900` saniye önce tarifeyi arka planda yeniden
+yükler. Yenileme sürerken çağrılar mevcut taze snapshot'ı bekleme olmadan kullanır.
+Yenileme başarısız olursa mevcut snapshot korunur ve 5 dakikada bir yeniden denenir;
+TTL yine dolarsa normal stale-if-error davranışı geçerlidir. Bu görev olmadan TTL
+sonrası ilk çağrı soğuk yüklemeyi (yaklaşık 1,5–2,5 dakika) bekliyordu.
+
 ## Konfigürasyon
 
 | Değişken | Varsayılan | Sert üst sınır |

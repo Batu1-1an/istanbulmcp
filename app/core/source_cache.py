@@ -19,6 +19,11 @@ class CacheEntry:
     refreshed_at_iso: str
     metadata: dict[str, Any] | None = None
     max_age_at_monotonic: float | None = None
+    stale_if_error_seconds: float = 0
+
+    def retain_until_monotonic(self) -> float:
+        deadline = self.expires_at_monotonic + max(0.0, self.stale_if_error_seconds)
+        return deadline if self.max_age_at_monotonic is None else min(deadline, self.max_age_at_monotonic)
 
 
 @dataclass(frozen=True)
@@ -67,10 +72,14 @@ class SourceTTLCache:
         max_entries: int,
         loader: Callable[[], Awaitable[Any]],
         stale_if_error_seconds: int = 0,
+        force: bool = False,
     ) -> CachedSourceData:
+        """Return a fresh entry or load one. ``force`` reloads even a fresh entry;
+        other callers keep reading the current entry meanwhile, and a failed forced
+        reload raises instead of returning stale data."""
         now = time.monotonic()
         entry = self._entries.get(key)
-        if entry is not None and now < entry.expires_at_monotonic:
+        if not force and entry is not None and now < entry.expires_at_monotonic:
             observe_cache("hit")
             return CachedSourceData(
                 value=entry.value,
@@ -88,7 +97,7 @@ class SourceTTLCache:
             async with lock:
                 now = time.monotonic()
                 entry = self._entries.get(key)
-                if entry is not None and now < entry.expires_at_monotonic:
+                if not force and entry is not None and now < entry.expires_at_monotonic:
                     observe_cache("hit")
                     return CachedSourceData(
                         value=entry.value,
@@ -123,6 +132,7 @@ class SourceTTLCache:
                     refreshed_at_iso=refreshed_at,
                     metadata=metadata,
                     max_age_at_monotonic=max_age_at,
+                    stale_if_error_seconds=stale_if_error_seconds,
                 )
                 return CachedSourceData(
                     value=value,
@@ -142,7 +152,8 @@ class SourceTTLCache:
             if stale_entry is not None and stale_entry.max_age_at_monotonic is not None:
                 stale_deadline = min(stale_deadline, stale_entry.max_age_at_monotonic)
             if (
-                stale_entry is not None
+                not force
+                and stale_entry is not None
                 and stale_if_error_seconds > 0
                 and time.monotonic() <= stale_deadline
             ):
@@ -192,9 +203,16 @@ class SourceTTLCache:
         return CachedSourceData(value=entry.value, refreshed_at_iso=entry.refreshed_at_iso,
                                 is_fresh=fresh, is_stale=not fresh, metadata=entry.metadata)
 
+    def expires_in(self, key: str) -> float | None:
+        """Seconds until the entry's TTL ends (negative once stale); None when absent."""
+        entry = self._entries.get(key)
+        return None if entry is None else entry.expires_at_monotonic - time.monotonic()
+
     def _evict_before_insert(self, *, max_entries: int, now: float) -> None:
         max_entries = max(1, int(max_entries))
-        expired = [key for key, entry in self._entries.items() if now >= entry.expires_at_monotonic]
+        # An expired entry stays while its stale-if-error window lasts; otherwise any
+        # unrelated insert would silently remove the fallback a failed refresh needs.
+        expired = [key for key, entry in self._entries.items() if now >= entry.retain_until_monotonic()]
         for key in expired:
             self._entries.pop(key, None)
             self._locks.pop(key, None)
@@ -236,6 +254,7 @@ async def cached_source_data_with_status(
     ttl_seconds: int,
     loader: Callable[[], Awaitable[Any]],
     stale_if_error_seconds: int = 0,
+    force: bool = False,
 ) -> CachedSourceData:
     from app.core.settings import get_settings
 
@@ -245,6 +264,7 @@ async def cached_source_data_with_status(
         max_entries=get_settings().source_cache_max_entries,
         loader=loader,
         stale_if_error_seconds=stale_if_error_seconds,
+        force=force,
     )
 
 

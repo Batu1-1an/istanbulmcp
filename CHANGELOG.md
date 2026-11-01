@@ -17,6 +17,14 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 - İSKİ relay adresi artık tool sonucunda kaynak URL'i olarak görünmez.
 
 ### Fixed
+- Kaynak önbelleği, TTL'i dolan her girdiyi başka bir kaynak yazıldığı anda siliyordu;
+  `*_STALE_IF_ERROR_SECONDS` pencereleri bu yüzden production'da pratikte çalışmıyordu.
+  Girdi artık stale penceresi bitene kadar tutulur; kaynak hata verirse son başarılı
+  veri `freshness=stale` ile sunulur.
+- GTFS tarifesi TTL'i (24 saat) dolunca önbellekten düşüyordu: `istanbul_gtfs_snapshot_status`
+  "snapshot yok" diyor, günün ilk `istanbul_next_departures` çağrısı 1,5–2,5 dakikalık
+  soğuk yüklemeyi bekliyordu. Tarife artık TTL dolmadan arka planda yenilenir; yenileme
+  sırasında çağrılar mevcut snapshot'ı kullanır.
 - `istanbul_neighborhood_profile`, adında Ş/İ/Ğ geçen 19 ilçe ve Eyüpsultan için bina
   stoku ve deprem senaryosunu hiç bulamıyordu (ör. Şişli/Gülbahar). Bu iki kaynak ilçe
   adını eski kodlamayla (`ÞÝÞLÝ`), Eyüpsultan'ı eski adıyla (`EYÜP`) tutuyor. CKAN

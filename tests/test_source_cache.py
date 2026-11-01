@@ -142,6 +142,83 @@ async def test_source_cache_boundary_fresh_then_stale_then_unavailable(monkeypat
 
 
 @pytest.mark.asyncio
+async def test_other_inserts_keep_an_expired_entry_inside_its_stale_window(monkeypatch):
+    clock = {"t": 0.0}
+    monkeypatch.setattr("app.core.source_cache.time.monotonic", lambda: clock["t"])
+    cache = SourceTTLCache()
+
+    async def loader():
+        return "timetable"
+
+    async def failing():
+        raise RuntimeError("upstream down")
+
+    stale_options = {"ttl_seconds": 100, "max_entries": 10, "stale_if_error_seconds": 1000}
+    await cache.get_with_status("gtfs", loader=loader, **stale_options)
+    clock["t"] = 200.0
+    await cache.get_with_status("other", ttl_seconds=100, max_entries=10, loader=loader)
+
+    assert cache.peek_with_status("gtfs", stale_if_error_seconds=1000).is_stale
+    stale = await cache.get_with_status("gtfs", loader=failing, **stale_options)
+    assert stale.is_stale and stale.value == "timetable"
+
+    clock["t"] = 1200.0
+    await cache.get_with_status("later", ttl_seconds=100, max_entries=10, loader=loader)
+    assert set(cache._entries) == {"later"}
+
+
+@pytest.mark.asyncio
+async def test_forced_refresh_reloads_without_blocking_readers_of_the_fresh_entry():
+    import asyncio
+
+    cache = SourceTTLCache()
+    entered, release = asyncio.Event(), asyncio.Event()
+    calls = 0
+
+    async def loader():
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            entered.set()
+            await release.wait()
+        return calls
+
+    options = {"ttl_seconds": 60, "max_entries": 10}
+    await cache.get_with_status("timetable", loader=loader, **options)
+    assert 59 < cache.expires_in("timetable") <= 60
+    assert cache.expires_in("missing") is None
+
+    refresh = asyncio.create_task(cache.get_with_status("timetable", loader=loader, force=True, **options))
+    await asyncio.wait_for(entered.wait(), 1)
+    reader = await asyncio.wait_for(cache.get_with_status("timetable", loader=loader, **options), 1)
+    assert reader.value == 1 and reader.is_fresh
+    release.set()
+
+    assert (await refresh).value == 2
+    assert cache.peek_with_status("timetable").value == 2
+
+
+@pytest.mark.asyncio
+async def test_failed_forced_refresh_raises_and_keeps_the_current_entry():
+    cache = SourceTTLCache()
+
+    async def loader():
+        return "current"
+
+    async def failing():
+        raise RuntimeError("upstream down")
+
+    options = {"ttl_seconds": 60, "max_entries": 10, "stale_if_error_seconds": 600}
+    await cache.get_with_status("timetable", loader=loader, **options)
+
+    with pytest.raises(RuntimeError):
+        await cache.get_with_status("timetable", loader=failing, force=True, **options)
+
+    current = cache.peek_with_status("timetable", stale_if_error_seconds=600)
+    assert current.value == "current" and current.is_fresh
+
+
+@pytest.mark.asyncio
 async def test_source_cache_removes_failed_key_locks():
     cache = SourceTTLCache()
 
