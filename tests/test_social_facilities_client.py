@@ -164,7 +164,19 @@ def test_merge_rows_keeps_live_values_and_fills_missing_fields_with_discrepancy_
     )
     assert merged[0]["latitude"] == 41.0
     assert merged[0]["address"] == "District address"
-    assert any("source_discrepancy" in warning for warning in warnings)
+    assert warnings == merged[0]["source_discrepancies"] == [
+        "source_discrepancy: Same: coordinates differ by 139 m; live values kept."
+    ]
+
+
+def test_merge_rows_ignores_coordinate_noise_below_50_m():
+    merged, warnings = SocialFacilitiesClient.merge_rows(
+        [{"name": "Same", "latitude": 41.0, "longitude": 28.9, "address": "A Caddesi No:1", "detail_url": "https://live.test/same"}],
+        [{"name": "Same", "latitude": 41.00018, "longitude": 28.9, "address": "A Caddesi No:1"}],
+    )
+    assert merged[0]["fallback_source"] == "sosyal-tesis-konumlari"
+    assert warnings == []
+    assert "source_discrepancies" not in merged[0]
 
 
 @pytest.mark.parametrize(("address", "expected"), [
@@ -195,7 +207,9 @@ def test_merge_kir_kahvesi_address_variants_preserves_live_location_and_link():
     assert merged[0]["detail_url"] == live["detail_url"]
     assert merged[0]["latitude"] == live["latitude"]
     assert merged[0]["fallback_source"] == "sosyal-tesis-konumlari"
-    assert warnings  # Conflicting source coordinates remain visible.
+    assert warnings == merged[0]["source_discrepancies"] == [
+        "source_discrepancy: KIR KAHVESİ SOSYAL TESİSİ: address differs, coordinates differ by 226 m; live values kept."
+    ]
 
 
 @pytest.mark.parametrize("changes", [

@@ -115,15 +115,17 @@ class SocialFacilitiesService:
         except Exception as exc:
             return self._source_error(exc)
 
-        ranked: list[tuple[float, str, dict[str, Any]]] = []
+        ranked: list[tuple[float, str, dict[str, Any], dict[str, Any]]] = []
         for row in cached.value.rows:
             distance = haversine_m(safe_lat, safe_lon, row["latitude"], row["longitude"])
             if distance <= safe_radius:
                 item = self._public_row(row)
                 item["distance_m"] = round(distance, 1)
-                ranked.append((distance, self._sort_key(row), item))
+                ranked.append((distance, self._sort_key(row), item, row))
         ranked.sort(key=lambda item: (item[0], item[1]))
-        data = [item for _, _, item in ranked[:safe_limit]]
+        selected = ranked[:safe_limit]
+        data = [item for _, _, item, _ in selected]
+        discrepancies = [warning for *_, row in selected for warning in row.get("source_discrepancies", ())]
         return success_envelope(
             summary=f"{len(data)} İstanbul sosyal tesisi {safe_radius} metre içinde bulundu.",
             data=data,
@@ -136,7 +138,7 @@ class SocialFacilitiesService:
                 "distance=straight-line Haversine",
                 "scope=Istanbul social facility locations",
             ],
-            warnings=self._warnings(cached),
+            warnings=self._warnings(cached, discrepancies),
         )
 
     async def _snapshot(self) -> CachedSourceData:
@@ -236,6 +238,7 @@ class SocialFacilitiesService:
                 "address": self._text(raw.get("address")),
                 "detail_url": self._url(raw.get("detail_url")),
                 "reservation_url": self._url(raw.get("reservation_url")),
+                "source_discrepancies": tuple(str(item) for item in raw.get("source_discrepancies") or ()),
             },
             None,
         )
@@ -294,11 +297,11 @@ class SocialFacilitiesService:
             ttl_seconds=self.settings.social_facilities_cache_ttl_seconds,
         )
 
-    def _warnings(self, cached: CachedSourceData) -> list[str]:
+    def _warnings(self, cached: CachedSourceData, row_warnings: list[str] | None = None) -> list[str]:
         metadata = cached.metadata or {}
         source_warnings = [
             warning
-            for warning in metadata.get("warnings", [])
+            for warning in [*metadata.get("warnings", []), *(row_warnings or [])]
             if not any(term in str(warning).casefold() for term in FORBIDDEN_FIELDS)
         ]
         warnings = [LOCATION_ONLY_WARNING, *source_warnings]

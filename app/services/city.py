@@ -187,7 +187,7 @@ class CityService:
             latest = max(with_values or readings, key=lambda row: str(row.get("ReadTime") or ""), default={})
             station["latest_reading"] = latest
             station["latest_reading_quality"] = {
-                "has_reading": bool(latest),
+                "has_reading": bool(with_values),
                 "has_aqi": latest.get("AQI") is not None,
                 "has_concentration": latest.get("Concentration") is not None,
                 "read_time": latest.get("ReadTime"),

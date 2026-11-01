@@ -62,6 +62,24 @@ async def test_nearby_filters_radius_sorts_and_keeps_nullable_optional_keys():
 
 
 @pytest.mark.asyncio
+async def test_source_discrepancy_warnings_cover_only_returned_facilities():
+    near_warning = "source_discrepancy: Near: coordinates differ by 226 m; live values kept."
+    fake = FakeClient(
+        [
+            {"name": "Near", "latitude": 41.03, "longitude": 28.98, "source_discrepancies": [near_warning]},
+            {"name": "Far", "latitude": 41.10, "longitude": 29.00,
+             "source_discrepancies": ["source_discrepancy: Far: address differs; live values kept."]},
+        ]
+    )
+    result = await SocialFacilitiesService(settings=_settings(), client=fake).nearby(
+        lat=41.0285, lon=28.9825, radius_m=2000, limit=5
+    )
+    assert [item["name"] for item in result["data"]] == ["Near"]
+    assert [warning for warning in result["warnings"] if warning.startswith("source_discrepancy")] == [near_warning]
+    assert "source_discrepancies" not in result["data"][0]
+
+
+@pytest.mark.asyncio
 async def test_invalid_input_does_not_call_source_and_empty_is_success():
     fake = FakeClient([])
     service = SocialFacilitiesService(settings=_settings(), client=fake)

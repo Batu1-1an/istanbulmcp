@@ -103,6 +103,7 @@ class SocialFacilitiesPayload:
 
 
 ISTANBUL_BOUNDS = (40.70, 41.50, 27.80, 30.20)
+COORDINATE_DISCREPANCY_M = 50
 SOCIAL_FACILITIES_CATALOG_URL = "https://tesislerimiz.ibb.istanbul/tesisler"
 SOCIAL_FACILITIES_RESERVATION_URL = "https://tesislerrezervasyon.ibb.istanbul/"
 SOCIAL_FACILITIES_CKAN_URL = "https://data.ibb.gov.tr/dataset/6e9b0cf3-d756-4301-8c5e-a6e3a223ed6d"
@@ -329,8 +330,7 @@ class SocialFacilitiesClient:
                     warnings.append(f"XLSX fallback unavailable: {type(exc).__name__}.")
             if self._live_failed and not fallback_rows:
                 raise SocialFacilitiesSourceError("Live social-facility catalog and XLSX fallback are unavailable")
-            merged, discrepancies = self.merge_rows(primary_rows, fallback_rows)
-            warnings.extend(discrepancies)
+            merged, _discrepancies = self.merge_rows(primary_rows, fallback_rows)
             reported = primary_reported if primary_reported is not None else len(fallback_rows)
             accepted = len(merged)
             skipped = max(0, int(reported) - accepted - primary_duplicates)
@@ -428,7 +428,7 @@ class SocialFacilitiesClient:
                 if not _identity_conflict(previous, raw):
                     duplicates += 1
                     continue
-                warnings.append(f"source_discrepancy: duplicate canonical identity preserved for {raw.get('name') or 'unnamed facility'}.")
+                raw["source_discrepancies"] = [f"source_discrepancy: duplicate canonical identity preserved for {raw.get('name') or 'unnamed facility'}."]
             seen_ids.add(identity)
             identity_rows.setdefault(identity, raw)
             rows.append(raw)
@@ -525,13 +525,22 @@ class SocialFacilitiesClient:
             pairs.append((row, match))
             matched_ids.add(id(match))
         for row, match in pairs:
+            details: list[str] = []
+            distance = _distance_m(row, match)
             for field in ("name", "address", "district", "latitude", "longitude"):
                 current = row.get(field)
                 candidate = match.get(field)
                 if not _valid_field(field, current) and _valid_field(field, candidate):
                     row[field] = candidate
-                elif _valid_field(field, current) and _valid_field(field, candidate) and not _same_value(field, current, candidate):
-                    warnings.append(f"source_discrepancy: {field} differs for {row.get('name') or 'unnamed facility'}; live value kept.")
+                elif (field not in {"latitude", "longitude"} and _valid_field(field, current)
+                      and _valid_field(field, candidate) and normalize_name(current) != normalize_name(candidate)):
+                    details.append(f"{field} differs")
+            if distance is not None and distance > COORDINATE_DISCREPANCY_M:
+                details.append(f"coordinates differ by {distance:.0f} m")
+            if details:
+                warning = f"source_discrepancy: {row.get('name') or 'unnamed facility'}: {', '.join(details)}; live values kept."
+                row["source_discrepancies"] = [*row.get("source_discrepancies", ()), warning]
+                warnings.append(warning)
             row["fallback_source"] = "sosyal-tesis-konumlari"
         identities: set[str] = set()
         result: list[dict[str, Any]] = []
@@ -677,13 +686,13 @@ def _valid_field(field: str, value: Any) -> bool:
     return bool(_text(value))
 
 
-def _same_value(field: str, left: Any, right: Any) -> bool:
-    if field in {"latitude", "longitude"}:
-        try:
-            return abs(float(left) - float(right)) < 1e-5
-        except (TypeError, ValueError):
-            return False
-    return normalize_name(left) == normalize_name(right)
+def _distance_m(left: dict[str, Any], right: dict[str, Any]) -> float | None:
+    coordinates = [
+        _coordinate(row.get(field), -bound, bound)
+        for row in (left, right)
+        for field, bound in (("latitude", 90), ("longitude", 180))
+    ]
+    return None if any(value is None for value in coordinates) else haversine_m(*coordinates)
 
 
 def _identity_conflict(left: dict[str, Any], right: dict[str, Any]) -> bool:
@@ -714,12 +723,8 @@ def _district_from_address(address: str | None) -> str | None:
 
 
 def _same_location(left: dict[str, Any], right: dict[str, Any]) -> bool:
-    coordinates = [
-        _coordinate(row.get(field), -bound, bound)
-        for row in (left, right)
-        for field, bound in (("latitude", 90), ("longitude", 180))
-    ]
-    if any(value is None for value in coordinates) or haversine_m(*coordinates) > 300:
+    distance = _distance_m(left, right)
+    if distance is None or distance > 300:
         return False
     addresses = [normalize_address(row.get("address")) for row in (left, right)]
     districts = [_district_from_address(row.get("address")) for row in (left, right)]

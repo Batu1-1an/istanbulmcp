@@ -297,6 +297,21 @@ async def test_blank_route_id_rows_are_excluded_without_dropping_referenced_rout
     assert any("without route_id" in warning for warning in result["warnings"])
 
 
+@pytest.mark.asyncio
+async def test_top_level_timetable_date_ignores_agency_metadata_file(tmp_path):
+    f = feed(tmp_path)
+    dates = {"agency": "2024-03-13T06:52:27", "calendar": "2026-03-17T06:04:01"}
+    for resource in f.resources:
+        resource["last_modified"] = dates.get(resource["name"], "2026-03-17T12:31:52")
+    async with f.http:
+        result = await f.service.next_departures(stop_id="S1", at=AT, limit=3)
+
+    assert result["ok"], result
+    assert result["freshness"]["source_updated_at"] == "2026-03-17T06:04:01"
+    agency = next(s for s in result["sources"] if s["resource_id"] == "id-agency")
+    assert agency["source_updated_at"] == "2024-03-13T06:52:27"
+
+
 def mojibake(text: str) -> str:
     # Like İBB routes.csv: UTF-8 read as Windows-1254, undefined bytes kept as C1 controls.
     return "".join(bytes([b]).decode("cp1254", errors="ignore") or chr(b) for b in text.encode("utf-8"))

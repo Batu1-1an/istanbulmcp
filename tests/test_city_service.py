@@ -417,7 +417,7 @@ async def test_air_quality_warns_on_missing_aqi(tmp_path):
 
     assert result["data"][0]["latest_reading"]["AQI"] is None
     assert result["data"][0]["latest_reading_quality"]["has_aqi"] is False
-    assert result["data"][0]["latest_reading_quality"]["has_reading"] is True
+    assert result["data"][0]["latest_reading_quality"]["has_reading"] is False
     assert result["warnings"]
 
 

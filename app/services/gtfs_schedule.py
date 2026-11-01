@@ -26,6 +26,7 @@ from app.storage.gtfs_schedule import require_snapshot
 
 ISTANBUL = ZoneInfo("Europe/Istanbul")
 REFRESH_RETRY_SECONDS = 300
+METADATA_ONLY_TABLES = frozenset({"agency"})
 logger = logging.getLogger("istanbul_mcp.gtfs_schedule")
 _warmup_active = False
 _warmup_done = asyncio.Event()
@@ -229,6 +230,7 @@ class GtfsScheduleService:
             )
             untimed = metadata.get("untimed_total", 0)
             invalid_coords = metadata.get("invalid_coordinate_total", 0)
+            resources = [resource for resource in metadata["resources"] if not searching or resource.get("name") == "stops"]
             sources = [Source(
                 name=f"IETT GTFS {resource.get('name') or 'table'}", dataset_id=GTFS_DATASET_ID,
                 resource_id=resource["id"], operator="iett", coverage_kind="published_timetable",
@@ -240,7 +242,7 @@ class GtfsScheduleService:
                 source_updated_at=resource.get("last_modified") or resource.get("metadata_modified"),
                 last_successful_refresh_at=cached.refreshed_at_iso,
                 last_checked_at=utc_now_iso() if cached.is_stale else cached.refreshed_at_iso,
-            ) for resource in metadata["resources"] if not searching or resource.get("name") == "stops"]
+            ) for resource in resources]
             if searching:
                 return self._stop_search_envelope(found, cached, sources, limits, safe_limit)
             warnings = [STATIC_WARNING, "Cache freshness records retrieval age, not the age of the published timetable."]
@@ -268,7 +270,8 @@ class GtfsScheduleService:
                                    scope="next_24_hours_at_selected_stops"),
                 freshness=Freshness(status="stale" if cached.is_stale else "fresh",
                                     retrieved_at=cached.refreshed_at_iso or utc_now_iso(),
-                                    source_updated_at=min((s.source_updated_at for s in sources if s.source_updated_at), default=None),
+                                    source_updated_at=min((s.source_updated_at for resource, s in zip(resources, sources)
+                                                           if s.source_updated_at and resource.get("name") not in METADATA_ONLY_TABLES), default=None),
                                     ttl_seconds=self.settings.gtfs_schedule_cache_ttl_seconds),
             )
         except InputValidationError as exc:

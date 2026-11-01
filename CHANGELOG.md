@@ -12,11 +12,25 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
   `null` döner; yayıncı, dataset/resource ID ve tazelik bilgisi korunur.
 - Sunucu talimatı, cevapta kaynağı yayıncı adıyla belirtmeyi ve yalnız dolu
   `sources[].url` alanını link olarak vermeyi ister.
+- `istanbul_nearby(kind=social_facility)` kaynak farkı uyarılarını yalnız yanıtta dönen
+  tesisler için verir; önceden tüm katalog için basılıyordu. Canlı katalog ile Açık Veri
+  koordinat farkı 50 m altındaysa uyarı sayılmaz (önceden ~1 m; eşleşen 16 tesisin 15'i
+  3–22 m farkla uyarı üretiyordu). Uyarı tesis başına tektir ve farkı metre olarak verir.
+- `istanbul_next_departures` üst düzey `freshness.source_updated_at` alanında yalnız
+  işletmeci bilgisi taşıyan `agency.txt` tarihini hesaba katmaz; tarife dosyalarının en
+  eskisini verir (2024 yerine 2026-03-17). Dosya bazlı tarihler `sources[]` içinde kalır.
 
 ### Security
 - İSKİ relay adresi artık tool sonucunda kaynak URL'i olarak görünmez.
 
 ### Fixed
+- `istanbul_nearby(kind=air_quality)` her istasyon için `AQI`/`Concentration` değerini
+  `null` döndürüyordu. `GetAQIByStationId` tarih aralığı olmadan çağrılınca kaynak saatlik
+  dilimleri istek anından (ör. `21:47:47.89`) üretiyor; ölçümler `HH:00:00`'da tutulduğu
+  için hiçbir dilim eşleşmiyordu. İstek artık İstanbul saatine hizalı son 24 saatlik
+  `StartDate`/`EndDate` gönderir; canlı kontrolde 28 istasyonun 27'si değer döndürdü.
+  `latest_reading_quality.has_reading` artık yalnız AQI veya konsantrasyon değeri varsa
+  `true` olur; tamamen boş satır ölçüm sayılmaz.
 - Kaynak önbelleği, TTL'i dolan her girdiyi başka bir kaynak yazıldığı anda siliyordu;
   `*_STALE_IF_ERROR_SECONDS` pencereleri bu yüzden production'da pratikte çalışmıyordu.
   Girdi artık stale penceresi bitene kadar tutulur; kaynak hata verirse son başarılı
