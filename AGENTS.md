@@ -34,6 +34,8 @@ railway up
 
 Document new commands in `README.md`. Check Railway state before deploying.
 
+`api.ibb.gov.tr` is not reachable directly from the dev machine; production reaches it through the IBB relay. For live source checks, run connector code with Railway's env injected (values are not printed): `railway run .venv/bin/python script.py`. To change a variable and deploy code with a single restart (and a single GTFS warm-up), use `railway variable set KEY=value --skip-deploys` followed by `railway up --ci`.
+
 ## Coding Style & Naming Conventions
 
 Use Python 3.11+. Prefer small modules by data source/domain, for example `app/connectors/ispark.py` and `app/services/freshness.py`.
