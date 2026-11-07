@@ -231,3 +231,21 @@ python scripts/live_mcp_uat.py --base-url "$BASE_URL/mcp/"
 ```
 
 The script writes timestamped JSON and Markdown reports under `.planning/reports/`.
+
+## Etkinlik katmanını yayımlama
+
+Önce `railway status` ile hedefi kontrol edin. Ticketmaster anahtarı secret
+olarak `TICKETMASTER_API_KEY` içinde tutulur; değeri loglara veya dokümanlara
+yazılmaz. `EVENTS_ENABLED=true` üç etkinlik aracını açar. Biletinial ayrıca
+`EVENTS_BILETINIAL_ENABLED=true` ile açılır. Varsayılanlar kapalıdır.
+
+İki bayrağı `railway variable set EVENTS_ENABLED=true EVENTS_BILETINIAL_ENABLED=true --skip-deploys`
+ile ayarlayıp `railway up --ci` ile tek deploy yapabilirsiniz. Böylece mevcut
+GTFS warm-up gereksiz ikinci restart almaz. Tool yayını sonrası `tools/list`
+yenilenmeli; kapsam/fiyatlar için kaynak snapshot yüklemesinin tamamlanması
+beklenmelidir. Sağlık yanıtı tek başına etkinlik kapsamını kanıtlamaz.
+
+Katalog SQLite dosyasındadır. Volume bağlanmamış Railway örneğinde yeni
+deploy dosyayı yeniden oluşturur; kaynaklar arka planda tekrar yüklenir.
+API anahtarı veya kaynak olmadan özellik açık olsa da kaynak verisi uydurulmaz.
+[Davranış ve ayar sınırları](events.md).

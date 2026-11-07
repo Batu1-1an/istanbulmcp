@@ -1,0 +1,407 @@
+[
+  {
+    "id": "student_theatre",
+    "persona": "Öğrenci Deniz",
+    "question": "Yarın Kadıköy'de 300 TL'yi geçmeyen tiyatro var mı?",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "date_to": "tomorrow",
+      "district": "Kadıköy",
+      "category": "theatre",
+      "max_price_try": 300,
+      "limit": 10
+    }
+  },
+  {
+    "id": "parent_daytime",
+    "persona": "Ebeveyn Ece",
+    "question": "Yarın çocuğumla gündüz gidebileceğim etkinlikler neler?",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "date_to": "tomorrow",
+      "category": "family",
+      "time_from": "10:00",
+      "time_to": "18:00",
+      "limit": 10
+    }
+  },
+  {
+    "id": "parent_plan",
+    "persona": "Ebeveyn Ece",
+    "question": "Yarın gündüz yalnız aile etkinliklerinden oluşan bir plan hazırla.",
+    "tool": "istanbul_events_plan",
+    "arguments": {
+      "date": "tomorrow",
+      "start_time": "10:00",
+      "end_time": "18:00",
+      "interests": [
+        "family"
+      ],
+      "max_events": 2
+    }
+  },
+  {
+    "id": "music_evening",
+    "persona": "Konser sever Mert",
+    "question": "Yarın 19.00'dan sonra hangi konserler var?",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "date_to": "tomorrow",
+      "category": "concert",
+      "time_from": "19:00",
+      "limit": 10
+    }
+  },
+  {
+    "id": "standup",
+    "persona": "Arkadaş grubu",
+    "question": "Önümüzdeki hafta stand-up gösterileri bul.",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "category": "standup",
+      "limit": 10
+    }
+  },
+  {
+    "id": "opera",
+    "persona": "Klasik müzik sever Ayşe",
+    "question": "Gelecek hafta opera veya bale gösterileri var mı?",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "category": "opera_ballet",
+      "limit": 10
+    }
+  },
+  {
+    "id": "free_events",
+    "persona": "Bütçesiz gezgin Ali",
+    "question": "Gelecek hafta kesin ücretsiz olan etkinlikleri göster.",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "free_only": true,
+      "limit": 10
+    }
+  },
+  {
+    "id": "tourist_taksim",
+    "persona": "Turist Sam",
+    "question": "Find events within 3 km of Taksim tomorrow.",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "date_to": "tomorrow",
+      "lat": 41.0369,
+      "lon": 28.985,
+      "radius_m": 3000,
+      "limit": 10
+    }
+  },
+  {
+    "id": "kadikoy_radius",
+    "persona": "Kadıköylü Duru",
+    "question": "Yarın Kadıköy Rıhtım'ın 2 km yakınında ne var?",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "date_to": "tomorrow",
+      "lat": 40.9919,
+      "lon": 29.0253,
+      "radius_m": 2000,
+      "limit": 10
+    }
+  },
+  {
+    "id": "district_ascii",
+    "persona": "Telefonda yazan Can",
+    "question": "kadikoy'de gelecek hafta neler var?",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "district": "kadikoy",
+      "limit": 10
+    }
+  },
+  {
+    "id": "venue_zorlu",
+    "persona": "Mekân odaklı Selin",
+    "question": "Zorlu PSM'de gelecek hafta ne var?",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "venue": "Zorlu",
+      "limit": 10
+    }
+  },
+  {
+    "id": "venue_moda",
+    "persona": "Tiyatro sever Bora",
+    "question": "Moda Sahnesi'ndeki gösterileri listele.",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "venue": "Moda Sahnesi",
+      "limit": 10
+    }
+  },
+  {
+    "id": "sila_ascii",
+    "persona": "Sanatçı takipçisi",
+    "question": "Sila konseri bulabilir misin?",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "query": "sila",
+      "limit": 10,
+      "category": "concert"
+    }
+  },
+  {
+    "id": "sila_turkish",
+    "persona": "Sanatçı takipçisi",
+    "question": "Sıla konseri bulabilir misin?",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "query": "Sıla",
+      "limit": 10,
+      "category": "concert"
+    }
+  },
+  {
+    "id": "query_theatre",
+    "persona": "Yeni kullanıcı Zeynep",
+    "question": "Gelecek hafta tiyatro arıyorum.",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "category": "tiyatro",
+      "limit": 10
+    }
+  },
+  {
+    "id": "mixed_plan",
+    "persona": "Çift Elif ve Arda",
+    "question": "Yarın akşam tiyatro ve konserlerden bir günlük plan yap.",
+    "tool": "istanbul_events_plan",
+    "arguments": {
+      "date": "tomorrow",
+      "start_time": "18:00",
+      "end_time": "23:59",
+      "interests": [
+        "theatre",
+        "concert"
+      ],
+      "max_events": 2
+    }
+  },
+  {
+    "id": "budget_plan",
+    "persona": "Öğrenci Deniz",
+    "question": "Yarın akşam toplam 500 TL bütçeyle plan yap.",
+    "tool": "istanbul_events_plan",
+    "arguments": {
+      "date": "tomorrow",
+      "max_price_try": 500,
+      "max_events": 2
+    }
+  },
+  {
+    "id": "early_finish",
+    "persona": "Erken dönecek Ekin",
+    "question": "Yarın 22.00'ye kadar bittiği doğrulanan etkinliklerden plan yap.",
+    "tool": "istanbul_events_plan",
+    "arguments": {
+      "date": "tomorrow",
+      "start_time": "17:00",
+      "end_time": "22:00",
+      "max_events": 2,
+      "require_known_end": true
+    }
+  },
+  {
+    "id": "tight_budget",
+    "persona": "Bütçesiz gezgin Ali",
+    "question": "Yarın 0 TL bütçeyle ne yapabilirim?",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "date_to": "tomorrow",
+      "max_price_try": 0,
+      "limit": 10,
+      "include_unknown_prices": false
+    }
+  },
+  {
+    "id": "no_event_name",
+    "persona": "Nadir etkinlik arayan",
+    "question": "Var olmayan qzxv987 etkinliğini arıyorum.",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "query": "qzxv987",
+      "limit": 10
+    }
+  },
+  {
+    "id": "invalid_district",
+    "persona": "Yanlış şehir seçen",
+    "question": "Ankara'daki etkinlikleri göster.",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "district": "Ankara"
+    },
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "invalid_radius",
+    "persona": "Çok geniş alan isteyen",
+    "question": "100 km yarıçapında etkinlik bul.",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "lat": 41.0369,
+      "lon": 28.985,
+      "radius_m": 100000
+    },
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "invalid_date",
+    "persona": "Tarihi karıştıran",
+    "question": "31 Şubat'ta etkinlik var mı?",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "2027-02-31"
+    },
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "two_letter_query",
+    "persona": "Kısa arama yapan",
+    "question": "Adında 'su' geçen etkinlik var mı?",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "query": "su",
+      "limit": 10
+    }
+  },
+  {
+    "id": "long_gap_plan",
+    "persona": "Acele etmek istemeyen",
+    "question": "Yarın etkinlikler arasında en az 90 dakika bırak.",
+    "tool": "istanbul_events_plan",
+    "arguments": {
+      "date": "tomorrow",
+      "start_time": "12:00",
+      "end_time": "23:59",
+      "min_gap_minutes": 90,
+      "max_events": 3
+    }
+  },
+  {
+    "id": "district_plan",
+    "persona": "Yakasında kalmak isteyen",
+    "question": "Yarın sadece Kadıköy'de bir etkinlik planı yap.",
+    "tool": "istanbul_events_plan",
+    "arguments": {
+      "date": "tomorrow",
+      "district": "Kadıköy",
+      "start_time": "12:00",
+      "end_time": "23:59",
+      "max_events": 3
+    }
+  },
+  {
+    "id": "parent_five",
+    "persona": "5 yaşındaki çocuğuyla Ece",
+    "question": "Yarın 5 yaşındaki çocuğuma uygun olduğu doğrulanan etkinlikleri göster.",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "date_to": "tomorrow",
+      "child_age": 5,
+      "time_from": "10:00",
+      "time_to": "18:00",
+      "limit": 10
+    }
+  },
+  {
+    "id": "parent_twelve",
+    "persona": "12 yaşındaki çocuğuyla Ece",
+    "question": "12 yaşındaki çocuğum için yarın uygun yaş aralığındaki etkinlikler neler?",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "date_to": "tomorrow",
+      "child_age": 12,
+      "limit": 10
+    }
+  },
+  {
+    "id": "strict_budget",
+    "persona": "Fiyat karşılaştıran Deniz",
+    "question": "Yarın fiyatı doğrulanmış ve 1000 TL altında olanları göster.",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "date_to": "tomorrow",
+      "max_price_try": 1000,
+      "include_unknown_prices": false,
+      "limit": 10
+    }
+  },
+  {
+    "id": "family_strict_plan",
+    "persona": "5 yaşındaki çocuğuyla Ece",
+    "question": "5 yaşındaki çocuğumla yarın 18.00 itibarıyla biten bir aile planı hazırla.",
+    "tool": "istanbul_events_plan",
+    "arguments": {
+      "date": "tomorrow",
+      "start_time": "10:00",
+      "end_time": "18:00",
+      "child_age": 5,
+      "require_known_end": true,
+      "max_events": 2
+    }
+  },
+  {
+    "id": "venue_query_explicit",
+    "persona": "Mekân odaklı Selin",
+    "question": "Adında veya mekânında Moda geçen etkinlikleri bul.",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "query": "Moda",
+      "query_scope": "all",
+      "limit": 10
+    }
+  },
+  {
+    "id": "invalid_child_age",
+    "persona": "Yaşı yanlış yazan ebeveyn",
+    "question": "Çocuk yaşını -1 yazdım.",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "child_age": -1
+    },
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "sold_out_opt_in",
+    "persona": "Diğer seansları arayan takipçi",
+    "question": "Tükenmiş olanlar dahil gelecek haftanın aile gösterilerini göster.",
+    "tool": "istanbul_events_search",
+    "arguments": {
+      "date_from": "tomorrow",
+      "category": "family",
+      "include_sold_out": true,
+      "limit": 10
+    }
+  }
+]

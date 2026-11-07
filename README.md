@@ -1,6 +1,6 @@
 # Istanbul MCP
 
-Istanbul MCP, İstanbul'a dair açık verileri Claude, ChatGPT, Codex, Cursor gibi MCP destekleyen yapay zekâ araçlarına bağlayan, salt okunur ve uzak bir Model Context Protocol sunucusudur.
+Istanbul MCP, İstanbul'a dair şehir verilerini Claude, ChatGPT, Codex, Cursor gibi MCP destekleyen yapay zekâ araçlarına bağlayan, salt okunur ve uzak bir Model Context Protocol sunucusudur.
 
 ```text
 https://istanbulmcp-production.up.railway.app/mcp/
@@ -215,7 +215,7 @@ Her sonuç standart bir yapıyla döner: `ok`, `summary`, `data`, `freshness`, `
 
 ## MCP Araçları
 
-Production yüzeyi **18 salt okunur araçtır**: aşağıdaki 16 araç ve GTFS tarifesi açıkken eklenen 2 araç. Daha önce yayımlanmış araç adları listede görünmese de çağrılabilir kalır; eski → yeni karşılıklar için [geçiş tablosuna](docs/tool-migration.md) bakın.
+Production yüzeyi **21 salt okunur araçtır**: temel 16 araç, GTFS tarifesine ait 2 araç ve etkinlik katmanının 3 aracı. Daha önce yayımlanmış araç adları listede görünmese de çağrılabilir kalır; eski → yeni karşılıklar için [geçiş tablosuna](docs/tool-migration.md) bakın.
 
 | Araç | İşlev |
 |---|---|
@@ -293,3 +293,33 @@ Kod [MIT Lisansı](LICENSE) ile lisanslanmıştır. Bu lisans yalnızca kodu kap
 Istanbul MCP resmî olmayan, bağımsız bir projedir; İBB, İSKİ, İETT, Metro İstanbul, Şehir Hatları veya TCDD ile bağlantılı değildir.
 
 Veriler gecikmeli, eksik veya hatalı olabilir. Nöbetçi eczane, su arızası ve ulaşım gibi kritik bilgileri resmî kaynaktan teyit edin.
+
+## Etkinlik keşfi ve planlama
+
+İsteğe bağlı etkinlik katmanı `istanbul_events_search`, `istanbul_event_detail` ve
+`istanbul_events_plan` araçlarını ekler. `EVENTS_ENABLED=true` ve bir kaynak
+yapılandırması gerekir. Ticketmaster katalog, Biletinial doğrulanmış seans ve
+teklif gözlemleri sağlar. Fiyatı bilinmeyen ücretsiz sayılmaz; günlük planlar
+ulaşım süresi veya canlı bilet garantisi vermez.
+
+[Etkinlik rehberi: kullanım, ayarlar, mimari ve doğrulama](docs/events.md).
+Üç araç açıkken varsayılan 16 araç 19 olur; GTFS de açıksa 21 araç listelenir.
+
+Etkinlik canlı kabul kontrolü (geçici yerel DB, deploy yapmaz):
+
+```bash
+railway run .venv/bin/python scripts/check_events.py
+```
+
+### Etkinlik kullanıcı senaryoları
+
+0.4.0 ile Türkçe kategori adları, yayımlanmış çocuk yaş aralığı, kesin bitiş
+koşulu ve yalnız doğrulanmış fiyatlarla arama desteklenir. Tükenmiş seanslar
+varsayılan olarak dışlanır. [Persona bulguları ve doğrulama](docs/events-persona-validation.md).
+
+```bash
+# Ağsız kullanıcı-niyeti regresyonları
+pytest tests/test_event_personas.py tests/test_events.py
+# Opt-in: çalışan MCP üzerinde farklı kullanıcı soruları; raw cevap/secret kaydetmez
+railway run .venv/bin/python scripts/events_persona_uat.py --output .data/events-persona-uat.json
+```

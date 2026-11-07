@@ -55,6 +55,51 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 - Canlı `istanbul_transport_disruptions` hat testi yanlış parametre adı (`line_code`)
   yerine aracın gerçek parametresi `line` ile çağrılır.
 
+## [0.4.0] - 2026-11-07
+
+### Fixed
+- Daily plans restrict interests before sampling and preserve selected performance
+  identities instead of substituting another session from the same series.
+- Planning samples the bounded day index across hours and series, avoiding the
+  first search page bias. Diverse requested categories receive an explicit score.
+- Background detail work prioritizes upcoming sessions and records retry times;
+  failing/past series no longer repeatedly consume the detail batch.
+- Event schema initialization is serialized once per SQLite file, reducing
+  concurrent first-load DDL contention. Storage schema version is now 3.
+
+### Added
+- Source-published child genre, age ranges and durations; child_age filtering and
+  require_known_end planning for explicit finish deadlines.
+- Bounded relevant detail refresh for budget/free/family searches, strict known-price
+  filtering, ticket type context, Turkish category aliases and title-scoped search.
+- Repeatable persona UAT questions, semantic checks and new user-intent regressions.
+- Event workflow prompt guidance for child ages, firm finish deadlines and exact
+  session selection; privacy documentation describes request-only age filtering.
+
+### Changed
+- Explicit sold-out sessions are excluded from event search by default;
+  include_sold_out opts in. Nearby cards identify distances as straight-line.
+
+## [0.3.1] - 2026-11-07
+
+### Fixed
+- Event HTTP requests share a per-host one-request-per-second limiter across
+  catalogue warm-up and concurrent detail requests. HTTP 429 applies a bounded
+  Retry-After cooldown without repeated upstream requests.
+
+## [0.3.0] - 2026-11-07
+
+### Added
+- Optional event search, event detail and daily planning MCP tools with source
+  observations, explicit unknown prices/availability, bounded calendar exports.
+- Official Ticketmaster TR feed and opt-in Biletinial list/detail connectors.
+- Transactional SQLite event snapshots, normalized Turkish FTS5 and RTree.
+- Event fixtures, protocol/behavior tests and [event guide](docs/events.md).
+
+### Changed
+- SQLite foreign key enforcement now applies on every application connection.
+- New published names remain callable when the event feature is disabled.
+
 ## [0.2.6] - 2026-10-25
 
 ### Added

@@ -352,3 +352,33 @@ No alternative route, working backup, guaranteed repair date or end-to-end
 station/journey accessibility is inferred. One failed source is partial: the
 other source's verified data is kept with a `partial_source` warning. Two failed
 sources give `ok=false`/broken; checked-empty remains successful.
+
+## Optional event tools
+
+`EVENTS_ENABLED=true` adds three read-only tools (19 base tools, or 21 with GTFS).
+
+| Tool | Purpose | Bounds |
+|---|---|---|
+| `istanbul_events_search` | Indexed Istanbul sessions, Turkish text, dates, category, district, venue, radius, budget | 31 days, 50 results, radius 20 km |
+| `istanbul_event_detail` | Sessions, observed offers and provenance for a search ID | Known event/performance ID only; no arbitrary URLs |
+| `istanbul_events_plan` | One-day options with separate unknown-budget plans, ICS and calendar links | 20 evaluated candidates, 3 stops, 5 options |
+
+Disabled names remain callable with `feature_disabled`. Unknown prices and
+availability stay unknown. Non-overlapping times do not prove travel feasibility.
+[Full behavior, settings and examples](events.md).
+
+### Event search/plan controls (0.4.0)
+
+Search also accepts Turkish category aliases, `child_age` (0–17),
+`include_unknown_prices` (default true), `include_sold_out` (default false),
+and `query_scope=title|all` (default title). Family/price/free questions can
+refresh at most three relevant Biletinial series within a 12-second total
+refresh budget. Catalogue price hints only prioritize these checks; they never
+become verified session prices. Cards expose age_limit, duration_minutes,
+end_source, ticket type context and straight-line distance_kind.
+
+Planning restricts interests before candidate selection, accepts child_age and
+require_known_end (default false), and preserves exact selected performance IDs.
+Missing/ambiguous selections return selection_changed. Event IDs allow a series'
+sessions. Published durations can supply an end with end_source=published_duration.
+Unknown ends are excluded under require_known_end.

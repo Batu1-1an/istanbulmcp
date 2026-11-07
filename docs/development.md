@@ -68,3 +68,39 @@ RUN_LIVE_GTFS_TESTS=1 pytest -s tests/live/test_gtfs_source_live.py
 # Tam GTFS ZIP indirir (opt-in; geçici DB kullanır)
 RUN_LIVE_GTFS_SCHEDULE_TESTS=1 pytest -s tests/live/test_gtfs_schedule_source_live.py
 ```
+
+## Etkinlik geliştirme doğrulaması
+
+```bash
+pytest tests/test_events.py tests/test_tool_compatibility.py tests/test_mcp_structured.py
+```
+
+Fixture testleri dış ağ kullanmaz; kaynak biçimleri `tests/fixtures/events/`
+içindedir. Gzip/redirect sınırları, transaction, Türkçe arama, fiyat belirsizliği,
+plan çakışmaları ve MCP şeması sınanır. Tam regresyon için `pytest` çalıştırılır.
+Canlı kaynak denemelerinin tarihi ve ölçümleri [etkinlik rehberinde](events.md)
+tutulur; tarihli örnek şehir kapsamı garantisi değildir.
+
+Canlı etkinlik kabulü (gerçek Ticketmaster → geçici SQLite → üç MCP tool):
+
+```bash
+railway run .venv/bin/python scripts/check_events.py
+```
+
+Bu kontrol deploy veya production veritabanını değiştirmez; Biletinial tam katalog
+taraması yapmaz, anahtar veya ham kaynak gövdesi yazdırmaz.
+
+## Etkinlik persona senaryoları
+
+```bash
+pytest tests/test_event_personas.py tests/test_events.py
+railway run .venv/bin/python scripts/events_persona_uat.py --output .data/events-persona-uat.json
+# Yerel aday sunucuya karşı (önceden başlatılmış olmalı)
+python scripts/events_persona_uat.py --url http://127.0.0.1:8770/mcp/ --output .data/events-persona-local.json
+```
+
+Sorular explicit MCP argümanlarına eşlenir; bu test LLM routing başarısını ölçmez.
+Runner önce bağlantı ve yapılandırılmış kaynakların hazır olmasını kontrol eder;
+startup yarışını kullanıcı akışı hatası saymaz. Tarihli özetler ve iddiaların
+sınırları [doğrulama raporunda](events-persona-validation.md), ham özet JSON
+raporları ignore edilen .data dizinindedir.

@@ -1,6 +1,6 @@
 # Veri işleme ve gizlilik notu
 
-Son güncelleme: 2026-10-25. Bu belge depodaki uygulama davranışını açıklar;
+Son güncelleme: 2026-11-07. Bu belge depodaki uygulama davranışını açıklar;
 isteminizi kullandığınız MCP istemcisinin veya barındırma sağlayıcısının
 politikalarının yerine geçmez.
 
@@ -55,3 +55,20 @@ Genel destek: [GitHub Issues](https://github.com/Batu1-1an/istanbulmcp/issues).
 **Hassas içerikleri public issue'ya eklemeyin.** Güvenlik bildirimi için,
 etkinse [private vulnerability reporting](https://github.com/Batu1-1an/istanbulmcp/security/advisories/new)
 kanalını kullanın; özel kanalın etkinliği bu oturumda doğrulanmamıştır.
+
+## Etkinlik veri akışı
+
+Etkinlik araması yerel SQLite indeksinde yapılır; serbest metin, bütçe veya
+kullanıcı konumu veya `child_age` Ticketmaster/Biletinial arama parametresine gönderilmez.
+`child_age` yalnız istek sırasında yayımlanmış yaş koşuluyla karşılaştırılır;
+uygulama çocuk profili veya yaş geçmişi saklamaz. Bütçe/aile/ücretsiz aramalarında
+en fazla üç ilgili etkinliğin kamuya açık detay sayfası yenilenebilir;
+bu çağrılar kullanıcının bütçe, yaş veya koordinatını taşımaz.
+Ticketmaster TR kataloğu ülke bazında indirilir. Biletinial kategori listesi
+İstanbul filtresiyle alınır; detay doğrulaması seçilen kamuya açık etkinlik
+sayfasını çağırır. Kaynaklar bu sunucu isteklerini görebilir.
+
+Bilet alma, hesap girişi, rezervasyon ve takvime dış yazma yapılmaz. Kullanıcı
+bilet veya Google Calendar bağlantısını açarsa ilgili üçüncü tarafın kendi
+koşulları ve gizlilik politikası geçerlidir. API anahtarı yalnız sunucudadır;
+MCP argümanı, yanıtı veya kaynak atıf URL’sine konmaz.

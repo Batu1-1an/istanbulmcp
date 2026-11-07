@@ -11,6 +11,7 @@ from app.core.envelope import ResponseEnvelope
 P = ParamSpec("P")
 
 STRUCTURED_TOOL_NAMES = frozenset({
+    "istanbul_events_search", "istanbul_event_detail", "istanbul_events_plan",
     "istanbul_nearby", "istanbul_traffic_status", "istanbul_water_status",
     "istanbul_transit_line", "istanbul_transport_disruptions",
     "istanbul_market_schedule",

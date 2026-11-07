@@ -14,6 +14,7 @@ from app.core.envelope import Freshness, Pagination, ResponseEnvelope, Source, e
 from app.core.settings import Settings
 from app.mcp.registry import create_mcp_server
 from app.mcp.structured import STRUCTURED_LEGACY_TOOL_NAMES, STRUCTURED_TOOL_NAMES, with_envelope_output
+from app.mcp.events import EVENT_TOOL_NAMES
 import app.mcp.server as handlers
 
 CASES = [
@@ -33,9 +34,9 @@ CASES = [
 async def test_only_selected_tools_publish_the_canonical_envelope_schema(legacy):
     server = create_mcp_server(Settings(mcp_legacy_tools_enabled=legacy))
     tools = await server.list_tools()
-    expected = STRUCTURED_TOOL_NAMES | (STRUCTURED_LEGACY_TOOL_NAMES if legacy else set())
+    expected = (STRUCTURED_TOOL_NAMES - set(EVENT_TOOL_NAMES)) | (STRUCTURED_LEGACY_TOOL_NAMES if legacy else set())
     structured = {tool.name for tool in tools if tool.output_schema is not None}
-    assert len(STRUCTURED_TOOL_NAMES) == 6
+    assert len(STRUCTURED_TOOL_NAMES) == 9
     assert structured == expected
     for tool in tools:
         if tool.name in expected:
@@ -58,7 +59,7 @@ def test_adapter_preserves_input_schema_docstring_and_bare_dict_handler(name):
 
     reference = MCPServer("unadapted")
     reference.add_tool(handler, structured_output=False)
-    configured = create_mcp_server(Settings(mcp_legacy_tools_enabled=True))
+    configured = create_mcp_server(Settings(mcp_legacy_tools_enabled=True, events_enabled=True))
     original_tool = asyncio.run(reference.list_tools())[0]
     actual_tool = next(tool for tool in asyncio.run(configured.list_tools()) if tool.name == name)
     assert actual_tool.input_schema == original_tool.input_schema

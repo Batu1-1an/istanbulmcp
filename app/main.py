@@ -26,6 +26,7 @@ from app.core.settings import get_settings
 from app.core.status import build_status
 from app.mcp.registry import create_mcp_server
 from app.services.gtfs_schedule import begin_warmup, keep_snapshot_fresh
+from app.services.events import keep_events_fresh, validate_events_settings
 from app.storage.db import public_readiness, readiness
 
 
@@ -68,6 +69,7 @@ def create_app() -> Starlette:
     validate_open_data_settings(settings)
     validate_ibb_relay_settings(settings)
     validate_watchdog_settings(settings)
+    validate_events_settings(settings)
     auth_enabled = validate_auth_settings(settings)
     if not auth_enabled and settings.ckan_sql_allowed_resource_ids:
         logger.warning(
@@ -91,12 +93,17 @@ def create_app() -> Starlette:
             watchdog = EventLoopWatchdog(asyncio.get_running_loop(), timeout_seconds=settings.event_loop_watchdog_seconds)
             watchdog.start()
         warmup_task = None
+        events_task = asyncio.create_task(keep_events_fresh(settings)) if settings.events_enabled else None
         if settings.gtfs_schedule_enabled and begin_warmup():
             warmup_task = asyncio.create_task(keep_snapshot_fresh(settings))
         try:
             async with mcp.session_manager.run():
                 yield
         finally:
+            if events_task is not None:
+                events_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await events_task
             if watchdog is not None:
                 watchdog.stop()
             if warmup_task is not None and not warmup_task.done():

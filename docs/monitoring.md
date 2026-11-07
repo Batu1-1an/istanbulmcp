@@ -86,3 +86,26 @@ gh workflow run uptime.yml                          # elle tetikleme
 Public repoda standart GitHub runner kullanımı ücretsizdir. Repo private yapılırsa her çalışma en az 1 dakika sayılır; 10 dakikalık aralık ücretsiz kotayı aşacağından aralığı 30 dakikaya çıkarın.
 
 Event loop donarsa `EVENT_LOOP_WATCHDOG_SECONDS` (varsayılan 60) sonunda süreç tüm thread stack'lerini stderr'e yazıp `70` koduyla çıkar; Railway `ON_FAILURE` politikası servisi yeniden başlatır. Dökümü `railway logs` içinde `event_loop_stalled` ile arayın.
+
+## Etkinlik kaynağı ve planlama
+
+Etkinlik tool çağrıları mevcut `mcp_tool_call` telemetrisiyle izlenir.
+`istanbul_mcp.events` kaynak yenileme hatalarında yalnız kaynak adı ve
+exception türünü loglar. HTTPX apikey sorgu değerleri maskelenir; ham kaynak
+gövdesi veya kullanıcı etkinlik sorgusu olay loguna yazılmaz.
+
+Tool sonucunda sources.last_checked_at, last_successful_refresh_at, kapsam
+sayıları ve coverage_status incelenir. freshness.stale, başarısız yenileme
+uyarıları, provisional Biletinial seansları ve bilinmeyen fiyatlar korunur.
+Planın candidate_truncated ve unverified_budget alanları kalite sınırıdır;
+boş seçenek veya kaynak kaybı şehirde etkinlik bulunmadığını kanıtlamaz.
+[Etkinlik işletim rehberi](events.md).
+
+### Etkinlik detay kuyruğu (0.4.0)
+
+`event_detail_checks` seri bazında attempted_at, last_successful_at, error_type ve
+next_check_at tutar. Başarısız detaylar beş dakika geri çekilir; geçmiş seanslar
+yenileme sırasını tüketmez. Önümüzdeki 31 günün yakın seansları önce işlenir.
+Bekleyen iş varsa batch sonrası beş saniye, yoksa en fazla 60 saniye beklenir;
+host başına ortak 1 istek/s sınırı değişmez. Fiyat/aile sorgularındaki sınırlı
+detay kontrolleri için response warnings ve gecikme telemetrisi incelenir.

@@ -143,6 +143,16 @@ class Settings:
     mcp_max_concurrent_requests: int = 25
     mcp_max_listen_streams: int = 200
     event_loop_watchdog_seconds: float = 60.0
+    events_enabled: bool = False
+    ticketmaster_api_key: str | None = field(default=None, repr=False)
+    events_biletinial_enabled: bool = False
+    events_cache_ttl_seconds: int = 3600
+    events_stale_if_error_seconds: int = 86400
+    events_max_feed_bytes: int = 8 * 1024 * 1024
+    events_max_uncompressed_bytes: int = 32 * 1024 * 1024
+    events_max_rows: int = 10000
+    events_biletinial_max_pages: int = 40
+    events_detail_ttl_seconds: int = 900
 
 
 def _int_env(name: str, default: int) -> int:
@@ -371,4 +381,14 @@ def get_settings() -> Settings:
         mcp_max_concurrent_requests=_int_env("MCP_MAX_CONCURRENT_REQUESTS", 25),
         mcp_max_listen_streams=_int_env("MCP_MAX_LISTEN_STREAMS", 200),
         event_loop_watchdog_seconds=_float_env("EVENT_LOOP_WATCHDOG_SECONDS", 60.0),
+        events_enabled=_bool_env("EVENTS_ENABLED", False),
+        ticketmaster_api_key=_str_env("TICKETMASTER_API_KEY"),
+        events_biletinial_enabled=_bool_env("EVENTS_BILETINIAL_ENABLED", False),
+        events_cache_ttl_seconds=_int_env("EVENTS_CACHE_TTL_SECONDS", 3600),
+        events_stale_if_error_seconds=_int_env("EVENTS_STALE_IF_ERROR_SECONDS", 86400),
+        events_max_feed_bytes=_int_env("EVENTS_MAX_FEED_BYTES", 8 * 1024 * 1024),
+        events_max_uncompressed_bytes=_int_env("EVENTS_MAX_UNCOMPRESSED_BYTES", 32 * 1024 * 1024),
+        events_max_rows=_int_env("EVENTS_MAX_ROWS", 10000),
+        events_biletinial_max_pages=_int_env("EVENTS_BILETINIAL_MAX_PAGES", 40),
+        events_detail_ttl_seconds=_int_env("EVENTS_DETAIL_TTL_SECONDS", 900),
     )

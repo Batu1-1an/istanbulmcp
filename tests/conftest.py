@@ -6,6 +6,9 @@ import pytest
 # app.main creates its default ASGI app at import time, before fixtures run.
 os.environ["MCP_AUTH_REQUIRED"] = "false"
 os.environ["GTFS_SCHEDULE_ENABLED"] = "false"
+os.environ["EVENTS_ENABLED"] = "false"
+os.environ["EVENTS_BILETINIAL_ENABLED"] = "false"
+os.environ.pop("TICKETMASTER_API_KEY", None)
 # The production watchdog exits the process; never let it kill pytest.
 os.environ["EVENT_LOOP_WATCHDOG_SECONDS"] = "0"
 os.environ.pop("MCP_API_KEYS", None)

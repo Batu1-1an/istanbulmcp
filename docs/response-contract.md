@@ -93,3 +93,20 @@ stale süresi, snapshot değişimi, kesilme ve iki MCP protokolünü kontrol ede
 
 Kontrol edilen güncel belge: Context7 `/modelcontextprotocol/python-sdk/v2.3.0`,
 [Tools ve structured output](https://github.com/modelcontextprotocol/python-sdk/blob/v2.3.0/docs/servers/tools.md).
+
+## Optional event results
+
+Event tools retain the same ResponseEnvelope, including list-valued data.
+Search data contains session cards. Detail data contains one object with
+performances and observed offers. Plan data contains one object with options,
+unverified_budget and rejection reasons; result_info.scope=data.options counts
+plan options rather than the enclosing data object. Unknown prices/availability
+are explicit. Provider ticket_links retain separate availability observations.
+See [events](events.md) for limits, timing and source semantics.
+
+Event cards in 0.4.0 additionally expose `age_limit`, `duration_minutes`,
+`end_source` and `distance_kind=straight_line`. Price includes the observed ticket
+type and eligibility uncertainty; catalogue hints never populate the price.
+Detail may include requested_performance_id, selected_performance_ids and
+selection_status for exact session selection. Plan echoes requested_categories,
+child_age and require_known_end. Existing tool names and envelope remain callable.

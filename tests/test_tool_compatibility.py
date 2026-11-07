@@ -9,6 +9,7 @@ from app.mcp.registry import DEFAULT_TOOL_NAMES, create_mcp_server
 # Every tool name that production has ever listed. Clients cache tools/list, so
 # a name may leave the listing but must stay callable; never delete entries here.
 PUBLISHED_TOOL_NAMES = frozenset({
+    "istanbul_events_search", "istanbul_event_detail", "istanbul_events_plan",
     "istanbul_air_quality_nearby", "istanbul_bbox_search", "istanbul_city_services_nearby",
     "istanbul_datastore_query", "istanbul_ferry_schedules", "istanbul_get_dataset",
     "istanbul_get_resource_schema", "istanbul_health", "istanbul_iski_active_faults",

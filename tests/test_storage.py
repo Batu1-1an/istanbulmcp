@@ -7,7 +7,7 @@ def test_init_database_enables_wal_and_schema(tmp_path):
     status = init_database(db_path)
 
     assert status["journal_mode"] == "wal"
-    assert status["schema_version"] == 1
+    assert status["schema_version"] == 3
     assert db_path.exists()
 
 

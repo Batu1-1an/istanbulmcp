@@ -66,3 +66,17 @@ Tüm değişkenler ve örnek değerler [.env.example](../.env.example) dosyasın
 `ISKI_RELAY_TOKEN`, Cloudflare Worker'daki `RELAY_TOKEN` secret değeriyle aynı olmalıdır. `ISKI_API_BEARER_TOKEN`, İSKİ'nin kendi web istemcisinin kullandığı resmi API fallback'i için gerekir. Snapshot JSON tercihen `{"captured_at":"...","payload":...}` zarfını kullanır; eski çıplak payload biçimi için ilgili `*_SNAPSHOT_CAPTURED_AT` değişkeni zorunludur. Süresi geçmiş veya tarihsiz snapshot aktif veri olarak sunulmaz.
 
 İSKİ canlı kaynakları bazı Railway çıkışlarından zaman aşımına düşebilir. Üretim kurulumu bu trafiği sabit hedefli ve kimlik doğrulamalı Cloudflare Worker relay üzerinden geçirir. Relay, resmi e-Devlet tablolarını ve İSKİ JSON kaynaklarını kullanır; başarılı yanıtları Workers KV'de global olarak paylaşır ve stale-while-revalidate ile yeniler. Relay ve doğrudan kaynaklar kullanılamazsa yalnızca capture zamanı bulunan ve azami yaş sınırını aşmamış snapshot döndürülebilir.
+
+## Etkinlik kaynakları
+
+`EVENTS_ENABLED` (false), `TICKETMASTER_API_KEY` (secret) ve
+`EVENTS_BILETINIAL_ENABLED` (false) kaynakları açar. Anahtar tek başına açmaz.
+TTL, fallback yaşı, indirme/açılmış içerik, kayıt ve kategori sayfalama sınırları
+[etkinlik ayar tablosunda](events.md#ayarlar) açıklanır. Kaynaklar İBB relay
+üzerinden geçirilmez. `.env` otomatik yüklenmez; yerelde shell environment veya
+`railway run` kullanılır. Secret değerlerini komut çıktısına yazdırmayın.
+
+Etkinlik persona iyileştirmeleri (0.4.0) yeni environment variable gerektirmez.
+Yaş, fiyat doğruluğu, tükenmişlik ve bitiş koşulları MCP çağrısı parametreleridir;
+[tool kontrol alanları](tool-reference.md#event-searchplan-controls-040). SQLite
+schema_version=3, seri bazlı detail retry kayıtlarını ekler; eski veri silinmez.

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.mcp.events import istanbul_events_search, istanbul_event_detail, istanbul_events_plan
+
 from typing import Literal
 
 from mcp.server import MCPServer

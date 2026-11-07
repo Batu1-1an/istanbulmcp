@@ -1,0 +1,20 @@
+{
+  "events": [
+    {
+      "eventId": "tm-sila-1", "eventName": "Sıla", "eventStatus": "onsale",
+      "eventStartDateTime": "2030-11-08T17:00:00Z", "eventStartLocalTime": "20:00",
+      "eventEndDateTime": null, "classificationSegment": "Music",
+      "transactable": false, "minPrice": null, "currency": null,
+      "primaryEventUrl": "https://www.biletix.com/performance/ABC12/001/TURKIYE/tr",
+      "venue": {"venueName": "Örnek Sahne", "venueCity": "İstanbul", "venueCountryCode": "TR",
+        "venueLatitude": 40.987, "venueLongitude": 29.028, "venueAddress": "Kadıköy İstanbul"}
+    },
+    {
+      "eventId": "tm-cancelled", "eventName": "İptal Konser", "eventStatus": "cancelled",
+      "eventStartDateTime": "2030-11-08T18:00:00Z", "eventStartLocalTime": "21:00",
+      "classificationSegment": "Music", "primaryEventUrl": "https://www.biletix.com/performance/CAN01/001/TURKIYE/tr",
+      "venue": {"venueName": "Örnek Sahne", "venueCity": "İstanbul", "venueCountryCode": "TR"}
+    },
+    {"eventId": "other-city", "eventName": "Ankara", "venue": {"venueCity": "Ankara", "venueCountryCode": "TR"}}
+  ]
+}

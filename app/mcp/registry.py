@@ -14,6 +14,7 @@ from app.mcp.instructions import SERVER_INSTRUCTIONS
 from app.mcp.prompts import register_prompts
 from app.mcp.resources import register_resources
 from app.mcp.structured import STRUCTURED_LEGACY_TOOL_NAMES, STRUCTURED_TOOL_NAMES, with_envelope_output
+from app.mcp.events import EVENT_TOOL_NAMES
 
 READ_ONLY = ToolAnnotations(
     read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=True,
@@ -42,6 +43,9 @@ LEGACY_TOOL_NAMES = (
 
 
 TOOL_TITLES = {
+    "istanbul_events_search": "İstanbul etkinlik arama",
+    "istanbul_event_detail": "İstanbul etkinlik detayları",
+    "istanbul_events_plan": "İstanbul günlük etkinlik planı",
     "istanbul_health": "İstanbul servis durumu",
     "istanbul_search_datasets": "İBB veri seti arama",
     "istanbul_get_dataset": "İBB veri seti bilgileri",
@@ -125,7 +129,10 @@ def create_mcp_server(settings: Settings) -> MCPServer:
 
     server = IstanbulMCPServer("istanbul-mcp", title="Istanbul MCP", version=package_version(), instructions=SERVER_INSTRUCTIONS)
     names = DEFAULT_TOOL_NAMES + LEGACY_TOOL_NAMES
+    names += EVENT_TOOL_NAMES
     hidden = set() if settings.mcp_legacy_tools_enabled else set(LEGACY_TOOL_NAMES)
+    if not settings.events_enabled:
+        hidden.update(EVENT_TOOL_NAMES)
     if not settings.ferry_schedules_enabled:
         hidden.add("istanbul_ferry_schedules")
     names += ("istanbul_next_departures", "istanbul_gtfs_snapshot_status")
@@ -144,5 +151,5 @@ def create_mcp_server(settings: Settings) -> MCPServer:
     server.telemetry = ToolTelemetry(server.callable_tool_names())
     server.hidden_tools = frozenset(hidden)
     register_resources(server, settings)
-    register_prompts(server)
+    register_prompts(server, events_enabled=settings.events_enabled)
     return server

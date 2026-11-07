@@ -12,6 +12,8 @@ from app.core.settings import Settings
 # Canonical public references only. Deployment overrides can contain credentials
 # or private relay addresses and must never be copied into discovery metadata.
 SOURCE_CATALOG = (
+    ("ticketmaster", "Ticketmaster Discovery Feed / Biletix", "Ticketmaster", "https://developer.ticketmaster.com/products-and-docs/apis/discovery-feed/", "event_catalogue"),
+    ("biletinial", "Biletinial", "Biletinial", "https://biletinial.com/tr-tr/tiyatro", "event_catalogue_and_observed_offers"),
     ("runtime", "Istanbul MCP runtime", "Istanbul MCP", None, "local_metadata"),
     ("ckan", "İBB Açık Veri", "İBB", "https://data.ibb.gov.tr", "catalog_and_static_records"),
     ("ibb_open_data_layers", "İBB açık veri nokta katmanları", "İBB", "https://data.ibb.gov.tr", "static_point_layers"),
@@ -49,6 +51,8 @@ def _document(summary: str, data: list[dict[str, Any]], *, limits: list[str] | N
 def _coverage(settings: Settings, actual_tools: set[str]) -> list[dict[str, Any]]:
     # Configured/enabled is deliberately not called healthy or available.
     entries = [
+        ("events", ["istanbul_events_search", "istanbul_event_detail", "istanbul_events_plan"], ["ticketmaster", "biletinial"], "event_catalogue_and_daily_plan",
+         "Opt-in sources; not all Istanbul events. Ticketmaster has no prices/live ticket availability. Biletinial list sessions need detail verification. Planning checks time gaps, not travel feasibility."),
         ("runtime", ["istanbul_health"], ["runtime"], "local_readiness",
          "SQLite/runtime readiness only; does not check upstream data sources."),
         ("catalog", ["istanbul_search_datasets", "istanbul_get_dataset", "istanbul_get_resource_schema", "istanbul_query_resource"], ["ckan"], "catalog_and_records",
