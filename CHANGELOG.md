@@ -55,6 +55,14 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 - Canlı `istanbul_transport_disruptions` hat testi yanlış parametre adı (`line_code`)
   yerine aracın gerçek parametresi `line` ile çağrılır.
 
+## [0.4.1] - 2026-11-08
+
+### Fixed
+- Event search, detail and planning guidance now asks clients to show a clickable
+  event/ticket-page link beside every presented event title, using the existing
+  ticket_url or ticket_links[].url. Missing links stay explicit; calendar links
+  do not replace event links. Source citation guidance no longer obscures these links.
+
 ## [0.4.0] - 2026-11-07
 
 ### Fixed

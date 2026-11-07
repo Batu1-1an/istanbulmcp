@@ -49,6 +49,10 @@ codex mcp list
 
 Manuel yapılandırma için `~/.codex/config.toml` dosyasına `[mcp_servers.istanbul]` başlığı altında `url = "https://istanbulmcp-production.up.railway.app/mcp/"` ekleyin.
 
+Ekledikten sonra yeni bir Codex oturumu açıp `/mcp` ile `istanbul` bağlantısını
+kontrol edin. Bu doğrudan bağlantı canlı sunucunun araçlarını keşfeder;
+etkinlik katmanı açıksa üç etkinlik aracı da sunulur.
+
 ### Claude Code
 
 ```bash
@@ -301,6 +305,9 @@ Veriler gecikmeli, eksik veya hatalı olabilir. Nöbetçi eczane, su arızası v
 yapılandırması gerekir. Ticketmaster katalog, Biletinial doğrulanmış seans ve
 teklif gözlemleri sağlar. Fiyatı bilinmeyen ücretsiz sayılmaz; günlük planlar
 ulaşım süresi veya canlı bilet garantisi vermez.
+
+Gösterilen her etkinliğin yanında kaynaktan gelen tıklanabilir etkinlik/bilet
+sayfası bağlantısı sunulması istenir; kaynak link vermiyorsa adres uydurulmaz.
 
 [Etkinlik rehberi: kullanım, ayarlar, mimari ve doğrulama](docs/events.md).
 Üç araç açıkken varsayılan 16 araç 19 olur; GTFS de açıksa 21 araç listelenir.

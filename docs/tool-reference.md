@@ -382,3 +382,7 @@ require_known_end (default false), and preserves exact selected performance IDs.
 Missing/ambiguous selections return selection_changed. Event IDs allow a series'
 sessions. Published durations can supply an end with end_source=published_duration.
 Unknown ends are excluded under require_known_end.
+
+All three event tools ask clients to show a clickable event/ticket-page link
+beside each event title, using ticket_url or a non-null ticket_links[].url as
+returned. Missing links are stated explicitly; calendar links do not replace them.

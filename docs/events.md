@@ -52,6 +52,37 @@ event_ids verilirse seçilenlerin detayları kullanılır, tekrar arama yapılma
 ilçe keşfiyle birleştirilemez. En fazla 20 kimlik, 5 ilgi kategorisi, 3 durak,
 5 plan seçeneği kabul edilir. Asgari boşluk 0–240 dakikadır.
 
+## Kullanıcıya etkinlik bağlantısını gösterme (0.4.1)
+
+Arama, detay ve günlük planda kullanıcıya gösterilen her etkinliğin başlığının
+yanında tıklanabilir etkinlik/bilet sayfası bağlantısı sunulmalıdır. Önce kartın
+`ticket_url` değeri, yoksa `ticket_links[].url` içindeki dolu kaynak bağlantısı
+aynen kullanılır. Bu alanlar arama kartında, detayın `performances` listesinde
+ve plandaki performans kartlarında zaten vardır; yanıt şeması değişmez.
+
+Etkinlik bağlantısı kullanıcı kaynak istemese de gösterilir. `sources[].url`
+atıf kuralı etkinlik sayfası bağlantısını gizlemez. Sağlayıcının ana sayfası,
+API adresi veya Google Calendar bağlantısı etkinlik sayfasının yerine geçmez.
+Kaynak link sunmamışsa kullanıcıya bağlantının bulunmadığı söylenir; başlıktan
+URL üretilmez. Link, canlı bilet bulunabilirliği veya satın alma garantisi değildir.
+
+Bu davranış sunucu talimatında, üç aracın açıklamasında ve `etkinlik_plani`
+prompt'unda belirtilir. Kullanıcıya nihai metni MCP istemcisinin modeli üretir;
+sunucu değişikliği tek başına her istemcinin talimata uyduğunu kanıtlamaz.
+ChatGPT'de yayımlanmış araç açıklamalarının güncellenmesi ilgili metadata
+incelemesinin tamamlanmasına bağlıdır.
+
+2026-11-08 doğrulaması: etkinlik, registry metadata ve yayımlanmış araç
+uyumluluğu grubunda 49 test geçti. Gerçek yerel MCP Client ve Ticketmaster
+fixture'ıyla arama → detay → seçilen seans planı boyunca aynı bilet URL'sinin
+korunduğu; üç aracın açıklaması ve etkinlik prompt'unda link talimatının
+sunulduğu doğrulandı. Kullanıcıya üretilen nihai LLM cevabı bu kontrolde
+ölçülmedi. Tekrar komutu:
+
+```bash
+pytest tests/test_events.py tests/test_registry_metadata.py tests/test_tool_compatibility.py
+```
+
 ## Fiyat, satış ve program durumu
 
 Program durumu iptal/ertelemeden, satış penceresi onsale/offsale bilgisinden,

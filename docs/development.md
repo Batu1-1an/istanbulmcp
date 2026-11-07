@@ -104,3 +104,24 @@ Runner önce bağlantı ve yapılandırılmış kaynakların hazır olmasını k
 startup yarışını kullanıcı akışı hatası saymaz. Tarihli özetler ve iddiaların
 sınırları [doğrulama raporunda](events-persona-validation.md), ham özet JSON
 raporları ignore edilen .data dizinindedir.
+
+## Codex doğrudan MCP bağlantısı
+
+```bash
+codex mcp add istanbul --url https://istanbulmcp-production.up.railway.app/mcp/
+codex mcp get istanbul
+```
+
+Bu komut kullanıcı genelindeki Codex yapılandırmasına Streamable HTTP sunucusu
+ekler. Yeni Codex oturumunda `/mcp` ile bağlantı ve araç keşfi kontrol edilir.
+Public endpoint için Ticketmaster anahtarı veya başka kaynak secret'ı Codex'e
+aktarılmaz; bunlar sunucuda kalır. ChatGPT'deki yayımlanmış eklentinin araç
+incelemesi bu doğrudan bağlantının yapılandırmasıyla değişmez.
+
+2026-11-08 yerel kurulum kontrolü: Codex CLI 0.166.0 ile `istanbul` genel MCP
+kaydı etkin olarak eklendi. Yapılandırmaya kaydedilen URL üzerinden initialize
+0.4.0, tools/list 21 araç (üç etkinlik aracı dahil) ve istanbul_health
+ready=true doğrulandı. Bu kontrol mevcut sohbetin araçlarının yeniden
+yüklendiği veya ChatGPT yayın incelemesinin tamamlandığı anlamına gelmez.
+Komut yöntemi [resmî OpenAI dokümanından](https://developers.openai.com/learn/docs-mcp)
+ve kurulu CLI'ın `codex mcp add --help` çıktısından doğrulandı.

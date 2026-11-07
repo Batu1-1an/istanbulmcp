@@ -110,3 +110,9 @@ type and eligibility uncertainty; catalogue hints never populate the price.
 Detail may include requested_performance_id, selected_performance_ids and
 selection_status for exact session selection. Plan echoes requested_categories,
 child_age and require_known_end. Existing tool names and envelope remain callable.
+
+In 0.4.1, client presentation guidance requires a clickable event/ticket-page
+link beside each presented event title in search, detail and plans. Use the
+existing ticket_url or non-null ticket_links[].url exactly as returned; a missing
+link stays explicitly unavailable. These are event destinations, separate from
+sources[].url citations and calendar links. No result schema or tool name changes.

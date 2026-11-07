@@ -90,6 +90,10 @@ def etkinlik_plani(date: str, interests: str | None = None, district: str | None
 Önce istanbul_events_search ile sınırlı aday bul, seçilen event_id değerlerini
 istanbul_event_detail ile doğrula, ardından istanbul_events_plan kullan.
 Seçilen performance_id değerini koru; belirsiz eşleşmede yeniden seçim iste.
+Gösterdiğin her etkinliğin başlığının yanında tıklanabilir etkinlik/bilet sayfası
+linki ver. Yanıttaki ticket_url alanını, yoksa dolu ticket_links[].url değerini
+aynen kullan. Etkinlik linki yoksa açıkça belirt; adres uydurma. Takvim linki
+etkinlik/bilet sayfasının yerine geçmez.
 İlgi türleri dışından etkinlik ekleme. Çocuk yaşı verilmişse child_age kullan;
 yalnız kaynakta yayımlanmış uyumlu yaş aralığını kabul et. Kesin bitiş saati
 istenmişse end_time ile require_known_end=true kullan. Yalnız bilinen fiyatlar
