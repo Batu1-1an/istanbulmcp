@@ -163,3 +163,19 @@ tanımları periyodik tarama ve otomatik kontrollerden sonra kullanıcılara aç
 Custom MCP Refresh işlemiyle yayımlanmış eklentinin continuous review akışı
 ayrıdır. Bu oturumda yeni etkinlik araçlarının ChatGPT dağıtımı doğrulanamadı;
 dashboard'daki ilgili araç inceleme durumu ayrıca kontrol edilmelidir.
+
+### Git push sonrası kontrol
+
+2026-11-07: uygulama, fixture, test ve doküman değişiklikleri
+`5995c42ad4a35b2c67efb39e0d98a897ef63d7da` commit'iyle origin/main'e
+pushlandı; uzak dal SHA'sı doğrulandı. Secret taramasında sızıntı yok;
+büyük snapshot veya .env commit'e eklenmedi. Sonraki doğrudan production
+kontrolü initialize=0.4.0, tools/list=21 ve üç etkinlik aracını doğruladı.
+Bu oturumdaki bağlı ChatGPT tanımlarında üç yeni ad hâlâ yoktu.
+
+Yayın paneli için Chrome DevTools bağlantısı denendi; araç, profilin başka bir
+çalışan browser tarafından kullanıldığını bildirerek sayfa listesini alamadı.
+Başka oturumun tarayıcısı kapatılmadı. Yayın paneli veya inceleme durumu
+görülemedi, tarama/yeniden yayın yapılmış sayılmadı. Sonraki işlem, açık ve
+erişilebilir geliştirici panelinde mevcut eklentinin araç incelemesini
+kontrol etmektir; [işletim adımları](deploy-railway.md#chatgptde-yayımlanmış-eklentiye-yeni-araçların-geçmesi).

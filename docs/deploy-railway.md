@@ -249,3 +249,26 @@ Katalog SQLite dosyasındadır. Volume bağlanmamış Railway örneğinde yeni
 deploy dosyayı yeniden oluşturur; kaynaklar arka planda tekrar yüklenir.
 API anahtarı veya kaynak olmadan özellik açık olsa da kaynak verisi uydurulmaz.
 [Davranış ve ayar sınırları](events.md).
+
+### ChatGPT'de yayımlanmış eklentiye yeni araçların geçmesi
+
+Git push, Railway deploy ve ChatGPT araç yayını ayrı işlemlerdir. Önce
+production MCP initialize sürümünü ve tools/list içeriğini doğrulayın.
+Etkinlik katmanı açıkken üç yeni adın tamamı listelenmelidir:
+`istanbul_events_search`, `istanbul_event_detail`, `istanbul_events_plan`.
+
+Yayımlanmış eklentilerde OpenAI bu tanımları periyodik olarak tarar; yeni ve
+değişen araçları otomatik kontrolleri geçince açar. Mevcut sözleşmeyi koruyan
+sunucu düzeltmesi için yeni eklenti sürümü gerekmez. Eklenti adı/açıklaması
+veya içe aktarılan skill gibi gönderilmiş bilgilerin değişmesi ayrı sürüm ve
+inceleme gerektirir. Ekrandaki eklenti sürümü MCP serverInfo.version değildir.
+
+[Yayın panelinde](https://platform.openai.com/plugins) mevcut yayımlanmış
+eklentiyi açın; kayıtlı MCP adresinin production endpoint'ine işaret ettiğini
+ve yeni araçların inceleme durumunu kontrol edin. Bir kontrol tutulmuşsa panelin
+gerçek gerekçesine göre düzeltin. Bu durumu görmeden onay/ret veya dağıtımın
+tamamlandığı iddia edilmemelidir. Yayımlanmış eklenti için custom MCP Refresh
+akışını zorunlu yeni sürüm/yeniden yayın işlemiyle karıştırmayın. Mevcut yayını
+araç güncellemesi için kaldırmayın.
+
+Kaynak: [OpenAI ongoing maintenance](https://developers.openai.com/plugins/deploy/app-review#ongoing-maintenance).
