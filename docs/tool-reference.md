@@ -386,3 +386,17 @@ Unknown ends are excluded under require_known_end.
 All three event tools ask clients to show a clickable event/ticket-page link
 beside each event title, using ticket_url or a non-null ticket_links[].url as
 returned. Missing links are stated explicitly; calendar links do not replace them.
+
+### Event QA controls (0.5.0)
+
+Search defaults to match_mode=words; match_mode=prefix explicitly enables
+stems/autocomplete. Empty query means no text filter. category_source identifies
+provider genre, explicit title_marker or unknown; absent indexed category
+observations produce a partial-coverage warning, not a city-wide absence claim.
+Category questions can use the same bounded detail-refresh budget as price questions.
+
+Source metadata adds refresh_status and serving_stale. Plans retain the requested
+date/window even with event_ids and give a specific repair for excluded selected
+sessions. Alternatives reduce repeated series sets and prefer known observed
+totals. total_observed_minimum_try is null for partial prices; the previous
+known_minimum_total_try stays a subtotal in that case.

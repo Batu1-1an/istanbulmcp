@@ -125,3 +125,23 @@ ready=true doğrulandı. Bu kontrol mevcut sohbetin araçlarının yeniden
 yüklendiği veya ChatGPT yayın incelemesinin tamamlandığı anlamına gelmez.
 Komut yöntemi [resmî OpenAI dokümanından](https://developers.openai.com/learn/docs-mcp)
 ve kurulu CLI'ın `codex mcp add --help` çıktısından doğrulandı.
+
+## 100 senaryolu etkinlik QA kabulü
+
+```bash
+pytest tests/test_events_qa_findings.py tests/test_events.py tests/test_event_personas.py
+railway run .venv/bin/python -m scripts.events_100_uat --output .data/events-100-current.json
+# Çalışan yerel sunucuya karşı
+.venv/bin/python -m scripts.events_100_uat --url http://127.0.0.1:8770/mcp/ --output .data/events-100-local.json
+```
+
+Fixture `tests/fixtures/events/user_scenarios_100.json` çalışma gününe göre tarihleri
+çözer. Koşucu varsayılan olarak bütün yapılandırılmış kaynakların checked olmasını
+bekler; kısmi kapsamı özellikle ölçmek için `--allow-partial-sources` kullanılabilir.
+MCP_API_KEYS varsa ilk Bearer anahtarı yalnız bellekte kullanılır. Rapor ham yanıt
+veya secret kaydetmez. Sürüm, kaynak durumları, beklenen hata kodları, gerçek
+plan sayısı, çağrı ve duvar süresi ayrı tutulur. Başarılı negatif senaryolar
+ürün hatası değildir. Çıkış kodu kontrol hatasında 1, preflight hazır değilse
+başarısızdır. Bu dış ağ koşusu normal CI testlerinin otomatik parçası değildir;
+CI'da istendiğinde aynı komutla ve summary artifact'iyle ayrıca çalıştırılabilir.
+[İnceleme ve ölçüm sınırları](events-100-review.md).

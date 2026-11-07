@@ -80,3 +80,8 @@ Etkinlik persona iyileştirmeleri (0.4.0) yeni environment variable gerektirmez.
 Yaş, fiyat doğruluğu, tükenmişlik ve bitiş koşulları MCP çağrısı parametreleridir;
 [tool kontrol alanları](tool-reference.md#event-searchplan-controls-040). SQLite
 schema_version=3, seri bazlı detail retry kayıtlarını ekler; eski veri silinmez.
+
+0.5.0 QA düzeltmeleri yeni environment variable veya SQLite migration gerektirmez.
+`match_mode=words|prefix` arama parametresidir; varsayılan words. Kategori kanıtı
+mevcut JSON gözlem payload'ında saklanır. Yenileme/fallback durumu kaynak metadata'sında
+sunulur; aynı TTL, stale ve kaynak başına istek bütçeleri korunur.

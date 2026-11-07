@@ -113,7 +113,10 @@ RTree kutusundan sonra kesin kuş uçuşu mesafesi kontrol edilir.
 
 Görünen Türkçe başlık korunur, indeks metni katlanır: Sıla/sila, İclal/iclal.
 Kullanıcı FTS operatörleri çalıştırılmaz; normalize kelimelerden parametreli
-prefix sorgusu kurulur. Typo düzeltmesi/vektör arama uygulanmaz. Tekilleştirme
+tam kelime sorgusu kurulur (`match_mode=words`, 0.5.0 varsayılanı).
+Kök/otomatik tamamlama için `match_mode=prefix` açıkça seçilir; örneğin
+`sıla` yalnız prefix modunda `Silahşör` kelimesine eşleşebilir. Boş query,
+filtre verilmemiş gibidir. Typo düzeltmesi/vektör arama uygulanmaz. Tekilleştirme
 aynı başlık/başlangıç/bilinen mekândaki farklı sağlayıcılara uygulanır. Aynı
 sağlayıcının farklı seans kimlikleri birleştirilmez; Biletix seq alanının her
 zaman teklif türü olduğu varsayılmaz.
@@ -126,6 +129,14 @@ ilk yüklemeyi deneyebilir. TTL sonrası azami yaş içindeki snapshot stale dö
 aşırı eski kaynak sorguya katılmaz. İndirme zamanı kaynak yayın zamanı değildir.
 Kaynak kontrol/başarı ve kapsam sayıları sources içinde, detay gözlem zamanı
 karttadır. Boş sonuç şehirde etkinlik olmadığı anlamına gelmez.
+
+`sources[].refresh_status` süreç içindeki idle/refreshing/failed/unavailable
+durumunu, `serving_stale` halen kullanılabilir son iyi snapshot'ın stale
+sunulduğunu gösterir. Başarısız yenileme TTL içinde olsa da freshness stale
+olur. Yenileme sürerken son kullanılabilir snapshot okunabilir; yeni snapshot
+transaction sonunda bütünüyle görünür. Hiç başarılı snapshot yoksa veya azami
+fallback yaşı aşılmışsa veri varmış gibi davranılmaz. Farklı çağrılar aynı
+snapshot'a sabitlenmez; kaynak ve detay güncellemeleri sonuçları değiştirebilir.
 
 ## Planlama ve takvim
 
@@ -349,3 +360,35 @@ korunmasını istemciye açıklar. Prompt kendisi araç çağırmaz.
 Initialize 0.4.0, tools/list 21; healthz/readyz 200, WAL ve schema_version=3.
 Yeni environment değişkeni gerekmedi. Bu sürümdeki tüm test sonuçları ve
 üretim persona kontrolü [doğrulama raporunda](events-persona-validation.md).
+
+## 0.5.0: 100 senaryolu QA incelemesi
+
+[Bulgu bazlı inceleme](events-100-review.md), ilk raporun gerçek kusurlarıyla
+test/kanıt hatalarını ayırır. Kaynak türü tüm desteklenen kategorilere eşlenir.
+Genel Etkinlik kovasındaki açık Atölyesi/Sergisi/Festivali/Seminer başlık
+işaretleri `category_source=title_marker`, ayrı kaynak türü `provider`, kanıt
+yoksa `unknown` olur. Bu sınıflandırma çocuk yaş uygunluğu değildir.
+Kategori filtresinde kayıt gözlenmediyse `limits` içinde
+`category_coverage=not_observed` ve tarih/sorgu/indeks kapsamı belirtilir;
+bu alan şehir toplamı veya kategorinin kalıcı olarak desteklenmediği anlamına gelmez.
+
+Tür/bütçe/ücretsiz soruları azami üç ilgili seriyi aynı 12 saniye bütçesinde
+doğrulayabilir; title-marker yalnız doğrulanacak adayı önceliklendirebilir,
+fiyat veya yaş kanıtı üretemez. Fazladan doğrulama gecikmeyi artırabilir.
+
+Plan alternatifleri bilinen gözlenen toplamları öne alır ve gösterilmiş seri
+kümeleriyle örtüşmeyi azaltır. Aynı seri kümesinin farklı seans varyantları
+tekilleştirilir; limit üst sınırdır. Ham score/score_breakdown korunur, seçim
+sırası yalnız ham score'a göre değildir. `total_observed_minimum_try` tüm
+fiyatlar gözlenmişse toplam, aksi halde null'dır. Mevcut
+`known_minimum_total_try` eksik toplamda yalnız ara toplamdır; son ödeme tutarı değildir.
+
+Seçilen seans da verilen tarih ve 18:00–23:59 varsayılan penceresine uyar.
+Dışarıda kalırsa kullanılan pencere ve start_time/end_time/tarih onarımı döner;
+istemcinin verdiği pencere sessizce genişletilmez. Plan ID'lerinin çevre
+boşluğu seçilen tek seansı bütün seriye dönüştürmez.
+
+```bash
+pytest tests/test_events_qa_findings.py
+railway run .venv/bin/python -m scripts.events_100_uat --output .data/events-100-current.json
+```

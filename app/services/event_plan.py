@@ -12,7 +12,7 @@ from app.core.envelope import error_envelope
 from app.core.error_responses import validation_error_envelope
 from app.core.events import CATEGORIES, ISTANBUL, age_suitability, event_time, normalize_category
 from app.core.geo import haversine_m
-from app.core.validation import InputValidationError, resolve_limit
+from app.core.validation import InputValidationError, resolve_limit, validate_text
 from app.services.events import EventService, event_clock, event_date
 
 
@@ -111,6 +111,7 @@ def enumerate_plans(cards: list[dict], *, window_end: datetime, max_events=3, mi
             }
             options.append({"score": round(sum(breakdown.values()), 2), "score_breakdown": breakdown,
                             "performances": list(path), "gaps": gaps, "known_minimum_total_try": known_total,
+                            "total_observed_minimum_try": known_total if all(p is not None for p in prices) else None,
                             "total_price_known": all(p is not None for p in prices), "budget_status": budget_status,
                             "checks": {"time_overlap": False, "minimum_gap_checked": True, "travel_feasibility_verified": False,
                                        "window_end_verified": all(c["end_known"] for c in path)},
@@ -118,9 +119,33 @@ def enumerate_plans(cards: list[dict], *, window_end: datetime, max_events=3, mi
     options.sort(key=lambda p: (-p["score"], tuple(c["start_at"] for c in p["performances"]), tuple(c["performance_id"] for c in p["performances"])))
     verified = [p for p in options if max_price_try is None or p["budget_status"] != "unknown"]
     unverified = [p for p in options if max_price_try is not None and p["budget_status"] == "unknown"]
-    for option in [*verified[:limit], *unverified[:limit]]:
+    verified, unverified = diverse_options(verified, limit), diverse_options(unverified, limit)
+    for option in [*verified, *unverified]:
         option["calendar"] = calendar_output(option["performances"])
-    return verified[:limit], unverified[:limit]
+    return verified, unverified
+
+
+def diverse_options(options: list[dict], limit: int) -> list[dict]:
+    """Prefer known observed totals, then penalize overlap with shown event series."""
+    remaining, seen = [], set()
+    for option in sorted(options, key=lambda item: (not item["total_price_known"], -item["score"],
+                         tuple(card["performance_id"] for card in item["performances"]))):
+        identity = frozenset(card["event_id"] for card in option["performances"])
+        if identity not in seen:
+            seen.add(identity)
+            remaining.append((option, identity))
+    selected, chosen_series = [], []
+    while remaining and len(selected) < limit:
+        def rank(entry):
+            option, identity = entry
+            overlap = max((len(identity & other) / len(identity | other) for other in chosen_series), default=0)
+            return (not option["total_price_known"], -(option["score"] - 60 * overlap), -option["score"],
+                    tuple(card["performance_id"] for card in option["performances"]))
+        winner = min(remaining, key=rank)
+        remaining.remove(winner)
+        selected.append(winner[0])
+        chosen_series.append(winner[1])
+    return selected
 
 
 def choose_candidates(cards: list[dict], limit: int = 20) -> list[dict]:
@@ -184,6 +209,8 @@ class EventPlanService:
                 interests = ["family"]
             if event_ids is not None and (not event_ids or len(event_ids) > 20):
                 raise InputValidationError("event_ids must contain 1–20 IDs from search", field="event_ids")
+            if event_ids is not None:
+                event_ids = [validate_text(identifier, field="event_ids", max_length=64) for identifier in event_ids]
             if event_ids is not None and district is not None:
                 raise InputValidationError("Use selected event_ids or district discovery", field="district")
             safe_limit = resolve_limit(limit, 3, 5)
@@ -269,6 +296,14 @@ class EventPlanService:
                                 "Time gaps and straight-line distances do not establish travel feasibility.",
                                 "Unknown end times are allowed only at the final stop."]
         envelope["warnings"] += ["Ulaşım süresi hesaplanmadı; bilet durumu ve ücretler kaynakta yeniden kontrol edilmeli."]
+        outside_window = sum(item["reason"] == "outside_time_window" for item in rejected)
+        if event_ids is not None and outside_window:
+            instruction = (f"{outside_window} selected session(s) are outside date={day.isoformat()} "
+                           f"and window {start_time}–{end_time}. Set date to the selected session's day "
+                           "and supply start_time/end_time explicitly; the default window is 18:00–23:59.")
+            envelope["warnings"].append(instruction)
+            if not options:
+                envelope["result_info"]["next_step"] = instruction
         if not options:
             envelope["warnings"].append("No verified plan was found; inspect unverified_budget and rejected sessions.")
         return envelope

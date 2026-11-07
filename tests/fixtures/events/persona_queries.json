@@ -283,12 +283,13 @@
   {
     "id": "two_letter_query",
     "persona": "Kısa arama yapan",
-    "question": "Adında 'su' geçen etkinlik var mı?",
+    "question": "Adında 'su' ile başlayan kelime bulunan etkinlik var mı?",
     "tool": "istanbul_events_search",
     "arguments": {
       "date_from": "tomorrow",
       "query": "su",
-      "limit": 10
+      "limit": 10,
+      "match_mode": "prefix"
     }
   },
   {

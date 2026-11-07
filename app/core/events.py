@@ -72,11 +72,11 @@ def category_for(value: str) -> Category:
         (("stand up", "standup", "comedy"), "standup"),
         (("opera", "bale", "ballet"), "opera_ballet"),
         (("children", "child", "family", "cocuk"), "family"),
-        (("theatre", "theater", "tiyatro"), "theatre"),
-        (("concert", "music", "muzik", "konser"), "concert"),
         (("festival",), "festival"), (("exhibition", "sergi"), "exhibition"),
         (("workshop", "atolye"), "workshop"), (("sport", "spor"), "sport"),
-        (("seminar", "seminer"), "seminar"),
+        (("seminar", "seminer", "soylesi"), "seminar"),
+        (("theatre", "theater", "tiyatro"), "theatre"),
+        (("concert", "music", "muzik", "konser"), "concert"),
     ):
         if any(word in text for word in words):
             return category
@@ -114,6 +114,7 @@ class EventObservation(BaseModel):
     series_key: str = Field(min_length=1, max_length=240)
     title: str = Field(min_length=1, max_length=500)
     category: Category = "other"
+    category_source: Literal["provider", "title_marker", "unknown"] = "provider"
     start_at: datetime
     end_at: datetime | None = None
     venue: EventVenue

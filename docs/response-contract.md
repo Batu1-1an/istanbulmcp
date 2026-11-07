@@ -116,3 +116,12 @@ link beside each presented event title in search, detail and plans. Use the
 existing ticket_url or non-null ticket_links[].url exactly as returned; a missing
 link stays explicitly unavailable. These are event destinations, separate from
 sources[].url citations and calendar links. No result schema or tool name changes.
+
+In 0.5.0 event cards add category_source=provider|title_marker|unknown.
+Source metadata adds optional refresh_status=idle|refreshing|failed|unavailable
+and serving_stale; other source domains may leave these null. Event fallback
+after refresh failure is explicitly stale, even if its snapshot TTL has not expired.
+Plan options add total_observed_minimum_try: null if any session price is unknown,
+otherwise the sum of observed minima. The old known_minimum_total_try still
+contains a partial subtotal when total_price_known=false. Tool names and
+list-valued data shapes are preserved; search's default is now complete words.

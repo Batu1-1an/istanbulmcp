@@ -1,0 +1,1304 @@
+[
+  {
+    "id": "S01",
+    "persona": "Genel kullanıcı",
+    "question": "Bu hafta İstanbul'da ne var?",
+    "tool": "search",
+    "args": {},
+    "expect": "ok",
+    "note": "Default 7-day window",
+    "checks": true
+  },
+  {
+    "id": "S02",
+    "persona": "Genel kullanıcı",
+    "question": "Bugün ne var?",
+    "tool": "search",
+    "args": {
+      "date_from": "today",
+      "date_to": "today"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S03",
+    "persona": "Plan yapan kullanıcı",
+    "question": "Yarın ne var?",
+    "tool": "search",
+    "args": {
+      "date_from": "tomorrow",
+      "date_to": "tomorrow"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S04",
+    "persona": "Haftalık planlayıcı",
+    "question": "Önümüzdeki 7 günü listele.",
+    "tool": "search",
+    "args": {
+      "date_from": "$TODAY",
+      "date_to": "$WEEK_END"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S05",
+    "persona": "Aylık planlayıcı",
+    "question": "31 günlük pencereyi listele.",
+    "tool": "search",
+    "args": {
+      "date_from": "$TODAY",
+      "date_to": "$MAX_END"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S06",
+    "persona": "Geriye dönük kullanıcı",
+    "question": "Geçen hafta ne vardı?",
+    "tool": "search",
+    "args": {
+      "date_from": "$PAST_WEEK_START",
+      "date_to": "$YESTERDAY"
+    },
+    "expect": "either",
+    "note": "Past dates should not fabricate future data",
+    "checks": true
+  },
+  {
+    "id": "S07",
+    "persona": "Hatalı giriş",
+    "question": "Tarih aralığını ters gir.",
+    "tool": "search",
+    "args": {
+      "date_from": "$TOMORROW",
+      "date_to": "$TODAY"
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "S08",
+    "persona": "Hatalı giriş",
+    "question": "Geçersiz tarih formatı gir.",
+    "tool": "search",
+    "args": {
+      "date_from": "08/11/2026"
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "S09",
+    "persona": "Konser sever",
+    "question": "Konserleri listele.",
+    "tool": "search",
+    "args": {
+      "category": "concert"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S10",
+    "persona": "Tiyatro sever",
+    "question": "Tiyatroları listele.",
+    "tool": "search",
+    "args": {
+      "category": "theatre"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S11",
+    "persona": "Ebeveyn",
+    "question": "Aile etkinliklerini listele.",
+    "tool": "search",
+    "args": {
+      "category": "family"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S12",
+    "persona": "Arkadaş grubu",
+    "question": "Stand-up gösterilerini listele.",
+    "tool": "search",
+    "args": {
+      "category": "standup"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S13",
+    "persona": "Klasik müzik sever",
+    "question": "Opera ve bale gösterilerini listele.",
+    "tool": "search",
+    "args": {
+      "category": "opera_ballet"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S14",
+    "persona": "Sanat sever",
+    "question": "Sergileri listele.",
+    "tool": "search",
+    "args": {
+      "category": "exhibition"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S15",
+    "persona": "Atölye meraklısı",
+    "question": "Atölyeleri listele.",
+    "tool": "search",
+    "args": {
+      "category": "workshop"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S16",
+    "persona": "Spor sever",
+    "question": "Spor etkinliklerini listele.",
+    "tool": "search",
+    "args": {
+      "category": "sport"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S17",
+    "persona": "Öğrenci",
+    "question": "Seminerleri listele.",
+    "tool": "search",
+    "args": {
+      "category": "seminar"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S18",
+    "persona": "Festival sever",
+    "question": "Festivalleri listele.",
+    "tool": "search",
+    "args": {
+      "category": "festival"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S19",
+    "persona": "Meraklı kullanıcı",
+    "question": "Diğer kategorileri listele.",
+    "tool": "search",
+    "args": {
+      "category": "other"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S20",
+    "persona": "Sinema sever",
+    "question": "Sinema etkinliklerini listele.",
+    "tool": "search",
+    "args": {
+      "category": "sinema"
+    },
+    "expect": "error",
+    "note": "Cinema is explicitly out of scope",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "S21",
+    "persona": "Türkçe konuşan kullanıcı",
+    "question": "Tiyatro kategorisini Türkçe sor.",
+    "tool": "search",
+    "args": {
+      "category": "tiyatro"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S22",
+    "persona": "Türkçe konuşan kullanıcı",
+    "question": "Konser kategorisini Türkçe sor.",
+    "tool": "search",
+    "args": {
+      "category": "konser"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S23",
+    "persona": "Türkçe konuşan kullanıcı",
+    "question": "Çocuk etkinliklerini Türkçe sor.",
+    "tool": "search",
+    "args": {
+      "category": "çocuk"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S24",
+    "persona": "Türkçe konuşan kullanıcı",
+    "question": "Atölye kategorisini Türkçe sor.",
+    "tool": "search",
+    "args": {
+      "category": "atölye"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S25",
+    "persona": "Sanatçı takipçisi",
+    "question": "Sıla konseri var mı?",
+    "tool": "search",
+    "args": {
+      "query": "sıla"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S26",
+    "persona": "Sanatçı takipçisi",
+    "question": "Aynı aramayı ASCII yaz.",
+    "tool": "search",
+    "args": {
+      "query": "sila"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S27",
+    "persona": "Kullanıcı",
+    "question": "Başlıkta 'tiyatro' geçen etkinlikler.",
+    "tool": "search",
+    "args": {
+      "query": "tiyatro"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S28",
+    "persona": "Kullanıcı",
+    "question": "Başlıkta 'konser' geçen etkinlikler.",
+    "tool": "search",
+    "args": {
+      "query": "konser"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S29",
+    "persona": "Ebeveyn",
+    "question": "Başlıkta 'çocuk' geçen etkinlikler.",
+    "tool": "search",
+    "args": {
+      "query": "çocuk"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S30",
+    "persona": "Mekan odaklı kullanıcı",
+    "question": "AKM'de ne var?",
+    "tool": "search",
+    "args": {
+      "query": "AKM",
+      "query_scope": "all"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S31",
+    "persona": "Kararsız kullanıcı",
+    "question": "Boş metinle ara.",
+    "tool": "search",
+    "args": {
+      "query": ""
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S32",
+    "persona": "Güvenlik meraklısı",
+    "question": "SQL benzeri metinle ara.",
+    "tool": "search",
+    "args": {
+      "query": "'; DROP TABLE events; --"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S33",
+    "persona": "Gece kuşu",
+    "question": "Bu akşam 19:00-23:00 arası etkinlikler.",
+    "tool": "search",
+    "args": {
+      "date_from": "today",
+      "date_to": "today",
+      "time_from": "19:00",
+      "time_to": "23:00"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S34",
+    "persona": "Gece kuşu",
+    "question": "23:00-02:00 arası etkinlikler.",
+    "tool": "search",
+    "args": {
+      "date_from": "today",
+      "date_to": "today",
+      "time_from": "23:00",
+      "time_to": "02:00"
+    },
+    "expect": "either",
+    "note": "Cross-midnight handling",
+    "checks": true
+  },
+  {
+    "id": "S35",
+    "persona": "Bütçe odaklı kullanıcı",
+    "question": "Ücretsiz etkinlikleri listele.",
+    "tool": "search",
+    "args": {
+      "free_only": true
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S36",
+    "persona": "Öğrenci",
+    "question": "300 TL altı etkinlikler.",
+    "tool": "search",
+    "args": {
+      "max_price_try": 300
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S37",
+    "persona": "Öğrenci",
+    "question": "0 TL bütçeyle ara.",
+    "tool": "search",
+    "args": {
+      "max_price_try": 0
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S38",
+    "persona": "Fiyat doğrulaması isteyen",
+    "question": "Yalnız bilinen fiyatlı, 1000 TL altı.",
+    "tool": "search",
+    "args": {
+      "max_price_try": 1000,
+      "include_unknown_prices": false
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S39",
+    "persona": "Hızlı bakan kullanıcı",
+    "question": "Tek sonuç göster.",
+    "tool": "search",
+    "args": {
+      "limit": 1
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S40",
+    "persona": "Toplu liste isteyen",
+    "question": "50 sonuç göster.",
+    "tool": "search",
+    "args": {
+      "limit": 50
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S41",
+    "persona": "Hatalı giriş",
+    "question": "51 sonuç iste.",
+    "tool": "search",
+    "args": {
+      "limit": 51
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "S42",
+    "persona": "Hatalı giriş",
+    "question": "0 sonuç iste.",
+    "tool": "search",
+    "args": {
+      "limit": 0
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "S43",
+    "persona": "Hatalı giriş",
+    "question": "Negatif sonuç iste.",
+    "tool": "search",
+    "args": {
+      "limit": -1
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "S44",
+    "persona": "Kadıköy sakini",
+    "question": "Kadıköy'deki etkinlikler.",
+    "tool": "search",
+    "args": {
+      "district": "Kadıköy"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S45",
+    "persona": "Kadıköy sakini",
+    "question": "İlçeyi ASCII yaz.",
+    "tool": "search",
+    "args": {
+      "district": "kadikoy"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S46",
+    "persona": "Beşiktaş sakini",
+    "question": "Beşiktaş'ta tiyatro.",
+    "tool": "search",
+    "args": {
+      "district": "Beşiktaş",
+      "category": "theatre"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S47",
+    "persona": "Hatalı giriş",
+    "question": "Olmayan ilçe gir.",
+    "tool": "search",
+    "args": {
+      "district": "Atlantis"
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "S48",
+    "persona": "Zorlu izleyicisi",
+    "question": "Zorlu PSM'de ne var?",
+    "tool": "search",
+    "args": {
+      "venue": "Zorlu PSM"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S49",
+    "persona": "Taksim'deki turist",
+    "question": "Taksim çevresinde 3 km içinde ne var?",
+    "tool": "search",
+    "args": {
+      "lat": 41.0369,
+      "lon": 28.985,
+      "radius_m": 3000
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S50",
+    "persona": "Geniş arama yapan",
+    "question": "20 km yarıçapta ara.",
+    "tool": "search",
+    "args": {
+      "lat": 41.0369,
+      "lon": 28.985,
+      "radius_m": 20000
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S51",
+    "persona": "Hatalı giriş",
+    "question": "21 km yarıçap iste.",
+    "tool": "search",
+    "args": {
+      "lat": 41.0369,
+      "lon": 28.985,
+      "radius_m": 20001
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "S52",
+    "persona": "Hatalı giriş",
+    "question": "Yalnız enlem ver.",
+    "tool": "search",
+    "args": {
+      "lat": 41.0369
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "S53",
+    "persona": "Hatalı giriş",
+    "question": "Yalnız boylam ver.",
+    "tool": "search",
+    "args": {
+      "lon": 28.985
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "S54",
+    "persona": "5 yaşında çocuğu olan ebeveyn",
+    "question": "5 yaşa uygun aile etkinlikleri.",
+    "tool": "search",
+    "args": {
+      "category": "family",
+      "child_age": 5
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S55",
+    "persona": "Ebeveyn",
+    "question": "Kategori vermeden 5 yaşa uygun ara.",
+    "tool": "search",
+    "args": {
+      "child_age": 5
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S56",
+    "persona": "Hatalı giriş",
+    "question": "18 yaş için çocuk filtresi.",
+    "tool": "search",
+    "args": {
+      "child_age": 18
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "S57",
+    "persona": "Hatalı giriş",
+    "question": "Negatif çocuk yaşı.",
+    "tool": "search",
+    "args": {
+      "child_age": -1
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "S58",
+    "persona": "Geç kalan kullanıcı",
+    "question": "Tükenenleri de göster.",
+    "tool": "search",
+    "args": {
+      "include_sold_out": true
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S59",
+    "persona": "Mekan odaklı kullanıcı",
+    "question": "Mekan adlarında AKM ara.",
+    "tool": "search",
+    "args": {
+      "query": "AKM",
+      "query_scope": "all"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "S60",
+    "persona": "Hatalı giriş",
+    "question": "Geçersiz arama kapsamı.",
+    "tool": "search",
+    "args": {
+      "query": "konser",
+      "query_scope": "everything"
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "D61",
+    "persona": "Etkinliği inceleyen",
+    "question": "Aramadan gelen event_id detayı.",
+    "tool": "detail",
+    "args": {
+      "event_id": "$EVENT_ID"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "D62",
+    "persona": "Seansı seçen",
+    "question": "Aramadan gelen performance_id detayı.",
+    "tool": "detail",
+    "args": {
+      "event_id": "$PERF_ID"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "D63",
+    "persona": "Hatalı giriş",
+    "question": "Olmayan event_id.",
+    "tool": "detail",
+    "args": {
+      "event_id": "event_000000000000000000000000"
+    },
+    "expect": "error",
+    "note": "Syntactically valid but missing ID; malformed IDs are covered separately",
+    "checks": true,
+    "expected_error": "not_found"
+  },
+  {
+    "id": "D64",
+    "persona": "Hatalı giriş",
+    "question": "Olmayan performance_id.",
+    "tool": "detail",
+    "args": {
+      "event_id": "perf_000000000000000000000000"
+    },
+    "expect": "error",
+    "note": "Syntactically valid but missing ID; malformed IDs are covered separately",
+    "checks": true,
+    "expected_error": "not_found"
+  },
+  {
+    "id": "D65",
+    "persona": "URL yapıştıran kullanıcı",
+    "question": "Bilet URL'sini kimlik olarak ver.",
+    "tool": "detail",
+    "args": {
+      "event_id": "https://biletinial.com/tr-tr/tiyatro/seyfi-bey"
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "D66",
+    "persona": "Hatalı giriş",
+    "question": "Boş kimlik.",
+    "tool": "detail",
+    "args": {
+      "event_id": ""
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "D67",
+    "persona": "Hatalı giriş",
+    "question": "Boşluklu kimlik.",
+    "tool": "detail",
+    "args": {
+      "event_id": "  event_abc  "
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "D68",
+    "persona": "Tekrar kontrol eden",
+    "question": "Aynı detayı iki kez sor.",
+    "tool": "detail",
+    "args": {
+      "event_id": "$EVENT_ID"
+    },
+    "expect": "ok",
+    "note": "Second call is an idempotence probe",
+    "checks": true
+  },
+  {
+    "id": "D69",
+    "persona": "Kullanıcı",
+    "question": "Detayda seans ve teklif var mı?",
+    "tool": "detail",
+    "args": {
+      "event_id": "$PERF_ID"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "D70",
+    "persona": "Kullanıcı",
+    "question": "Detayda kaynak ve tazelik var mı?",
+    "tool": "detail",
+    "args": {
+      "event_id": "$EVENT_ID"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "P71",
+    "persona": "Günlük planlayıcı",
+    "question": "Bugün için akşam planı.",
+    "tool": "plan",
+    "args": {},
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "P72",
+    "persona": "Günlük planlayıcı",
+    "question": "Yarın için akşam planı.",
+    "tool": "plan",
+    "args": {
+      "date": "tomorrow"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "P73",
+    "persona": "Hatalı giriş",
+    "question": "Geçersiz plan tarihi.",
+    "tool": "plan",
+    "args": {
+      "date": "2026-13-01"
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "P74",
+    "persona": "Geriye dönük",
+    "question": "Geçmiş tarih için plan.",
+    "tool": "plan",
+    "args": {
+      "date": "$PAST_PLAN_DAY"
+    },
+    "expect": "either",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "P75",
+    "persona": "Hatalı giriş",
+    "question": "Başlangıç ve bitiş aynı.",
+    "tool": "plan",
+    "args": {
+      "start_time": "18:00",
+      "end_time": "18:00"
+    },
+    "expect": "either",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "P76",
+    "persona": "Hatalı giriş",
+    "question": "Bitiş başlangıçtan önce.",
+    "tool": "plan",
+    "args": {
+      "start_time": "22:00",
+      "end_time": "18:00"
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "P77",
+    "persona": "Kültür sever",
+    "question": "Konser ve tiyatro planı.",
+    "tool": "plan",
+    "args": {
+      "interests": [
+        "concert",
+        "theatre"
+      ]
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "P78",
+    "persona": "5 yaşında çocuğu olan ebeveyn",
+    "question": "Çocuğa uygun gündüz planı.",
+    "tool": "plan",
+    "args": {
+      "start_time": "10:00",
+      "end_time": "18:00",
+      "interests": [
+        "family"
+      ],
+      "child_age": 5
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "P79",
+    "persona": "Ebeveyn",
+    "question": "Tiyatro ilgisiyle 5 yaş planı.",
+    "tool": "plan",
+    "args": {
+      "interests": [
+        "theatre"
+      ],
+      "child_age": 5
+    },
+    "expect": "either",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "P80",
+    "persona": "Bütçe odaklı",
+    "question": "500 TL toplam bütçe planı.",
+    "tool": "plan",
+    "args": {
+      "max_price_try": 500
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "P81",
+    "persona": "Bütçe odaklı",
+    "question": "0 TL toplam bütçe planı.",
+    "tool": "plan",
+    "args": {
+      "max_price_try": 0
+    },
+    "expect": "either",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "P82",
+    "persona": "Kadıköy sakini",
+    "question": "Kadıköy'de plan.",
+    "tool": "plan",
+    "args": {
+      "district": "Kadıköy"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "P83",
+    "persona": "Seçim yapan kullanıcı",
+    "question": "Seçtiğim bir etkinliği plana koy.",
+    "tool": "plan",
+    "args": {
+      "event_ids": [
+        "$PERF_ID"
+      ]
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "P84",
+    "persona": "Seçim yapan kullanıcı",
+    "question": "İki etkinliği plana koy.",
+    "tool": "plan",
+    "args": {
+      "event_ids": [
+        "$PERF_ID",
+        "$EVENT_ID"
+      ]
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "P85",
+    "persona": "Seansını seçen",
+    "question": "Belirli performance_id ile plan.",
+    "tool": "plan",
+    "args": {
+      "event_ids": [
+        "$PERF_ID"
+      ]
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "P86",
+    "persona": "Hatalı giriş",
+    "question": "21 etkinlik kimliği ver.",
+    "tool": "plan",
+    "args": {
+      "event_ids": [
+        "perf_fake0000000000000000",
+        "perf_fake0000000000000001",
+        "perf_fake0000000000000002",
+        "perf_fake0000000000000003",
+        "perf_fake0000000000000004",
+        "perf_fake0000000000000005",
+        "perf_fake0000000000000006",
+        "perf_fake0000000000000007",
+        "perf_fake0000000000000008",
+        "perf_fake0000000000000009",
+        "perf_fake0000000000000010",
+        "perf_fake0000000000000011",
+        "perf_fake0000000000000012",
+        "perf_fake0000000000000013",
+        "perf_fake0000000000000014",
+        "perf_fake0000000000000015",
+        "perf_fake0000000000000016",
+        "perf_fake0000000000000017",
+        "perf_fake0000000000000018",
+        "perf_fake0000000000000019",
+        "perf_fake0000000000000020"
+      ]
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "P87",
+    "persona": "Sıkı program yapan",
+    "question": "Etkinlikler arası boşluk 0 dakika.",
+    "tool": "plan",
+    "args": {
+      "min_gap_minutes": 0
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "P88",
+    "persona": "Gevşek program yapan",
+    "question": "Boşluk 240 dakika.",
+    "tool": "plan",
+    "args": {
+      "min_gap_minutes": 240
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "P89",
+    "persona": "Hatalı giriş",
+    "question": "Boşluk 241 dakika.",
+    "tool": "plan",
+    "args": {
+      "min_gap_minutes": 241
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "P90",
+    "persona": "Tek etkinlik isteyen",
+    "question": "En fazla 1 durak.",
+    "tool": "plan",
+    "args": {
+      "max_events": 1
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "P91",
+    "persona": "Hatalı giriş",
+    "question": "En fazla 4 durak.",
+    "tool": "plan",
+    "args": {
+      "max_events": 4
+    },
+    "expect": "either",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "P92",
+    "persona": "Erken çıkacak kullanıcı",
+    "question": "Bitişi bilinen etkinlikler.",
+    "tool": "plan",
+    "args": {
+      "require_known_end": true
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "P93",
+    "persona": "Çok seçenek isteyen",
+    "question": "5 plan seçeneği.",
+    "tool": "plan",
+    "args": {
+      "limit": 5
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "P94",
+    "persona": "Hatalı giriş",
+    "question": "6 plan seçeneği.",
+    "tool": "plan",
+    "args": {
+      "limit": 6
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "P95",
+    "persona": "Hatalı giriş",
+    "question": "İlçe ve seçilmiş etkinliği birlikte ver.",
+    "tool": "plan",
+    "args": {
+      "district": "Kadıköy",
+      "event_ids": [
+        "$PERF_ID"
+      ]
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "P96",
+    "persona": "Hatalı giriş",
+    "question": "6 ilgi kategorisi.",
+    "tool": "plan",
+    "args": {
+      "interests": [
+        "concert",
+        "theatre",
+        "family",
+        "standup",
+        "workshop",
+        "festival"
+      ]
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "P97",
+    "persona": "Hatalı giriş",
+    "question": "Geçersiz saat.",
+    "tool": "plan",
+    "args": {
+      "start_time": "25:00"
+    },
+    "expect": "error",
+    "note": "",
+    "checks": true,
+    "expected_error": "validation_error"
+  },
+  {
+    "id": "P98",
+    "persona": "Ebeveyn",
+    "question": "Yarın gündüz aile planı.",
+    "tool": "plan",
+    "args": {
+      "date": "tomorrow",
+      "start_time": "10:00",
+      "end_time": "14:00",
+      "interests": [
+        "family"
+      ]
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "W99",
+    "persona": "Aile planlayıcısı",
+    "question": "Aramadan seçtiğim aile etkinliğiyle plan yap.",
+    "tool": "workflow_search_plan",
+    "args": {
+      "category": "family",
+      "date": "tomorrow"
+    },
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  },
+  {
+    "id": "W100",
+    "persona": "Seans takipçisi",
+    "question": "Arama, detay ve plan zincirini koru.",
+    "tool": "workflow_chain",
+    "args": {},
+    "expect": "ok",
+    "note": "",
+    "checks": true
+  }
+]

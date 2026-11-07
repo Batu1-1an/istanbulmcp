@@ -18,6 +18,7 @@ async def istanbul_events_search(
     include_unknown_prices: bool = True, child_age: int | None = None,
     query_scope: str = "title",
     include_sold_out: bool = False,
+    match_mode: str = "words",
 ) -> dict:
     """Search indexed Istanbul event sessions; use event_detail for full verification.
 
@@ -27,12 +28,18 @@ async def istanbul_events_search(
     other. District: one of Istanbul's 39 districts. Coordinates must be paired;
     Turkish aliases such as tiyatro, konser, çocuk, atölye are accepted.
     query searches titles by default; query_scope=all also searches venue names.
+    Empty/whitespace query means no text filter. match_mode=words (default)
+    matches complete normalized words, so Sıla does not match Silahşör.
+    Use match_mode=prefix explicitly for stems/autocomplete; prefix matches
+    are related title matches, never proof of artist identity.
     radius defaults to 5000m, maximum 20000m. Limit defaults to 10, maximum 50.
     Radius/distance are straight-line; the opposite shore may be included.
     Price-unknown sessions remain labeled unknown with max_price_try; they are
     not verified within budget. free_only requires observed zero price.
     Set include_unknown_prices=false for verified-price-only results. Budget,
-    free and family queries may refresh up to three relevant Biletinial details.
+    free and category queries may refresh up to three relevant Biletinial details.
+    Category coverage is partial; category_source distinguishes provider genres
+    from explicit type markers in titles. Zero matches do not prove no city events.
     child_age (0–17) requires a published matching age range and family genre;
     missing age evidence is excluded, not guessed. Ticket-type eligibility and
     service fees still need checking on the ticket page.
@@ -53,6 +60,7 @@ async def istanbul_events_search(
         max_price_try=max_price_try, limit=limit,
         include_unknown_prices=include_unknown_prices, child_age=child_age, query_scope=query_scope,
         include_sold_out=include_sold_out,
+        match_mode=match_mode,
     )
 
 
@@ -84,6 +92,8 @@ async def istanbul_events_plan(
     Use selected event_ids (1–20 from search/detail) or district discovery.
     A selected performance_id keeps that exact session; an event_id allows its
     series sessions. Missing/ambiguous replacements require a new selection.
+    Selected IDs still respect date and the 18:00–23:59 default window; provide
+    the session's date and explicit start_time/end_time for daytime selections.
     interests accepts up to five search categories. Window is same-day HH:MM.
     interests restricts allowed categories; unrelated fallback is never added.
     child_age (0–17) restricts to family sessions with a published matching age range.
@@ -99,6 +109,9 @@ async def istanbul_events_plan(
     link beside its title from ticket_url or non-null ticket_links[].url.
     Use the exact returned URL; calendar links are separate and do not replace
     event links. If no event link is available, say so without inventing one.
+    Options prefer known observed totals and reduce repeated event series.
+    If total_price_known=false, total_observed_minimum_try is null and
+    known_minimum_total_try is only a partial subtotal, never the full price.
     """
     return await EventPlanService(get_settings()).plan(
         date=date, start_time=start_time, end_time=end_time, interests=interests,

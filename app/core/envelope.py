@@ -52,6 +52,8 @@ class Source(BaseModel):
     modes: list[str] | None = None
     coverage_kind: Literal["live_status", "official_announcements", "published_timetable"] | None = None
     coverage_status: Literal["checked", "unavailable"] | None = None
+    refresh_status: Literal["idle", "refreshing", "failed", "unavailable"] | None = None
+    serving_stale: bool | None = None
     last_checked_at: str | None = None
     dataset_id: str | None = None
     resource_id: str | None = None

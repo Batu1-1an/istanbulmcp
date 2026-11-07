@@ -13,7 +13,7 @@ from app.connectors.biletinial import BiletinialClient, plain_text
 from app.connectors.ticketmaster import TicketmasterClient
 from app.core.envelope import Freshness, Source, error_envelope, result_info, success_envelope
 from app.core.error_responses import validation_error_envelope
-from app.core.events import CATEGORIES, ISTANBUL, EventObservation, age_suitability, event_time, normalize_category, search_text
+from app.core.events import CATEGORIES, ISTANBUL, EventObservation, age_suitability, category_for, event_time, normalize_category, search_text
 from app.core.geo import haversine_m, radius_bbox
 from app.core.settings import Settings
 from app.core.source_cache import cached_source_data_with_status
@@ -25,6 +25,7 @@ logger = logging.getLogger("istanbul_mcp.events")
 EVENT_LIMITS = ["Istanbul source inventory only; not a complete city calendar.",
                 "Prices and availability are observations, not live seat inventory or checkout quotes."]
 SOURCE_NAMES = {"ticketmaster": "Ticketmaster Discovery Feed / Biletix", "biletinial": "Biletinial"}
+_refreshing_sources: set[tuple[str, str]] = set()
 
 
 def validate_events_settings(settings: Settings):
@@ -124,7 +125,7 @@ def event_card(row: EventObservation, matches=None, *, max_price=None, distance=
     lowest_offer = next((offer for offer in row.offers if offer.price == price and offer.currency == "TRY" and price is not None), None)
     return {
         "performance_id": row.performance_id, "event_id": row.event_id,
-        "title": row.title, "category": row.category, "start_at": row.start_at.isoformat(),
+        "title": row.title, "category": row.category, "category_source": row.category_source, "start_at": row.start_at.isoformat(),
         "end_at": row.end_at.isoformat() if row.end_at else None, "end_known": row.end_at is not None,
         "end_source": (row.end_source if row.end_source != "unknown" else "source_end") if row.end_at else "unknown",
         "age_limit": row.age_limit, "duration_minutes": row.duration_minutes,
@@ -163,6 +164,8 @@ class EventService:
             previous = snapshots.get(source)
             if not force and previous and (datetime.now(timezone.utc) - event_time(previous["refreshed_at"])).total_seconds() < self.settings.events_cache_ttl_seconds:
                 return previous
+            refresh_key = (str(self.settings.database_path.resolve()), source)
+            _refreshing_sources.add(refresh_key)
             try:
                 async def fetch(client):
                     connector = TicketmasterClient(self.settings, client) if source == "ticketmaster" else BiletinialClient(self.settings, client)
@@ -177,6 +180,8 @@ class EventService:
             except Exception as exc:
                 await asyncio.to_thread(self.repository.failure, source, type(exc).__name__)
                 raise
+            finally:
+                _refreshing_sources.discard(refresh_key)
         # One refresh per source per database/process; failed loads never replace cache.
         return await cached_source_data_with_status(
             f"events.{source}.{self.settings.database_path.resolve()}", ttl_seconds=self.settings.events_cache_ttl_seconds,
@@ -197,12 +202,18 @@ class EventService:
 
     def _sources(self, snapshots):
         result = []
+        usable = self._usable(snapshots)
         for source in self.configured_sources:
             snapshot = snapshots.get(source)
             metadata = snapshot["metadata"] if snapshot else {}
+            refreshing = (str(self.settings.database_path.resolve()), source) in _refreshing_sources
+            serving_stale = source in usable and bool(snapshot["last_error"] or
+                (datetime.now(timezone.utc) - event_time(snapshot["refreshed_at"])).total_seconds() > self.settings.events_cache_ttl_seconds)
             result.append(Source(name=SOURCE_NAMES[source], publisher="Ticketmaster" if source == "ticketmaster" else "Biletinial",
                                  license=None, url="https://developer.ticketmaster.com/products-and-docs/apis/discovery-feed/" if source == "ticketmaster" else "https://biletinial.com/tr-tr/tiyatro",
                                  scope="Istanbul catalogue snapshot", coverage_status="checked" if snapshot and not snapshot["last_error"] else "unavailable",
+                                 refresh_status="refreshing" if refreshing else "failed" if snapshot and snapshot["last_error"] else "idle" if snapshot else "unavailable",
+                                 serving_stale=serving_stale,
                                  last_checked_at=snapshot["checked_at"] if snapshot else None,
                                  last_successful_refresh_at=snapshot["refreshed_at"] if snapshot else None,
                                  received_total=metadata.get("received"), accepted_total=metadata.get("accepted"), skipped_total=metadata.get("skipped")))
@@ -217,16 +228,19 @@ class EventService:
     def _envelope(self, summary, data, snapshots, *, matched=None, warnings=(), limits=()):
         usable = self._usable(snapshots)
         ages = [(datetime.now(timezone.utc) - event_time(snapshots[s]["refreshed_at"])).total_seconds() for s in usable]
-        stale = any(age > self.settings.events_cache_ttl_seconds for age in ages)
+        overdue = any(age > self.settings.events_cache_ttl_seconds for age in ages)
+        stale = overdue or any(snapshots[s]["last_error"] for s in usable)
         notes = list(warnings)
         for source in self.configured_sources:
+            if (str(self.settings.database_path.resolve()), source) in _refreshing_sources:
+                notes.append(f"{source} catalogue refresh is in progress; the last usable snapshot remains available and results may change after publication.")
             if source not in usable:
                 notes.append(f"{source} catalogue unavailable or too old; missing coverage is not absence of events.")
             elif snapshots[source]["last_error"]:
                 notes.append(f"{source} refresh failed; last successful snapshot is being served.")
             if source in snapshots:
                 notes.extend(snapshots[source]["metadata"].get("warnings", []))
-        if stale:
+        if overdue:
             notes.append("Catalogue refresh is overdue; results may have changed.")
         oldest = min((snapshots[s]["refreshed_at"] for s in usable), default=None)
         return success_envelope(summary=summary, data=data, sources=self._sources(snapshots),
@@ -238,7 +252,8 @@ class EventService:
     async def search(self, *, query=None, category=None, date_from=None, date_to=None,
                      time_from=None, time_to=None, district=None, venue=None,
                      lat=None, lon=None, radius_m=None, free_only=False, max_price_try=None, limit=None,
-                     include_unknown_prices=True, child_age=None, query_scope="title", include_sold_out=False, _planning=False):
+                     include_unknown_prices=True, child_age=None, query_scope="title", include_sold_out=False,
+                     match_mode="words", _planning=False):
         if not self.settings.events_enabled:
             return self.disabled()
         try:
@@ -256,12 +271,16 @@ class EventService:
                     raise InputValidationError("Unsupported event category", field="category")
             if query_scope not in {"title", "all"}:
                 raise InputValidationError("query_scope must be title or all", field="query_scope")
+            if match_mode not in {"words", "prefix"}:
+                raise InputValidationError("match_mode must be words or prefix", field="match_mode")
             if child_age is not None and (isinstance(child_age, bool) or not isinstance(child_age, int) or not 0 <= child_age <= 17):
                 raise InputValidationError("child_age must be 0–17", field="child_age")
             if child_age is not None and category not in (None, "family"):
                 raise InputValidationError("child_age requires category=family or no category", field="category")
             if child_age is not None:
                 category = "family"
+            if isinstance(query, str) and not query.strip() and len(query) <= 120:
+                query = None
             query = validate_text(query, field="query", max_length=120) if query is not None else None
             venue = validate_text(venue, field="venue", max_length=200) if venue is not None else None
             if district is not None:
@@ -291,18 +310,18 @@ class EventService:
         try:
             rows = await asyncio.to_thread(self.repository.search,
                                            datetime.combine(first, time.min, ISTANBUL), datetime.combine(last + timedelta(days=1), time.min, ISTANBUL),
-                                           query=query, query_scope=query_scope, bbox=bbox, max_rows=self.settings.events_max_rows)
+                                           query=query, query_scope=query_scope, match_mode=match_mode, bbox=bbox, max_rows=self.settings.events_max_rows)
         except Exception:
             return error_envelope(summary="Event index could not be queried.", warning="The local index is unavailable; no events were verified.", code="source_unavailable", limits=EVENT_LIMITS)
         detail_checks = 0
-        # Price/child questions need recent evidence. Check a small relevant subset
-        # on demand; ordinary discovery still stays entirely in the local index.
-        if self.settings.events_biletinial_enabled and (max_price_try is not None or free_only or category == "family"):
+        # Price/category questions need recent evidence. Check a small relevant
+        # subset on demand; unfiltered discovery stays in the local index.
+        if self.settings.events_biletinial_enabled and (max_price_try is not None or free_only or category is not None):
             possible = []
             for row in rows:
                 if row.source != "biletinial" or row.source not in usable:
                     continue
-                if category and row.category != category and not (category == "family" and row.category == "theatre"):
+                if category and row.category != category and not (category == "family" and row.category == "theatre") and row.category != "other":
                     continue
                 if clock_from and row.start_at.time() < clock_from or clock_to and row.start_at.time() > clock_to:
                     continue
@@ -320,7 +339,8 @@ class EventService:
                 if free_only:
                     return not (row.catalogue_is_free is True or hint == 0)
                 return max_price_try is not None and (hint is None or hint > max_price_try)
-            possible.sort(key=lambda row: (row.category != category if category else False, price_priority(row),
+            possible.sort(key=lambda row: (row.category != category if category else False,
+                                            category_for(row.title) != category if category else False, price_priority(row),
                                             row.venue.name == "Unknown venue", row.start_at, row.event_id))
             seen_series = set()
             deadline = asyncio.get_running_loop().time() + 12
@@ -341,7 +361,8 @@ class EventService:
             if detail_checks:
                 rows = await asyncio.to_thread(self.repository.search,
                                                datetime.combine(first, time.min, ISTANBUL), datetime.combine(last + timedelta(days=1), time.min, ISTANBUL),
-                                               query=query, query_scope=query_scope, bbox=bbox, max_rows=self.settings.events_max_rows)
+                                               query=query, query_scope=query_scope, match_mode=match_mode, bbox=bbox, max_rows=self.settings.events_max_rows)
+        category_observed = category is None or any(row.source in usable and row.category == category for row in rows)
         selected = []
         unknown_budget = 0
         excluded_unknown_price = 0
@@ -396,6 +417,10 @@ class EventService:
             notes.append(f"Checked up to {detail_checks} relevant Biletinial event detail(s); this is not full price or audience coverage.")
         if query and selected and not any(card.get("query_match") == "exact_tokens" for card in selected):
             notes.append("No exact title-token matches; these are prefix or explicitly requested venue matches, not a verified artist identity.")
+        if category is not None and not category_observed:
+            notes.append(f"No {category} category observations in the usable index for this date/query scope. Category coverage is partial; this does not establish that Istanbul has no such events.")
+        if any(card["category_source"] == "title_marker" for card in selected[:safe_limit]):
+            notes.append("Some categories come from explicit event-type words in provider titles (category_source=title_marker), not a dedicated provider genre; verify the event page.")
         if district or bbox or venue:
             notes.append("Sessions with unverified venues cannot match location filters; inspect event details to verify them.")
         if bbox:
@@ -405,6 +430,8 @@ class EventService:
         return self._envelope(f"{min(len(selected), safe_limit)} indexed event session(s) found.", selected[:safe_limit], snapshots,
                               matched=len(selected), warnings=notes,
                               limits=[f"limit={safe_limit}", f"date_from={first}", f"date_to={last}", f"query_scope={query_scope}",
+                                      f"match_mode={match_mode}",
+                                      *([f"category_coverage={'observed' if category_observed else 'not_observed'}; scope=indexed date/query; classification is partial"] if category else []),
                                       "On-demand detail checks: at most 3 series per search.", "No cursor; narrow filters when truncated."])
 
     async def detail(self, identifier: str):

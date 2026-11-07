@@ -55,6 +55,26 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 - Canlı `istanbul_transport_disruptions` hat testi yanlış parametre adı (`line_code`)
   yerine aracın gerçek parametresi `line` ile çağrılır.
 
+## [0.5.0] - 2026-11-08
+
+### Fixed
+- Biletinial dedicated genres are mapped beyond family/stand-up. Explicit type
+  words in otherwise generic event titles carry category_source=title_marker;
+  absent category observations no longer imply complete category coverage.
+- Event searches use whole normalized words by default; match_mode=prefix opts
+  into stems. Empty optional query text now behaves like an omitted filter.
+- Failed source refreshes preserve usable snapshots and mark them stale, including
+  failures within TTL. Sources expose refresh_status and serving_stale.
+- Selected sessions outside a plan's date/time window get explicit repair guidance.
+- Trimming a selected performance ID no longer expands it into all series sessions.
+- Plan alternatives reduce repeated event sets and prefer known observed totals;
+  total_observed_minimum_try is null when the existing subtotal is incomplete.
+
+### Added
+- Persistent 100-scenario UAT fixture/runner with relative dates, recorded runtime
+  version, expected error codes, corrected title tokenization and actual plan counts.
+- Regression coverage and a finding-by-finding review of the 2026-11-08 QA report.
+
 ## [0.4.1] - 2026-11-08
 
 ### Fixed

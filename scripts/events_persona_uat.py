@@ -98,7 +98,9 @@ def inspect_result(case, payload):
                 errors.append("child_age_not_verified")
             if args.get("query") and args.get("query_scope", "title") == "title":
                 words=search_text(card["title"]).split()
-                if not all(any(word.startswith(token) for word in words) for token in search_text(args["query"]).split()):
+                tokens=search_text(args["query"]).split()
+                matched = all(any(word.startswith(token) for word in words) for token in tokens) if args.get("match_mode", "words") == "prefix" else all(token in words for token in tokens)
+                if not matched:
                     errors.append("title_query_matched_only_venue")
             if args.get("radius_m") is not None and (card["distance_m"] is None or card["distance_m"] > args["radius_m"] + 1):
                 errors.append("outside_radius")

@@ -91,6 +91,25 @@ def detail_ref(url: str) -> tuple[str, str]:
     return path[1], path[2]
 
 
+def _category(published: str, title: str) -> tuple[str, str]:
+    """Keep generic provider buckets distinct from explicit title type markers."""
+    kind = category_for(published)
+    folded = normalize_place(title)
+    if re.search(r"\bstand[\s-]*up\b", folded):
+        return "standup", "title_marker"
+    if kind != "other":
+        return kind, "provider"
+    for pattern, value in (
+        (r"\batolye(?:si|leri)?\b", "workshop"),
+        (r"\bsergi(?:si|leri)?\b", "exhibition"),
+        (r"\bfestival(?:i|leri)?\b", "festival"),
+        (r"\b(?:seminer(?:i|leri)?|soylesi(?:si|leri)?)\b", "seminar"),
+    ):
+        if re.search(pattern, folded):
+            return value, "title_marker"
+    return "other", "unknown"
+
+
 def parse_biletinial_list(payload, category: str) -> tuple[list[EventObservation], bool]:
     if not isinstance(payload, dict) or not isinstance(payload.get("items"), list) or not isinstance(payload.get("hasMore"), bool):
         raise EventSourceError("Invalid Biletinial catalogue page")
@@ -103,6 +122,7 @@ def parse_biletinial_list(payload, category: str) -> tuple[list[EventObservation
         if "istanbul" not in city:
             continue
         slug = item["seoUrl"]
+        kind, category_source = _category(str(item.get("categoryName") or category), item["name"])
         try:
             hint = float(item["minTicketAmount"]) if not isinstance(item.get("minTicketAmount"), bool) else None
             if hint is not None and (not math.isfinite(hint) or hint < 0):
@@ -115,7 +135,7 @@ def parse_biletinial_list(payload, category: str) -> tuple[list[EventObservation
                 continue
             result.append(EventObservation(
                 source="biletinial", source_id=f"{slug}:listing:{start.isoformat()}", series_key=slug,
-                title=item["name"], category="standup" if re.search(r"\bstand[\s-]*up\b", item["name"], re.I) else category_for(category), start_at=start,
+                title=item["name"], category=kind, category_source=category_source, start_at=start,
                 catalogue_min_price_try=hint, catalogue_is_free=item.get("isFree") if isinstance(item.get("isFree"), bool) else None,
                 venue=venue_from("Unknown venue"), observed_at=observed,
                 ticket_url=f"https://biletinial.com/tr-tr/{category}/{slug}",
@@ -233,8 +253,13 @@ def parse_biletinial_detail(html: str, url: str, known_starts=()) -> tuple[list[
         observation.age_limit = facts.get("yas siniri") or None
         if "cocuk oyunu" in folded_genre or "cocuk tiyatro" in folded_genre or "cocuk konser" in folded_genre:
             observation.category = "family"
+            observation.category_source = "provider"
         elif "stand" in folded_genre and "up" in folded_genre:
             observation.category = "standup"
+            observation.category_source = "provider"
+        elif category_for(genre) != "other":
+            observation.category = category_for(genre)
+            observation.category_source = "provider"
         if published_duration and 1 <= int(published_duration[1]) <= 600:
             observation.duration_minutes = int(published_duration[1])
             if observation.end_at is None:
@@ -250,6 +275,7 @@ def parse_biletinial_detail(html: str, url: str, known_starts=()) -> tuple[list[
 
 
 def _detail_observation(item, category, slug, source_id, start, venue_name, url, observed, linked):
+    kind, category_source = _category(category, str(item.get("name") or slug))
     location = item.get("location") or {} if linked else {}
     address = location.get("address") or {}
     address_text = ", ".join(str(address[k]) for k in ("streetAddress", "addressLocality") if address.get(k)) if isinstance(address, dict) else str(address)
@@ -266,7 +292,7 @@ def _detail_observation(item, category, slug, source_id, start, venue_name, url,
     end = event_time(item.get("endDate")) if linked else None
     return EventObservation(
         source="biletinial", source_id=str(source_id), series_key=slug,
-        title=str(item.get("name") or slug), category=category_for(category), start_at=start,
+        title=str(item.get("name") or slug), category=kind, category_source=category_source, start_at=start,
         end_at=end if end and end > start else None, venue=venue_from(venue_name, address_text, geo.get("latitude"), geo.get("longitude")),
         program_status={"EventScheduled": "scheduled", "EventCancelled": "cancelled", "EventPostponed": "postponed", "EventRescheduled": "rescheduled"}.get(str(item.get("eventStatus", "")).rsplit("/", 1)[-1], "unknown") if linked else "unknown",
         offers=parsed_offers, ticket_url=url, description=plain_text(str(item.get("description") or "")) or None,

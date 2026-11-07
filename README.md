@@ -93,7 +93,9 @@ Notlar:
 
 - Tüm Istanbul MCP araçları salt okunurdur ve `readOnlyHint` taşır.
 - `MCP_API_KEYS` veya `MCP_AUTH_REQUIRED=true` açıksa ChatGPT web bağlanamaz. Bu ekran statik Bearer anahtarı kabul etmez; sunucuda OAuth desteği yoktur. Public modu kullanın.
-- Araç listesi değiştiğinde plugin ayarlarından araçları yenileyin.
+- Custom bağlantıda araç listesi değiştiğinde [ChatGPT Plugins](https://chatgpt.com/plugins)
+  üzerinden bağlantıyı açıp **Refresh** seçin; ardından yeni bir sohbet açın.
+  Bu akış yayın incelemesi gerektirmez. [Resmî yenileme adımları](https://developers.openai.com/plugins/deploy/connect-chatgpt#refresh-metadata).
 - Business, Enterprise ve Edu planlarında yönetici **Create plugins with MCPs** iznini vermeli ve plugin'i yayımlamalıdır.
 - **Add custom MCP server** seçeneği görünmüyorsa **Settings → Apps → Advanced settings** yolundan Developer mode'u açın. Plus ve Pro planlarında bu adım gerekebilir.
 
@@ -324,9 +326,16 @@ railway run .venv/bin/python scripts/check_events.py
 koşulu ve yalnız doğrulanmış fiyatlarla arama desteklenir. Tükenmiş seanslar
 varsayılan olarak dışlanır. [Persona bulguları ve doğrulama](docs/events-persona-validation.md).
 
+0.5.0 aramada tam kelime eşlemesini varsayılan yapar; kök/önek için
+`match_mode=prefix` seçilir. Açık kaynak türleri ve başlıktaki tür işaretleri
+ayrılır, yenileme/fallback durumu görünürdür ve plan seçeneklerindeki tekrar
+azaltılır. [100 senaryolu QA incelemesi](docs/events-100-review.md).
+
 ```bash
 # Ağsız kullanıcı-niyeti regresyonları
 pytest tests/test_event_personas.py tests/test_events.py
 # Opt-in: çalışan MCP üzerinde farklı kullanıcı soruları; raw cevap/secret kaydetmez
 railway run .venv/bin/python scripts/events_persona_uat.py --output .data/events-persona-uat.json
+# QA raporundaki 100 niyetin kalıcı, opt-in yeniden koşusu
+railway run .venv/bin/python -m scripts.events_100_uat --output .data/events-100-current.json
 ```

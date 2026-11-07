@@ -146,7 +146,16 @@ yenileme ve host başına 1 istek/s sınırı korunur; daha geniş doğrulama ar
 planda ilerler. Doğal dil yönlendirmesi ve gerçek yolculuk yetişilebilirliği
 bu çalışmanın ölçtüğü başarılar değildir.
 
-## ChatGPT yayımlanmış eklenti kontrolü
+## ChatGPT eklenti bağlantısı kontrolü
+
+**2026-11-08 düzeltmesi:** Kullanıcı bağlantıyı custom MCP olarak eklediğini
+belirtti. Aşağıdaki önceki kontrollerde bağlantının yayımlanmış eklenti olduğu
+varsayılarak yapılan inceleme/yayın paneli yönlendirmesi bu bağlantı için geçerli
+değildir. 17/21 araç farkı gözlemi geçerlidir; bundan yayın incelemesi
+beklendiği sonucu çıkarılamaz. Custom bağlantı ChatGPT Plugins içinden açılıp
+**Refresh** seçilmeli, değişen araç listesi kontrol edilmeli ve yeni bir sohbet
+başlatılmalıdır. Yenileme sonrası sonuç bu oturumda henüz doğrulanmadı.
+Kaynak: [OpenAI Refresh metadata](https://developers.openai.com/plugins/deploy/connect-chatgpt#refresh-metadata).
 
 2026-11-07 19:57 UTC: ChatGPT'de bağlı İstanbul MCP eklentisinin health aracı
 gerçek çağrıyla `ready=true`, WAL ve schema_version=3 döndürdü. Ancak bu

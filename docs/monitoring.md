@@ -109,3 +109,10 @@ yenileme sırasını tüketmez. Önümüzdeki 31 günün yakın seansları önce
 Bekleyen iş varsa batch sonrası beş saniye, yoksa en fazla 60 saniye beklenir;
 host başına ortak 1 istek/s sınırı değişmez. Fiyat/aile sorgularındaki sınırlı
 detay kontrolleri için response warnings ve gecikme telemetrisi incelenir.
+
+0.5.0'da kaynak `refresh_status=refreshing` iken son kullanılabilir snapshot
+sunulabilir; failed + serving_stale=true yenilemenin başarısız ama fallback'in
+kullanılabilir olduğunu anlatır. TTL içinde hata da freshness=stale üretir.
+`coverage_status=unavailable` tek başına fallback verisinin atıldığı anlamına
+gelmez. İlgili tür sorgularının da azami üç detay çağrısı yapabildiği hesaba
+katılmalıdır; doğrulama gecikmesini yalnız yerel indeks gecikmesi diye ölçmeyin.

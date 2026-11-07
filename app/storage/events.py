@@ -159,7 +159,7 @@ class EventRepository:
         with connect(self.path) as conn:
             return {row["source"]: {**dict(row), "metadata": json.loads(row["metadata"])} for row in conn.execute("SELECT * FROM event_source_snapshots")}
 
-    def search(self, start: datetime, end: datetime, *, query: str | None = None, query_scope="title", bbox=None, max_rows=10000) -> list[EventObservation]:
+    def search(self, start: datetime, end: datetime, *, query: str | None = None, query_scope="title", match_mode="words", bbox=None, max_rows=10000) -> list[EventObservation]:
         self.initialize()
         sql = "SELECT o.payload FROM event_occurrences o"
         params = []
@@ -174,7 +174,7 @@ class EventRepository:
             if not tokens:
                 return []
             sql += " AND event_fts MATCH ?"
-            expression = " AND ".join('"' + token + '"*' for token in tokens)
+            expression = " AND ".join('"' + token + '"' + ("*" if match_mode == "prefix" else "") for token in tokens)
             params.append("name_norm : (" + expression + ")" if query_scope == "title" else expression)
         if bbox:
             min_lon, min_lat, max_lon, max_lat = bbox

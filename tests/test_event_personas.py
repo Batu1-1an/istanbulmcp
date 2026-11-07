@@ -100,7 +100,7 @@ async def test_turkish_category_aliases_are_accepted(tmp_path):
 async def test_title_query_does_not_match_only_a_venue_name(tmp_path):
     events=service_for(tmp_path,[show("one",title="Benimle Oynar Mısın",venue=EventVenue(name="Sultanbeyli Sahnesi"))])
     assert not (await events.search(query="su",date_from="2030-11-08",date_to="2030-11-08"))["data"]
-    assert (await events.search(query="su",query_scope="all",date_from="2030-11-08",date_to="2030-11-08"))["data"]
+    assert (await events.search(query="su",query_scope="all",match_mode="prefix",date_from="2030-11-08",date_to="2030-11-08"))["data"]
 
 
 @pytest.mark.asyncio
