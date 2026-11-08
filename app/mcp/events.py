@@ -35,6 +35,10 @@ async def istanbul_events_search(
     is catalogue metadata, never a visit or reservation time. Show the date and
     ticket link, and verify opening hours/admission conditions. Clock-filtered
     searches exclude date-only flexible tickets; excluded_unverified_time counts them.
+    admission_window holds published opening/last-entry/closing clocks, not an
+    appointment. Source excluded_weekdays uses Monday=0..Sunday=6; restricted
+    dates are excluded and counted in excluded_entry_date. Detail retains them
+    for inspection with entry_date_restricted=true, never an admission guarantee.
     Categories: concert, theatre, opera_ballet, standup, family, festival, exhibition, workshop, sport, seminar,
     other. District: one of Istanbul's 39 districts. Coordinates must be paired;
     Turkish aliases such as tiyatro, konser, çocuk, atölye are accepted.
@@ -89,6 +93,8 @@ async def istanbul_event_detail(event_id: str) -> dict:
     published HTML session times can resolve inconsistent JSON-LD offsets.
     Flexible-entry tickets have start_at=null; use event_date and do not present
     source_start_at as an appointment, opening hour or scheduled visit.
+    Preserve admission_window and excluded_weekdays. entry_date_restricted=true
+    marks an explicitly prohibited ticket date; it is not a cancellation claim.
     catalogue_retired means retained local sessions are inactive; source_unavailable
     means active local records exist but their source snapshot is unusable.
     not_found without retained history cannot explain whether a deploy reset or
@@ -132,6 +138,10 @@ async def istanbul_events_plan(
     the rejection; verify a visit time and admission conditions on the ticket page.
     Catalogue-only Biletinial sessions are rejected with session_detail_required;
     call event_detail before treating their listed timestamp as a timed visit.
+    Explicitly restricted ticket dates are rejected with entry_date_restricted.
+    Timed options exclude mutually incompatible published age ranges. Inspect
+    checks.common_published_age_range and age_compatibility: unknown age facts
+    remain unknown, and a common range does not verify the user's actual age.
     Sold-out/cancelled sessions are excluded. No travel-time or live ticket
     guarantee: non-overlapping times do not prove venues are reachable.
     For every event in the presented plan, show a clickable event/ticket-page

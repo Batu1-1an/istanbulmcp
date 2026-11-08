@@ -55,8 +55,9 @@ class JsonLdParser(HTMLParser):
 
 class SessionParser(HTMLParser):
     """Capture balanced session divs, excluding footer/script sold-out strings."""
-    def __init__(self):
+    def __init__(self, *, target_class: str | None = None):
         super().__init__(convert_charrefs=False)
+        self.target_class = target_class
         self.sessions = []
         self.depth = 0
         self.identity = None
@@ -64,8 +65,10 @@ class SessionParser(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         identity = dict(attrs).get("id", "")
-        if not self.depth and tag == "div" and re.fullmatch(r"seans-\d+", identity):
-            self.identity = identity.removeprefix("seans-")
+        target = (self.target_class in dict(attrs).get("class", "").split() if self.target_class
+                  else bool(re.fullmatch(r"seans-\d+", identity)))
+        if not self.depth and tag == "div" and target:
+            self.identity = identity.removeprefix("seans-") if not self.target_class else self.target_class
             self.parts = []
             self.depth = 1
         elif self.depth and tag == "div":
@@ -193,9 +196,34 @@ def _session_header(fragment: str) -> tuple[int, int, str | None, str] | None:
 
 def _flexible_entry(value: str) -> bool:
     text = normalize_place(plain_text(value, 8000))
-    return bool(re.search(r"\b(?:ilgili|secilen|belirtilen) tarihte(?:ki)? "
+    return bool(_admission_window(value) or re.search(r"\b(?:ilgili|secilen|belirtilen) tarihte(?:ki)? "
                           r"(?:istenilen|istenen|dilediginiz|herhangi bir) saatte "
                           r"(?:kullanilabilir|gecerlidir)\b", text))
+
+
+def _admission_window(value: str) -> dict | None:
+    text = normalize_place(plain_text(value, 8000))
+    clock = r"((?:[01]\d|2[0-3]):[0-5]\d)"
+    window = {}
+    span = re.search(clock + r"\s*[-–]\s*" + clock + r"\s*saatleri arasinda (?:katilim|ziyaret|giris)", text)
+    if span:
+        window.update(opens_at=span[1], last_entry_at=span[2])
+    for key, pattern in (
+        ("opens_at", clock + r"[’']?d[ae]\s+acilis"),
+        ("last_entry_at", r"son (?:ziyaretci )?giris(?:i)?\s*:\s*" + clock),
+        ("closes_at", r"(?:sergi )?kapanis saati\s*:\s*" + clock),
+    ):
+        found = re.search(pattern, text)
+        if found:
+            window[key] = found[1]
+    return window if window.get("opens_at") and window.get("last_entry_at") else None
+
+
+def _excluded_weekdays(value: str) -> list[int]:
+    sentences = [normalize_place(part) for part in re.split(r"[.!?;\n]+", plain_text(value, 8000))]
+    days = ("pazartesi", "sali", "carsamba", "persembe", "cuma", "cumartesi", "pazar")
+    return [i for i, name in enumerate(days) if any(re.search(
+        r"^biletler\s+" + name + r"\s+gunleri\s+gecerli\s+degildir\b", sentence) for sentence in sentences)]
 
 
 def _json_session_starts(items: list[dict], headers: list[tuple]) -> tuple[dict, set]:
@@ -230,6 +258,9 @@ def _json_session_starts(items: list[dict], headers: list[tuple]) -> tuple[dict,
 def parse_biletinial_detail(html: str, url: str, known_starts=()) -> tuple[list[EventObservation], dict]:
     category, slug = detail_ref(url)
     json_events = _json_events(html)
+    page_parser = SessionParser(target_class="event-card-v2__description")
+    page_parser.feed(html)
+    page_description = " ".join(plain_text(fragment, 8000) for _, fragment in page_parser.sessions[:2])
     # Pair HTML sessions with complete source dates, never invent a year from a day/month label.
     session_parser = SessionParser()
     session_parser.feed(html)
@@ -243,13 +274,17 @@ def parse_biletinial_detail(html: str, url: str, known_starts=()) -> tuple[list[
     observed = datetime.now(timezone.utc)
     missing = 0
     html_days = set()
-    flexible_rule = any(_flexible_entry(str(item.get("description") or "")) for item in json_events)
+    descriptions = page_description + " " + " ".join(str(item.get("description") or "") for item in json_events)
+    flexible_rule = _flexible_entry(descriptions)
+    global_window = _admission_window(descriptions)
+    excluded_weekdays = _excluded_weekdays(descriptions)
     for (session_id, fragment), header in zip(sessions, headers):
         if header is None:
             missing += 1
             continue
         day, month, clock, venue_name = header
         flexible = _flexible_entry(fragment) or (clock is None and flexible_rule)
+        window = {**(global_window or {}), **(_admission_window(fragment) or {})} or None
         # The source year can anchor an explicitly published HTML date even if
         # its JSON clock is wrong. Never assume that shifted clock is another show.
         related = [s for item in json_events if (s := json_starts.get(id(item))) is not None
@@ -278,7 +313,8 @@ def parse_biletinial_detail(html: str, url: str, known_starts=()) -> tuple[list[
         observation = _detail_observation(linked or (json_events[0] if json_events else {}), category, slug,
                                           session_id, start, venue_name, url, observed, linked is not None,
                                           start_time_basis="html_date" if flexible else "html_session", source_time_conflict=conflicting,
-                                          timing_kind="flexible_entry" if flexible else "scheduled")
+                                          timing_kind="flexible_entry" if flexible else "scheduled", admission_window=window)
+        observation.excluded_weekdays = sorted(set(excluded_weekdays + _excluded_weekdays(fragment)))
         text = normalize_place(plain_text(fragment))
         availability = "sold_out" if "tukendi" in text else "limited" if re.search(r"son \d+ bilet", text) else "unknown"
         prices = re.findall(r'class=["\']price-item["\'][^>]*>\s*<span[^>]*>(.*?)</span>\s*<strong[^>]*>(.*?)</strong>', fragment, re.S)
@@ -324,11 +360,13 @@ def parse_biletinial_detail(html: str, url: str, known_starts=()) -> tuple[list[
             unconfirmed += 1
             unconfirmed_days.add(key)
             continue
-        flexible = _flexible_entry(str(item.get("description") or ""))
+        flexible = _flexible_entry(str(item.get("description") or "")) or flexible_rule
         result.append(_detail_observation(item, category, slug, f"json:{start.isoformat()}:{location.get('name')}",
                                           datetime.combine(start.date(), time.min, ISTANBUL) if flexible else start,
                                           str(location.get("name") or ""), url, observed, True,
-                                          timing_kind="flexible_entry" if flexible else "scheduled"))
+                                          timing_kind="flexible_entry" if flexible else "scheduled",
+                                          admission_window=_admission_window(str(item.get("description") or "")) or global_window))
+        result[-1].excluded_weekdays = excluded_weekdays
     # Read dedicated source facts, not a title-based guess about children's content.
     fact_block = re.search(r'<dl\b[^>]*class=["\'][^"\']*event-card-v2__facts[^"\']*["\'][^>]*>(.*?)</dl>', html, re.S)
     facts = {}
@@ -340,6 +378,8 @@ def parse_biletinial_detail(html: str, url: str, known_starts=()) -> tuple[list[
     folded_genre = normalize_place(genre)
     published_duration = re.fullmatch(r"(\d{1,3})\s*(?:dakika|dk\.?|min(?:utes)?)", facts.get("sure", ""), re.I)
     for observation in result:
+        if observation.excluded_weekdays:
+            observation.warnings.append("Explicit source weekday restrictions apply; excluded_weekdays uses Monday=0 through Sunday=6. A listed date is not proof of admission.")
         observation.age_limit = facts.get("yas siniri") or None
         if "cocuk oyunu" in folded_genre or "cocuk tiyatro" in folded_genre or "cocuk konser" in folded_genre:
             observation.category = "family"
@@ -372,7 +412,7 @@ def parse_biletinial_detail(html: str, url: str, known_starts=()) -> tuple[list[
 
 
 def _detail_observation(item, category, slug, source_id, start, venue_name, url, observed, linked,
-                        *, start_time_basis="json_ld", source_time_conflict=False, timing_kind="scheduled"):
+                        *, start_time_basis="json_ld", source_time_conflict=False, timing_kind="scheduled", admission_window=None):
     kind, category_source = _category(category, str(item.get("name") or slug))
     location = item.get("location") or {} if linked else {}
     address = location.get("address") or {}
@@ -393,6 +433,7 @@ def _detail_observation(item, category, slug, source_id, start, venue_name, url,
         title=str(item.get("name") or slug), category=kind, category_source=category_source, start_at=start,
         start_time_basis=start_time_basis, source_time_conflict=source_time_conflict,
         timing_kind=timing_kind, source_start_at=event_time(item.get("startDate")) if linked and timing_kind == "flexible_entry" else None,
+        admission_window=admission_window,
         end_at=end if end and end > start else None, venue=venue_from(venue_name, address_text, geo.get("latitude"), geo.get("longitude")),
         program_status={"EventScheduled": "scheduled", "EventCancelled": "cancelled", "EventPostponed": "postponed", "EventRescheduled": "rescheduled"}.get(str(item.get("eventStatus", "")).rsplit("/", 1)[-1], "unknown") if linked else "unknown",
         offers=parsed_offers, ticket_url=url, description=plain_text(str(item.get("description") or "")) or None,

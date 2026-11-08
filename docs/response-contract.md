@@ -96,6 +96,19 @@ Kontrol edilen güncel belge: Context7 `/modelcontextprotocol/python-sdk/v2.3.0`
 
 ## Optional event results
 
+0.8.0 cards add optional admission_window (opens_at, last_entry_at, closes_at,
+HH:MM Europe/Istanbul), excluded_weekdays (Monday=0..Sunday=6), and
+entry_date_restricted. These are source facts, not a chosen visit time or proof
+of full admission eligibility. Discovery excludes explicitly prohibited dates
+with filter_counts.excluded_entry_date. Detail keeps restricted records for
+inspection; selected plans reject them with entry_date_restricted, and calendars
+omit them. Plan checks adds age_compatibility=published_ranges_compatible|
+partially_known|unknown and common_published_age_range={minimum,maximum} or null.
+An unbounded published maximum is null; missing evidence never means all ages.
+age_incompatible_combinations counts candidate combinations with no shared age,
+not individual sessions or city totals. A common source range is not proof of
+the user's age, accompaniment conditions or ticket eligibility.
+
 In 0.7.0 cards add `timing_kind=scheduled|flexible_entry`, `event_date` and
 `source_start_at`. Scheduled sessions retain their ISO start_at. Explicitly
 flexible-entry tickets have start_at=null, end_at=null, end_known=false;

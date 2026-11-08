@@ -126,14 +126,17 @@ def event_card(row: EventObservation, matches=None, *, max_price=None, distance=
     price = event_price(row, include_sold_out=include_sold_out)
     lowest_offer = next((offer for offer in row.offers if offer.price == price and offer.currency == "TRY"
                          and (offer.availability != "sold_out" or include_sold_out and availability(row)=="sold_out") and price is not None), None)
+    restricted = row.start_at.weekday() in row.excluded_weekdays
     return {
         "performance_id": row.performance_id, "event_id": row.event_id,
         "title": row.title, "category": row.category, "category_source": row.category_source,
         "start_at": row.start_at.isoformat() if row.timing_kind == "scheduled" else None,
         "timing_kind": row.timing_kind, "event_date": row.start_at.date().isoformat(),
         "source_start_at": row.source_start_at.isoformat() if row.source_start_at else None,
+        "admission_window": row.admission_window.model_dump() if row.admission_window else None,
+        "excluded_weekdays": row.excluded_weekdays, "entry_date_restricted": restricted,
         "start_time_basis": row.start_time_basis, "source_time_conflict": row.source_time_conflict,
-        "warnings": list(row.warnings),
+        "warnings": [*row.warnings, *(["This listed date is excluded by an explicit source weekday rule; it is not an admission recommendation."] if restricted else [])],
         "end_at": row.end_at.isoformat() if row.end_at and row.timing_kind == "scheduled" else None,
         "end_known": row.end_at is not None and row.timing_kind == "scheduled",
         "end_source": (row.end_source if row.end_source != "unknown" else "source_end") if row.end_at and row.timing_kind == "scheduled" else "unknown",
@@ -390,13 +393,16 @@ class EventService:
         now = datetime.now(ISTANBUL)
         counts = dict(initial_indexed_candidates=initial_candidate_count,indexed_candidates=len(rows), usable_observations=sum(row.source in usable for row in rows),
                       deduplicated_sessions=0, excluded_started=0, excluded_program=0, excluded_category=0,
-                      excluded_age=0, excluded_clock=0, excluded_unverified_time=0, excluded_location=0, excluded_sold_out=0,
+                      excluded_age=0, excluded_clock=0, excluded_unverified_time=0, excluded_entry_date=0, excluded_location=0, excluded_sold_out=0,
                       excluded_unknown_price=0, excluded_price=0, verified_free=0,
                       unknown_price_sessions=0, known_price_sessions=0,
                       detail_checks_attempted=detail_checks, detail_checks_succeeded=successful_detail_checks,
                       expired_offer_observations=sum(bool(row.offers) and (now-row.observed_at).total_seconds()>self.settings.events_detail_ttl_seconds for row in rows if row.source in usable))
         for row, matches in deduplicate([current_observation(row, self.settings) for row in rows if row.source in usable]):
             counts["deduplicated_sessions"] += 1
+            if row.start_at.weekday() in row.excluded_weekdays:
+                counts["excluded_entry_date"] += 1
+                continue
             if not include_past and (row.start_at.date() < now.date() if row.timing_kind == "flexible_entry" else row.start_at < now):
                 counts["excluded_started"] += 1
                 continue
@@ -454,6 +460,8 @@ class EventService:
             notes.append("Some price observations expired and are now unknown; old zero-price observations do not verify current free admission.")
         if counts["excluded_unverified_time"]:
             notes.append(f"{counts['excluded_unverified_time']} flexible-entry ticket(s) excluded: a date-only ticket cannot verify the requested start-time window.")
+        if counts["excluded_entry_date"]:
+            notes.append(f"{counts['excluded_entry_date']} listed ticket date(s) excluded by an explicit source weekday restriction; a catalogue date does not override admission conditions.")
         if any(card["timing_kind"] == "flexible_entry" for card in selected[:safe_limit]):
             notes.append("Flexible-entry tickets have no fixed visit start; event_date is the listed date, not proof of opening hours or admission eligibility. Verify the ticket page before visiting.")
         if free_only:

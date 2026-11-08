@@ -28,18 +28,26 @@ def normalize_category(value: str) -> str:
     return CATEGORY_ALIASES.get(text, text)
 
 
-def age_suitability(age_limit: str | None, child_age: int) -> str:
-    """Use only a published numeric range/minimum; no inferred child eligibility."""
+def published_age_range(age_limit: str | None) -> tuple[int, int | None] | None:
+    """A published range only; unknown is not an unrestricted age range."""
     text = normalize_place(age_limit or "")
     if text in {"tum yaslar", "her yas", "all ages", "yas siniri yok"}:
-        return "within"
+        return 0, None
     match = re.fullmatch(r"(\d{1,2})\s*[-–]\s*(\d{1,2})(?:\s*yas)?", text)
     if match:
-        return "within" if int(match[1]) <= child_age <= int(match[2]) else "outside"
+        return (int(match[1]), int(match[2])) if int(match[1]) <= int(match[2]) else None
     match = re.fullmatch(r"(\d{1,2})\s*(?:\+|yas(?: ve)? (?:uzeri|ustu))", text)
     if match:
-        return "within" if child_age >= int(match[1]) else "outside"
-    return "unknown"
+        return int(match[1]), None
+    return None
+
+
+def age_suitability(age_limit: str | None, child_age: int) -> str:
+    bounds = published_age_range(age_limit)
+    if bounds is None:
+        return "unknown"
+    low, high = bounds
+    return "within" if child_age >= low and (high is None or child_age <= high) else "outside"
 
 
 def stable_id(kind: str, *parts: str) -> str:
@@ -112,6 +120,12 @@ class EventOffer(BaseModel):
     url: str | None = None
 
 
+class EventAdmissionWindow(BaseModel):
+    opens_at: str | None = Field(default=None, pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+    last_entry_at: str | None = Field(default=None, pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+    closes_at: str | None = Field(default=None, pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+
+
 class EventObservation(BaseModel):
     source: Literal["ticketmaster", "biletinial"]
     source_id: str = Field(min_length=1, max_length=240)
@@ -123,6 +137,8 @@ class EventObservation(BaseModel):
     start_time_basis: Literal["provider_datetime", "html_session", "html_date", "json_ld"] = "provider_datetime"
     timing_kind: Literal["scheduled", "flexible_entry"] = "scheduled"
     source_start_at: datetime | None = None
+    admission_window: EventAdmissionWindow | None = None
+    excluded_weekdays: list[Literal[0, 1, 2, 3, 4, 5, 6]] = Field(default_factory=list, max_length=7)
     source_time_conflict: bool = False
     end_at: datetime | None = None
     venue: EventVenue

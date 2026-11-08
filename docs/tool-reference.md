@@ -355,6 +355,13 @@ sources give `ok=false`/broken; checked-empty remains successful.
 
 ## Optional event tools
 
+0.8.0 preserves admission_window and excluded_weekdays; entry_date_restricted
+marks a source-prohibited ticket date. Search excludes it and counts
+excluded_entry_date; detail remains inspectable. Plan checks reports a common
+published age range and evidence status, and excludes incompatible combinations.
+Neither opening/last-entry clocks nor the age range are an appointment or a
+verified user profile. [Details](events-admission-age-validation.md).
+
 0.7.0: `timing_kind=flexible_entry` has `event_date` and `start_at=null`.
 `source_start_at` is source catalogue metadata, never a reservation time.
 Date-only tickets remain discoverable, but clock filters exclude them and

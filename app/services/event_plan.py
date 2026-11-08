@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 
 from app.core.envelope import error_envelope
 from app.core.error_responses import validation_error_envelope
-from app.core.events import CATEGORIES, ISTANBUL, age_suitability, event_time, normalize_category
+from app.core.events import CATEGORIES, ISTANBUL, age_suitability, event_time, normalize_category, published_age_range
 from app.core.geo import haversine_m
 from app.core.validation import InputValidationError, resolve_limit, validate_text
 from app.services.events import EventService, event_clock, event_date
@@ -34,8 +34,11 @@ def _fold_ics(line: str) -> str:
 
 def calendar_output(cards: list[dict]) -> dict:
     lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Istanbul MCP//Events//TR", "CALSCALE:GREGORIAN", "X-WR-TIMEZONE:Europe/Istanbul"]
-    links, omitted_ends, omitted_flexible, omitted_unverified = [], False, False, False
+    links, omitted_ends, omitted_flexible, omitted_unverified, omitted_restricted = [], False, False, False, False
     for card in cards:
+        if card.get("entry_date_restricted"):
+            omitted_restricted = True
+            continue
         if card.get("source") == "biletinial" and not card.get("detail_checked"):
             omitted_unverified = True
             continue
@@ -61,20 +64,40 @@ def calendar_output(cards: list[dict]) -> dict:
     return {"ics": "\r\n".join(_fold_ics(line) for line in lines) + "\r\n", "google_calendar_links": links,
             "warnings": (["Unknown end time: ICS omits DTEND; no Google Calendar link was generated for that session."] if omitted_ends else []) +
                         (["Flexible-entry ticket: no fixed visit time; no calendar event was generated."] if omitted_flexible else []) +
-                        (["Biletinial catalogue-only timing needs event detail verification; no calendar event was generated."] if omitted_unverified else [])}
+                        (["Biletinial catalogue-only timing needs event detail verification; no calendar event was generated."] if omitted_unverified else []) +
+                        (["Source weekday admission restriction: no calendar event was generated for that date."] if omitted_restricted else [])}
+
+
+def _common_age_range(cards: tuple) -> tuple[bool, str, dict | None]:
+    known = [bounds for card in cards if (bounds := published_age_range(card.get("age_limit"))) is not None]
+    if not known:
+        return True, "unknown", None
+    minimum = max(bounds[0] for bounds in known)
+    upper = [bounds[1] for bounds in known if bounds[1] is not None]
+    maximum = min(upper) if upper else None
+    return (maximum is None or minimum <= maximum), ("published_ranges_compatible" if len(known) == len(cards) else "partially_known"), {"minimum":minimum,"maximum":maximum}
 
 
 def enumerate_plans(cards: list[dict], *, window_end: datetime, max_events=3, min_gap_minutes=30,
-                    max_price_try=None, limit=3, interests=()) -> tuple[list[dict], list[dict]]:
+                    max_price_try=None, limit=3, interests=(), diagnostics=None) -> tuple[list[dict], list[dict]]:
     options = []
-    cards = sorted((c for c in cards if c.get("timing_kind") != "flexible_entry"
+    cards = sorted((c for c in cards if c.get("timing_kind") != "flexible_entry" and not c.get("entry_date_restricted")
                     and not (c.get("source") == "biletinial" and not c.get("detail_checked"))),
                    key=lambda c: (c["start_at"], c["performance_id"]))
     for size in range(1, max_events + 1):
         for path in combinations(cards, size):
             if len({c["event_id"] for c in path}) < len(path):
                 continue
+            age_compatible, age_status, age_range = _common_age_range(path)
+            if not age_compatible:
+                if diagnostics is not None:
+                    diagnostics["age_incompatible_combinations"] = diagnostics.get("age_incompatible_combinations", 0) + 1
+                continue
             warnings, gaps = [], []
+            if age_status == "unknown":
+                warnings.append("No published age requirements were available; participant age suitability is unverified.")
+            elif age_status == "partially_known":
+                warnings.append("Some published age requirements are unknown; a common participant age is only partially verified.")
             valid = True
             for i, card in enumerate(path):
                 end = event_time(card["end_at"])
@@ -128,7 +151,8 @@ def enumerate_plans(cards: list[dict], *, window_end: datetime, max_events=3, mi
                             "total_observed_minimum_try": known_total if all(p is not None for p in prices) else None,
                             "total_price_known": all(p is not None for p in prices), "budget_status": budget_status,
                             "checks": {"time_overlap": False, "minimum_gap_checked": True, "travel_feasibility_verified": False,
-                                       "window_end_verified": all(c["end_known"] for c in path)},
+                                       "window_end_verified": all(c["end_known"] for c in path),
+                                       "age_compatibility": age_status, "common_published_age_range": age_range},
                             "warnings": list(dict.fromkeys(warnings))})
     options.sort(key=lambda p: (-p["score"], tuple(c["start_at"] for c in p["performances"]), tuple(c["performance_id"] for c in p["performances"])))
     verified = [p for p in options if max_price_try is None or p["budget_status"] != "unknown"]
@@ -276,6 +300,8 @@ class EventPlanService:
                 reason = "outside_time_window"
             elif (day < datetime.now(ISTANBUL).date() if flexible else event_time(card["start_at"]) < datetime.now(ISTANBUL)):
                 reason = "session_already_started"
+            elif card.get("entry_date_restricted"):
+                reason = "entry_date_restricted"
             elif card["program_status"] in {"cancelled", "postponed"}:
                 reason = "program_unavailable"
             elif card["availability"] == "sold_out" or card["sales_status"] == "sales_closed":
@@ -302,13 +328,15 @@ class EventPlanService:
                 candidates.append(card)
         candidate_count = len(candidates)
         evaluated = choose_candidates(candidates)
+        diagnostics = {"age_incompatible_combinations":0}
         options, unverified = enumerate_plans(evaluated, window_end=window_end, max_events=max_events,
                                               min_gap_minutes=min_gap_minutes, max_price_try=max_price_try,
-                                              limit=safe_limit, interests=interests or ())
+                                              limit=safe_limit, interests=interests or (), diagnostics=diagnostics)
         envelope["data"] = [{"date": day.isoformat(), "window": {"start": start_time, "end": end_time},
                              "options": options, "unverified_budget": unverified, "rejected": rejected,
                              "flexible_entries": flexible_entries[:20],
                              "flexible_entry_count": len(flexible_entries), "flexible_entries_truncated": len(flexible_entries) > 20,
+                             "age_incompatible_combinations": diagnostics["age_incompatible_combinations"],
                              "candidate_count": candidate_count, "evaluated_candidates": min(candidate_count, 20),
                              "candidate_truncated": bool(truncated or candidate_count > 20),
                              "ranking_scope": "evaluated candidates only; not a city-wide optimum"}]
@@ -323,6 +351,10 @@ class EventPlanService:
                                 "Time gaps and straight-line distances do not establish travel feasibility.",
                                 "Unknown end times are allowed only at the final stop."]
         envelope["warnings"] += ["Ulaşım süresi hesaplanmadı; bilet durumu ve ücretler kaynakta yeniden kontrol edilmeli."]
+        if diagnostics["age_incompatible_combinations"]:
+            envelope["warnings"].append(f"{diagnostics['age_incompatible_combinations']} combination(s) excluded because published age ranges have no common participant age.")
+        if any(item["reason"] == "entry_date_restricted" for item in rejected):
+            envelope["warnings"].append("Selected ticket dates excluded by an explicit source weekday admission rule; choose a permitted date and verify remaining conditions on the ticket page.")
         if flexible_entries:
             envelope["warnings"].append("Flexible-entry tickets are listed separately in flexible_entries: choose and verify a visit time, opening hours and admission conditions before making a timed plan or calendar entry.")
             envelope["result_info"]["next_step"] = "Inspect flexible_entries and verify a visit time and admission conditions on the ticket page; no timed stop or calendar entry was generated for them."

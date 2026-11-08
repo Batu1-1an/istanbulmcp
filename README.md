@@ -302,6 +302,10 @@ Veriler gecikmeli, eksik veya hatalı olabilir. Nöbetçi eczane, su arızası v
 
 ## Etkinlik keşfi ve planlama
 
+0.8.0, son giriş saatini başlangıç saymaz; kaynakta açıkça belirtilen geçersiz
+kullanım günlerini eler ve aynı kişinin karşılayamayacağı yaş aralıklarını tek
+planda birleştirmez. [Giriş koşulları ve ortak yaş doğrulaması](docs/events-admission-age-validation.md).
+
 0.7.0, görünür HTML seansıyla doğrulanmayan ek JSON saatlerini dışlar. Esnek giriş
 biletleri `timing_kind=flexible_entry`, `event_date` ve `start_at=null` ile
 gösterilir; planın `flexible_entries` bölümünde kalır, saatli plana/takvime
@@ -352,6 +356,8 @@ pytest tests/test_event_personas.py tests/test_events.py
 pytest tests/test_events_source_time.py
 # Doğrulanmayan ek saatler ve gün içinde kullanılabilen esnek girişler
 pytest tests/test_events_flexible_and_unconfirmed.py
+# Giriş aralığı, geçersiz kullanım günü ve ortak katılımcı yaşı
+pytest tests/test_events_admission_and_age.py
 # Opt-in: çalışan MCP üzerinde farklı kullanıcı soruları; raw cevap/secret kaydetmez
 railway run .venv/bin/python scripts/events_persona_uat.py --output .data/events-persona-uat.json
 # QA raporundaki 100 niyetin kalıcı, opt-in yeniden koşusu

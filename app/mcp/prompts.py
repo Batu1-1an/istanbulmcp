@@ -97,6 +97,9 @@ etkinlik/bilet sayfasının yerine geçmez.
 timing_kind=flexible_entry ise yalnız event_date ve bilet bağlantısını göster;
 start_at=null ve source_start_at ziyaret saati değildir. flexible_entries içindeki
 biletleri saatli plan veya takvime koyma; ziyaret saati ve giriş koşulları kaynakta doğrulanmalı.
+admission_window içindeki son giriş saatini etkinlik başlangıcı sayma.
+entry_date_restricted=true tarihleri önerme. Planın common_published_age_range
+alanını kullanıcının gerçek yaşıyla karşılaştır; bilinmeyen yaş uygunluğunu varsayma.
 İlgi türleri dışından etkinlik ekleme. Çocuk yaşı verilmişse child_age kullan;
 yalnız kaynakta yayımlanmış uyumlu yaş aralığını kabul et. Kesin bitiş saati
 istenmişse end_time ile require_known_end=true kullan. Yalnız bilinen fiyatlar

@@ -2,6 +2,12 @@
 
 ## Etkinleştirme ve kapsam
 
+0.8.0 `admission_window` ile kaynak açılış, son giriş ve kapanış bilgilerini
+ziyaret başlangıcından ayırır. Açık hafta günü istisnası `excluded_weekdays`
+alanına gider; o tarihte arama/plan önerisi yapılmaz. Plan kombinasyonları ortak
+yayımlanmış yaş aralığı gerektirir; bilinmeyen yaş uygunluğu varsayılmaz.
+[60 soru bulguları ve düzeltmeler](events-admission-age-validation.md).
+
 0.7.0, aynı mekân/tarihte HTML ile doğrulanmayan ek JSON saatlerini yayımlamaz.
 Esnek giriş bileti tarih ve bağlantısıyla keşfedilir; `start_at=null` ve
 `timing_kind=flexible_entry` kaynak zaman damgasının ziyaret saati olmadığını

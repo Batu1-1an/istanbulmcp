@@ -55,6 +55,23 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 - Canlı `istanbul_transport_disruptions` hat testi yanlış parametre adı (`line_code`)
   yerine aracın gerçek parametresi `line` ile çağrılır.
 
+## [0.8.0] - 2026-11-09
+
+### Fixed
+- Published admission ranges and last-entry clocks are flexible-entry metadata,
+  never scheduled starts. Preserve admission_window opening/last-entry/closing
+  observations without inventing a visit time or duration.
+- Explicit general source weekday exclusions populate excluded_weekdays.
+  Restricted dates are excluded from discovery, timed/flexible plans and
+  calendars; detail retains entry_date_restricted for inspection.
+- Multi-stop options cannot combine mutually exclusive published age ranges.
+  checks exposes the common published range and unknown/partial evidence;
+  age_incompatible_combinations counts rejected candidate combinations.
+
+### Tests
+- Admission ranges, weekday deny rules, restricted-date inspection/selection,
+  incompatible ages, unknown ages and open-ended age ranges use bounded fixtures.
+
 ## [0.7.0] - 2026-11-08
 
 ### Fixed
