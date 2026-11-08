@@ -101,6 +101,10 @@ def enumerate_plans(cards: list[dict], *, window_end: datetime, max_events=3, mi
                 warnings.append("Total price is unknown; the plan is not verified within budget.")
             if any(c["availability"] == "unknown" for c in path):
                 warnings.append("Ticket availability is unknown for one or more sessions.")
+            if any(c.get("source_time_conflict") for c in path):
+                warnings.append("Source time conflict: the published HTML Istanbul session time was used; verify the ticket page before visiting.")
+            if any(c["price"].get("eligibility_may_apply") for c in path):
+                warnings.append("Observed minimum prices may require a ticket type or eligibility condition; they are not guaranteed per-person general-admission prices.")
             breakdown = {
                 "interest": sum(30 if c["category"] in interests else 15 if not interests else 0 for c in path),
                 "time_fit": sum(25 if c["end_known"] else 12.5 for c in path),

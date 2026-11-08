@@ -306,6 +306,11 @@ Başlamış seansları yerel katalogda incelemek için `include_past=true`
 kullanılabilir; geçmiş fiyatın süresi dolduysa ücretsiz sayılmaz.
 [Ücretsiz arama, sayaçlar ve kayıt yaşam döngüsü](docs/events-free-lifecycle.md).
 
+0.6.1, Biletinial HTML seansı ile JSON-LD saat dilimi çeliştiğinde fazladan
+ertesi gün seansı oluşmasını önler. Saatin dayanağı ve çelişki uyarısı kartta
+korunur. Koşullu bilet minimumları arama ve planda ayrıca açıklanır.
+[50 sorudan çıkan saat düzeltmesi](docs/events-source-time-validation.md).
+
 İsteğe bağlı etkinlik katmanı `istanbul_events_search`, `istanbul_event_detail` ve
 `istanbul_events_plan` araçlarını ekler. `EVENTS_ENABLED=true` ve bir kaynak
 yapılandırması gerekir. Ticketmaster katalog, Biletinial doğrulanmış seans ve
@@ -338,6 +343,8 @@ azaltılır. [100 senaryolu QA incelemesi](docs/events-100-review.md).
 ```bash
 # Ağsız kullanıcı-niyeti regresyonları
 pytest tests/test_event_personas.py tests/test_events.py
+# HTML/JSON-LD saat çelişkisi, gerçek UTC gece yarısı ve eski seans seçimi
+pytest tests/test_events_source_time.py
 # Opt-in: çalışan MCP üzerinde farklı kullanıcı soruları; raw cevap/secret kaydetmez
 railway run .venv/bin/python scripts/events_persona_uat.py --output .data/events-persona-uat.json
 # QA raporundaki 100 niyetin kalıcı, opt-in yeniden koşusu

@@ -2,6 +2,11 @@
 
 ## Etkinleştirme ve kapsam
 
+0.6.1, HTML'deki İstanbul seans saati ile JSON-LD offset'i çeliştiğinde
+aynı etkinliğin ertesi gün ek seans olarak üretilmesini önler. Karttaki
+`start_time_basis`, `source_time_conflict` ve `warnings` korunmalıdır.
+[Kanıt, UTC ayrımı ve regresyonlar](events-source-time-validation.md).
+
 0.6.0 başlamış seansları varsayılan dışlar; `include_past=true` halen aktif
 yerel geçmiş kayıtlara izin verir. Fiyat zaman aşımı korunur. Sayaçlar ve
 detay yaşam döngüsü [ücretsiz etkinlik incelemesinde](events-free-lifecycle.md).
@@ -81,8 +86,10 @@ URL üretilmez. Link, canlı bilet bulunabilirliği veya satın alma garantisi d
 Bu davranış sunucu talimatında, üç aracın açıklamasında ve `etkinlik_plani`
 prompt'unda belirtilir. Kullanıcıya nihai metni MCP istemcisinin modeli üretir;
 sunucu değişikliği tek başına her istemcinin talimata uyduğunu kanıtlamaz.
-ChatGPT'de yayımlanmış araç açıklamalarının güncellenmesi ilgili metadata
-incelemesinin tamamlanmasına bağlıdır.
+Kullanıcının custom MCP bağlantısı için ChatGPT Plugins içindeki bağlantıda
+Refresh yapılmalı ve yeni sohbet açılmalıdır. Bu işlem yayımlanmış eklentilerin
+inceleme akışından ayrıdır; sunucunun güncellenmesi istemcinin araç listesinin
+yenilendiğini tek başına kanıtlamaz. [OpenAI Refresh metadata](https://developers.openai.com/plugins/deploy/connect-chatgpt#refresh-metadata).
 
 2026-11-08 doğrulaması: etkinlik, registry metadata ve yayımlanmış araç
 uyumluluğu grubunda 49 test geçti. Gerçek yerel MCP Client ve Ticketmaster

@@ -19,6 +19,10 @@ from app.services.places import normalize_place
 BASE = "https://biletinial.com"
 SLUG = re.compile(r"^[a-z0-9-]{1,180}$")
 MONTHS = {name: i for i, name in enumerate("ocak subat mart nisan mayis haziran temmuz agustos eylul ekim kasim aralik".split(), 1)}
+TIME_CONFLICT_WARNING = (
+    "Source time conflict: start_at uses the published Istanbul HTML session date/time; "
+    "the conflicting JSON-LD offset and end time were not used. Verify the ticket page before visiting."
+)
 
 
 class JsonLdParser(HTMLParser):
@@ -165,45 +169,81 @@ def _json_events(html: str) -> list[dict]:
     return events
 
 
+def _session_header(fragment: str) -> tuple[int, int, str, str] | None:
+    clock = re.search(r'class=["\']tm["\'][^>]*>(.*?)<', fragment, re.S)
+    day = re.search(r'class=["\']d["\'][^>]*>(.*?)<', fragment, re.S)
+    venue = re.search(r'href=["\']/tr-tr/mekan/[^"\']+["\'][^>]*>(.*?)</a>', fragment, re.S)
+    if not (clock and day and venue):
+        return None
+    parts = normalize_place(plain_text(day[1])).split()
+    try:
+        return int(parts[0]), MONTHS[parts[1]], plain_text(clock[1]), plain_text(venue[1], 300)
+    except (ValueError, KeyError, IndexError):
+        return None
+
+
+def _json_session_starts(items: list[dict], headers: list[tuple]) -> tuple[dict, set]:
+    """Reconcile an offset conflict only with an explicit same-venue HTML wall clock.
+
+    A genuine UTC instant matching another HTML slot always wins. JSON-only
+    records retain normal timezone conversion; no title or midnight heuristic.
+    """
+    slots = {(month, day, clock, normalize_place(venue)) for day, month, clock, venue in headers}
+    starts, conflicts = {}, set()
+    for item in items:
+        start = event_time(item.get("startDate"))
+        if start is None:
+            continue
+        venue = normalize_place(str((item.get("location") or {}).get("name", "")))
+        instant_slot = (start.month, start.day, start.strftime("%H:%M"), venue)
+        try:
+            raw = datetime.fromisoformat(item["startDate"].replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            raw = None
+        if raw is not None and raw.tzinfo is not None and instant_slot not in slots:
+            raw_slot = (raw.month, raw.day, raw.strftime("%H:%M"), venue)
+            if raw_slot in slots and raw.replace(tzinfo=ISTANBUL) != start:
+                # The full year is explicit in JSON; the date and clock are
+                # explicitly published in HTML, not inferred from a product name.
+                start = raw.replace(tzinfo=ISTANBUL)
+                conflicts.add(id(item))
+        starts[id(item)] = start
+    return starts, conflicts
+
+
 def parse_biletinial_detail(html: str, url: str, known_starts=()) -> tuple[list[EventObservation], dict]:
     category, slug = detail_ref(url)
     json_events = _json_events(html)
     # Pair HTML sessions with complete source dates, never invent a year from a day/month label.
-    starts = [value for value in known_starts if isinstance(value, datetime)]
-    starts += [start for item in json_events if (start := event_time(item.get("startDate"))) is not None]
     session_parser = SessionParser()
     session_parser.feed(html)
     sessions = session_parser.sessions
+    headers = [_session_header(fragment) for _, fragment in sessions]
+    json_starts, time_conflicts = _json_session_starts(json_events, [header for header in headers if header])
+    starts = [value for value in known_starts if isinstance(value, datetime)]
+    starts += list(json_starts.values())
     result = []
     matched_json = set()
     observed = datetime.now(timezone.utc)
     missing = 0
-    for session_id, fragment in sessions:
-        time_match = re.search(r'class=["\']tm["\'][^>]*>(.*?)<', fragment, re.S)
-        day_match = re.search(r'class=["\']d["\'][^>]*>(.*?)<', fragment, re.S)
-        venue_match = re.search(r'href=["\']/tr-tr/mekan/[^"\']+["\'][^>]*>(.*?)</a>', fragment, re.S)
-        if not (time_match and day_match and venue_match):
+    for (session_id, fragment), header in zip(sessions, headers):
+        if header is None:
             missing += 1
             continue
-        day_parts = normalize_place(plain_text(day_match[1])).split()
-        clock = plain_text(time_match[1])
-        try:
-            day, month = int(day_parts[0]), MONTHS[day_parts[1]]
-        except (ValueError, KeyError, IndexError):
-            missing += 1
-            continue
+        day, month, clock, venue_name = header
         candidates = {s.isoformat(): s for s in starts if s.day == day and s.month == month and s.strftime("%H:%M") == clock}
         if len(candidates) != 1:
             missing += 1
             continue
         start = next(iter(candidates.values()))
-        venue_name = plain_text(venue_match[1], 300)
-        linked = next((item for item in json_events if event_time(item.get("startDate")) == start
-                       and normalize_place(str((item.get("location") or {}).get("name", ""))) == normalize_place(venue_name)), None)
-        if linked:
-            matched_json.add(id(linked))
+        matching = [item for item in json_events if json_starts.get(id(item)) == start
+                    and normalize_place(str((item.get("location") or {}).get("name", ""))) == normalize_place(venue_name)]
+        linked = next((item for item in matching if id(item) not in time_conflicts), matching[0] if matching else None)
+        matched_json.update(id(item) for item in matching)
+        conflicting = any(id(item) in time_conflicts for item in matching)
         observation = _detail_observation(linked or (json_events[0] if json_events else {}), category, slug,
-                                          session_id, start, venue_name, url, observed, linked is not None)
+                                          session_id, start, venue_name, url, observed, linked is not None,
+                                          start_time_basis="html_session", source_time_conflict=conflicting)
         text = normalize_place(plain_text(fragment))
         availability = "sold_out" if "tukendi" in text else "limited" if re.search(r"son \d+ bilet", text) else "unknown"
         prices = re.findall(r'class=["\']price-item["\'][^>]*>\s*<span[^>]*>(.*?)</span>\s*<strong[^>]*>(.*?)</strong>', fragment, re.S)
@@ -231,11 +271,15 @@ def parse_biletinial_detail(html: str, url: str, known_starts=()) -> tuple[list[
     for item in json_events:
         if id(item) in matched_json:
             continue
-        start = event_time(item.get("startDate"))
+        start = json_starts.get(id(item))
         location = item.get("location") or {}
         address = location.get("address") or {}
         locality = str(address.get("addressLocality") or "") if isinstance(address, dict) else str(address)
         if start is None or "istanbul" not in normalize_place(locality):
+            continue
+        # A conflicting JSON item belongs to a published HTML session, even if
+        # that HTML session could not be indexed (e.g. ambiguous source years).
+        if id(item) in time_conflicts:
             continue
         result.append(_detail_observation(item, category, slug, f"json:{start.isoformat()}:{location.get('name')}",
                                           start, str(location.get("name") or ""), url, observed, True))
@@ -270,11 +314,14 @@ def parse_biletinial_detail(html: str, url: str, known_starts=()) -> tuple[list[
     if not result:
         raise EventSourceError("Biletinial detail contained no verified Istanbul sessions")
     return result, {"received": max(len(json_events), len(sessions)), "accepted": len(result),
+                    "time_conflicts": len(time_conflicts),
                     "skipped": missing, "complete": missing == 0,
-                    "warnings": ["Some HTML sessions had no unambiguous full source date and were not indexed."] if missing else []}
+                    "warnings": ([TIME_CONFLICT_WARNING] if time_conflicts else []) +
+                                (["Some HTML sessions had no unambiguous full source date and were not indexed."] if missing else [])}
 
 
-def _detail_observation(item, category, slug, source_id, start, venue_name, url, observed, linked):
+def _detail_observation(item, category, slug, source_id, start, venue_name, url, observed, linked,
+                        *, start_time_basis="json_ld", source_time_conflict=False):
     kind, category_source = _category(category, str(item.get("name") or slug))
     location = item.get("location") or {} if linked else {}
     address = location.get("address") or {}
@@ -289,15 +336,17 @@ def _detail_observation(item, category, slug, source_id, start, venue_name, url,
         parsed_offers.append(EventOffer(
             price=float(price) if price not in (None, "") else None, currency=offer.get("priceCurrency"),
             availability={"InStock": "in_stock", "SoldOut": "sold_out", "LimitedAvailability": "limited"}.get(str(offer.get("availability", "")).rsplit("/", 1)[-1], "unknown"), url=url))
-    end = event_time(item.get("endDate")) if linked else None
+    end = event_time(item.get("endDate")) if linked and not source_time_conflict else None
     return EventObservation(
         source="biletinial", source_id=str(source_id), series_key=slug,
         title=str(item.get("name") or slug), category=kind, category_source=category_source, start_at=start,
+        start_time_basis=start_time_basis, source_time_conflict=source_time_conflict,
         end_at=end if end and end > start else None, venue=venue_from(venue_name, address_text, geo.get("latitude"), geo.get("longitude")),
         program_status={"EventScheduled": "scheduled", "EventCancelled": "cancelled", "EventPostponed": "postponed", "EventRescheduled": "rescheduled"}.get(str(item.get("eventStatus", "")).rsplit("/", 1)[-1], "unknown") if linked else "unknown",
         offers=parsed_offers, ticket_url=url, description=plain_text(str(item.get("description") or "")) or None,
         organizer=(item.get("organizer") or {}).get("name"), observed_at=observed, detail_checked=True,
-        warnings=["Observed ticket prices may depend on ticket type, promotions and service fees; not a checkout quote."],
+        warnings=["Observed ticket prices may depend on ticket type, promotions and service fees; not a checkout quote.",
+                  *([TIME_CONFLICT_WARNING] if source_time_conflict else [])],
     )
 
 

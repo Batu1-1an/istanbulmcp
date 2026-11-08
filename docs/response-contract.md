@@ -132,3 +132,11 @@ Search accepts include_past=false by default. Detail may return catalogue_retire
 with retained inactive local evidence or source_unavailable for active but unusable
 source data; not_found without retained history does not establish cancellation.
 See [free search and lifecycle semantics](events-free-lifecycle.md).
+
+0.6.1 event cards add `start_time_basis=provider_datetime|html_session|json_ld`,
+`source_time_conflict` and per-card `warnings`. When a Biletinial JSON-LD offset
+disagrees with an explicitly matching HTML date/time and venue, start_at uses the
+published Istanbul HTML session; the conflicting JSON end is discarded. A real
+UTC instant matching an HTML session still keeps its normal converted time.
+Search and plan warnings also explain conditional ticket minima, which are not
+guaranteed per-person general-admission prices.

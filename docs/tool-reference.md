@@ -355,6 +355,10 @@ sources give `ok=false`/broken; checked-empty remains successful.
 
 ## Optional event tools
 
+0.6.1 cards expose `start_time_basis`, `source_time_conflict` and per-event
+`warnings`. Preserve source time and ticket eligibility warnings in user-facing
+search/detail/plans. [Time reconciliation and evidence](events-source-time-validation.md).
+
 `EVENTS_ENABLED=true` adds three read-only tools (19 base tools, or 21 with GTFS).
 
 | Tool | Purpose | Bounds |

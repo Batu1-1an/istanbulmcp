@@ -129,6 +129,8 @@ def event_card(row: EventObservation, matches=None, *, max_price=None, distance=
     return {
         "performance_id": row.performance_id, "event_id": row.event_id,
         "title": row.title, "category": row.category, "category_source": row.category_source, "start_at": row.start_at.isoformat(),
+        "start_time_basis": row.start_time_basis, "source_time_conflict": row.source_time_conflict,
+        "warnings": list(row.warnings),
         "end_at": row.end_at.isoformat() if row.end_at else None, "end_known": row.end_at is not None,
         "end_source": (row.end_source if row.end_source != "unknown" else "source_end") if row.end_at else "unknown",
         "age_limit": row.age_limit, "duration_minutes": row.duration_minutes,
@@ -459,6 +461,10 @@ class EventService:
             notes.append(f"No {category} category observations in the usable index for this date/query scope. Category coverage is partial; this does not establish that Istanbul has no such events.")
         if any(card["category_source"] == "title_marker" for card in selected[:safe_limit]):
             notes.append("Some categories come from explicit event-type words in provider titles (category_source=title_marker), not a dedicated provider genre; verify the event page.")
+        if any(card["source_time_conflict"] for card in selected[:safe_limit]):
+            notes.append("Source time conflict: published HTML Istanbul session times were used; inspect each event's warnings and verify the ticket page before visiting.")
+        if any(card["price"]["eligibility_may_apply"] for card in selected[:safe_limit]):
+            notes.append("Some minimum prices require a ticket type or eligibility condition; they are not guaranteed per-person general-admission prices.")
         if district or bbox or venue:
             notes.append("Sessions with unverified venues cannot match location filters; inspect event details to verify them.")
         if bbox:

@@ -28,6 +28,9 @@ async def istanbul_events_search(
     Started sessions are excluded by default, even for explicit dates. Use
     include_past=true for retained active past sessions; this is not an archive
     and expired prices stay unknown. result_info.filter_counts explains exclusions.
+    start_time_basis records the source of the time. source_time_conflict=true
+    means published Istanbul HTML session times took precedence over conflicting
+    JSON-LD offsets; preserve per-event warnings and verify the ticket page.
     Categories: concert, theatre, opera_ballet, standup, family, festival, exhibition, workshop, sport, seminar,
     other. District: one of Istanbul's 39 districts. Coordinates must be paired;
     Turkish aliases such as tiyatro, konser, çocuk, atölye are accepted.
@@ -78,6 +81,8 @@ async def istanbul_event_detail(event_id: str) -> dict:
     with bounded caching when configured. Ticketmaster details use the latest
     indexed feed; prices and ticket availability remain unknown. Missing or
     retired catalogue coverage is not cancellation.
+    Preserve start_time_basis, source_time_conflict and per-performance warnings;
+    published HTML session times can resolve inconsistent JSON-LD offsets.
     catalogue_retired means retained local sessions are inactive; source_unavailable
     means active local records exist but their source snapshot is unusable.
     not_found without retained history cannot explain whether a deploy reset or
@@ -114,6 +119,8 @@ async def istanbul_events_plan(
     returned separately in unverified_budget. min_gap_minutes: 0–240; max_events:
     1–3; limit: 1–5 options, default 3. At most 20 candidates are enumerated.
     Unknown end times can appear only last, without a window-end guarantee.
+    Preserve source-time-conflict warnings and ticket-type eligibility warnings;
+    observed minimum prices need not be per-person general-admission prices.
     Sold-out/cancelled sessions are excluded. No travel-time or live ticket
     guarantee: non-overlapping times do not prove venues are reachable.
     For every event in the presented plan, show a clickable event/ticket-page

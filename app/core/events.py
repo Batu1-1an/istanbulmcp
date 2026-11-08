@@ -120,6 +120,8 @@ class EventObservation(BaseModel):
     category: Category = "other"
     category_source: Literal["provider", "title_marker", "unknown"] = "provider"
     start_at: datetime
+    start_time_basis: Literal["provider_datetime", "html_session", "json_ld"] = "provider_datetime"
+    source_time_conflict: bool = False
     end_at: datetime | None = None
     venue: EventVenue
     program_status: Literal["scheduled", "cancelled", "postponed", "rescheduled", "unknown"] = "unknown"

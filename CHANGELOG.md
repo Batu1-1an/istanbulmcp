@@ -55,6 +55,24 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 - Canlı `istanbul_transport_disruptions` hat testi yanlış parametre adı (`line_code`)
   yerine aracın gerçek parametresi `line` ile çağrılır.
 
+## [0.6.1] - 2026-11-08
+
+### Fixed
+- A conflicting Biletinial JSON-LD timezone offset no longer produces an extra
+  next-day session alongside the explicitly published HTML session. Exact UTC
+  instants that match an HTML session and JSON-only sessions retain normal
+  timezone conversion. Conflicting JSON end times are not reused.
+- Event cards expose start_time_basis, source_time_conflict and per-event
+  warnings; search and plan options disclose source-time conflicts and
+  conditional ticket prices instead of implying general per-person prices.
+- Custom ChatGPT connection guidance consistently uses Refresh and a new chat,
+  without treating it as a published-plugin review flow.
+
+### Tests
+- Source-time fixtures cover the duplicate, missing catalogue dates, genuine
+  midnight UTC sessions, same-venue alternatives, venue/year ambiguity, calendar
+  time, and rejection of a retired phantom performance ID after detail refresh.
+
 ## [0.6.0] - 2026-11-08
 
 ### Added
