@@ -55,6 +55,12 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 - Canlı `istanbul_transport_disruptions` hat testi yanlış parametre adı (`line_code`)
   yerine aracın gerçek parametresi `line` ile çağrılır.
 
+## [0.5.2] - 2026-11-08
+
+### Fixed
+- The source genre Müzikli Oyun also maps to theatre rather than concert;
+  explicit child/family labels keep their precedence.
+
 ## [0.5.1] - 2026-11-08
 
 ### Fixed

@@ -25,6 +25,7 @@ FIXTURES = Path(__file__).parent / "fixtures/events"
     ("Music Musical", "theatre"), ("Musicals", "theatre"),
     ("Çocuk Müzikali", "family"), ("Children's Musical", "family"),
     ("Musical Festival", "festival"),
+    ("Müzikli Oyun", "theatre"), ("Çocuk Müzikli Oyun", "family"),
     ("Müzik", "concert"), ("Music Rock", "concert"),
 ])
 def test_musical_genres_do_not_match_the_music_substring(genre, expected):

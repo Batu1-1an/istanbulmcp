@@ -53,3 +53,8 @@ iki kusurla karıştırılmaz; kaynak kapsamı olmayan kayıtlar üretilmez.
 
 Son hedefli koşu: 116 test, 0 hata/başarısızlık/skip; rapor
 `.data/events-musical-fix-final.xml`. Secret taraması ve git diff --check temiz.
+
+0.5.1 canlı tekrarında La La La Fontaine Müzikali sayfasındaki ayrı türün
+Müzikli Oyun olduğu görüldü. 0.5.2 bu eşdeğer türü de theatre'a yöneltir;
+çocuk/aile önceliği korunur. İlgili regresyon örnekleri eklendi. Bu ikinci
+kaynak etiketi ilk düzeltmeden sonraki canlı denetimde bulunmuştur.

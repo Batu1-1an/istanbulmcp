@@ -71,7 +71,7 @@ def category_for(value: str) -> Category:
     text = normalize_place(value)
     # Match this distinct genre before the broader music/muzik substring,
     # while retaining the existing priority of family/festival labels.
-    musical = bool(re.search(r"\b(?:muzikal|muzikaller|musical|musicals)\b", text))
+    musical = bool(re.search(r"\b(?:muzikal|muzikaller|musical|musicals|muzikli\s+oyun)\b", text))
     for words, category in (
         (("stand up", "standup", "comedy"), "standup"),
         (("opera", "bale", "ballet"), "opera_ballet"),
