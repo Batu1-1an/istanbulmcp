@@ -16,7 +16,7 @@ from app.core.error_responses import validation_error_envelope
 from app.core.events import CATEGORIES, ISTANBUL, EventObservation, age_suitability, category_for, event_time, normalize_category, search_text
 from app.core.geo import haversine_m, radius_bbox
 from app.core.settings import Settings
-from app.core.source_cache import cached_source_data_with_status
+from app.core.source_cache import SourceLoadResult, cached_source_data_with_status
 from app.core.validation import InputValidationError, resolve_limit, validate_lat_lon, validate_radius, validate_text
 from app.services.places import normalize_place, resolve_district
 from app.storage.events import EventRepository
@@ -162,8 +162,12 @@ class EventService:
         async def load():
             snapshots = await asyncio.to_thread(self.repository.snapshots)
             previous = snapshots.get(source)
-            if not force and previous and (datetime.now(timezone.utc) - event_time(previous["refreshed_at"])).total_seconds() < self.settings.events_cache_ttl_seconds:
-                return previous
+            if not force and previous:
+                age = (datetime.now(timezone.utc) - event_time(previous["refreshed_at"])).total_seconds()
+                remaining = self.settings.events_cache_ttl_seconds - age
+                if remaining > 0:
+                    # Reusing SQLite facts must not start a new full cache TTL.
+                    return SourceLoadResult(previous, max_cache_age_seconds=remaining)
             refresh_key = (str(self.settings.database_path.resolve()), source)
             _refreshing_sources.add(refresh_key)
             try:

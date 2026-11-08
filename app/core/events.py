@@ -19,7 +19,8 @@ CATEGORIES = ("concert", "theatre", "opera_ballet", "standup", "family", "festiv
 CATEGORY_ALIASES = {"tiyatro": "theatre", "theater": "theatre", "konser": "concert", "muzik": "concert",
                     "opera": "opera_ballet", "bale": "opera_ballet", "opera bale": "opera_ballet",
                     "stand up": "standup", "stand-up": "standup", "cocuk": "family", "aile": "family",
-                    "sergi": "exhibition", "atolye": "workshop", "spor": "sport", "seminer": "seminar"}
+                    "sergi": "exhibition", "atolye": "workshop", "spor": "sport", "seminer": "seminar",
+                    "muzikal": "theatre", "musical": "theatre"}
 
 
 def normalize_category(value: str) -> str:
@@ -68,6 +69,9 @@ def event_url(value: str | None) -> str | None:
 
 def category_for(value: str) -> Category:
     text = normalize_place(value)
+    # Match this distinct genre before the broader music/muzik substring,
+    # while retaining the existing priority of family/festival labels.
+    musical = bool(re.search(r"\b(?:muzikal|muzikaller|musical|musicals)\b", text))
     for words, category in (
         (("stand up", "standup", "comedy"), "standup"),
         (("opera", "bale", "ballet"), "opera_ballet"),
@@ -78,7 +82,7 @@ def category_for(value: str) -> Category:
         (("theatre", "theater", "tiyatro"), "theatre"),
         (("concert", "music", "muzik", "konser"), "concert"),
     ):
-        if any(word in text for word in words):
+        if any(word in text for word in words) or category == "theatre" and musical:
             return category
     return "other"
 

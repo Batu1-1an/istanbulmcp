@@ -55,6 +55,14 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 - Canlı `istanbul_transport_disruptions` hat testi yanlış parametre adı (`line_code`)
   yerine aracın gerçek parametresi `line` ile çağrılır.
 
+## [0.5.1] - 2026-11-08
+
+### Fixed
+- Published Musical/Müzikal genres map to theatre (or explicitly labelled family
+  content), rather than matching the music/muzik substring as concerts.
+- Reusing a persisted event snapshot retains only its remaining catalogue TTL;
+  a cold/evicted process cache no longer postpones refresh by another full TTL.
+
 ## [0.5.0] - 2026-11-08
 
 ### Fixed

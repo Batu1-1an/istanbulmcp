@@ -9,7 +9,7 @@ import pytest
 from app.connectors.biletinial import parse_biletinial_detail, parse_biletinial_list
 from app.connectors.ticketmaster import TicketmasterClient
 from app.core.envelope import ResponseEnvelope
-from app.core.events import EventObservation, EventOffer, EventVenue, ISTANBUL
+from app.core.events import EventObservation, EventOffer, EventVenue, ISTANBUL, category_for
 from app.core.settings import Settings
 from app.core.source_cache import clear_source_cache
 from app.services.event_plan import EventPlanService, diverse_options, enumerate_plans
@@ -18,6 +18,55 @@ from app.storage.db import connect
 from app.storage.events import EventRepository
 
 FIXTURES = Path(__file__).parent / "fixtures/events"
+
+
+@pytest.mark.parametrize("genre,expected", [
+    ("Müzikal, İnteraktif Oyun, Dans", "theatre"),
+    ("Music Musical", "theatre"), ("Musicals", "theatre"),
+    ("Çocuk Müzikali", "family"), ("Children's Musical", "family"),
+    ("Musical Festival", "festival"),
+    ("Müzik", "concert"), ("Music Rock", "concert"),
+])
+def test_musical_genres_do_not_match_the_music_substring(genre, expected):
+    assert category_for(genre) == expected
+
+
+def test_source_musical_detail_does_not_become_a_concert():
+    html = (FIXTURES / "biletinial-detail.html").read_text()
+    html += '<dl class="event-card-v2__facts"><dt>Etkinlik Türü</dt><dd>Müzikal, İnteraktif Oyun, Dans</dd><dt>Yaş Sınırı</dt><dd>2+</dd></dl>'
+    rows, _ = parse_biletinial_detail(html, "https://biletinial.com/tr-tr/tiyatro/ornek-oyun")
+    assert all(row.category == "theatre" and row.age_limit == "2+" for row in rows)
+
+
+@pytest.mark.asyncio
+async def test_persisted_snapshot_reuse_does_not_restart_the_catalogue_ttl(events, monkeypatch):
+    import app.services.events as module
+    from app.core.source_cache import source_cache_snapshot
+    base = datetime.now(timezone.utc)
+    offset = {"seconds": 0}
+    original_now = __import__("time").monotonic()
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            value = base + timedelta(seconds=offset["seconds"])
+            return value.astimezone(tz) if tz else value.replace(tzinfo=None)
+    monkeypatch.setattr(module, "datetime", Clock)
+    monkeypatch.setattr("app.core.source_cache.time.monotonic", lambda: original_now + offset["seconds"])
+    old = base - timedelta(seconds=events.settings.events_cache_ttl_seconds - 5)
+    with connect(events.settings.database_path) as conn:
+        conn.execute("UPDATE event_source_snapshots SET refreshed_at=?", (old.isoformat(),))
+    calls = []
+    async def fetch(self):
+        calls.append(True)
+        return [occurrence("new")], {"accepted": 1}
+    monkeypatch.setattr(TicketmasterClient, "catalogue", fetch)
+    await events.refresh_source("ticketmaster")
+    assert not calls
+    cache = next(row for row in source_cache_snapshot() if row["source"].startswith("events.ticketmaster"))
+    assert cache["expires_in_seconds"] <= 5
+    offset["seconds"] = 6
+    await events.refresh_source("ticketmaster")
+    assert len(calls) == 1
 
 
 def occurrence(identity="one", hour=11, **updates):

@@ -2,6 +2,10 @@
 
 ## Etkinleştirme ve kapsam
 
+0.5.1 müzikal türünün yanlışlıkla konser sayılmasını ve diskteki snapshot
+yeniden kullanılırken TTL'in baştan başlamasını düzeltir.
+[Kanıt ve regresyonlar](events-musical-refresh-fix.md).
+
 `istanbul_events_search`, `istanbul_event_detail`, `istanbul_events_plan` aynı
 ResponseEnvelope sözleşmesini kullanır. `EVENTS_ENABLED=true` araçları açar;
 varsayılan kapalıdır. Kapalı araçlar listelenmez ama `feature_disabled` ile
