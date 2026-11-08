@@ -122,3 +122,26 @@ def test_opening_hours_are_read_from_description_but_not_unrelated_footer():
     scheduled=(FIXTURES/'biletinial-detail.html').read_text()+'<footer>11:00 - 19:00 saatleri arasında katılım sağlayabilirsiniz.</footer>'
     rows,_=parse_biletinial_detail(scheduled,'https://biletinial.com/tr-tr/tiyatro/ornek-oyun')
     assert all(r.timing_kind=='scheduled' and r.admission_window is None for r in rows)
+
+
+@pytest.mark.asyncio
+async def test_named_search_checks_cold_catalogue_admission_rules_before_recommending(tmp_path,monkeypatch):
+    clear_source_cache()
+    row=restricted_rows()[0]
+    provisional=row.model_copy(update={'detail_checked':False,'timing_kind':'scheduled',
+        'start_at':datetime(2030,11,10,23,59,tzinfo=ISTANBUL),'excluded_weekdays':[],
+        'offers':[],'venue':EventVenue(name='Unknown venue')})
+    settings=Settings(events_enabled=True,events_biletinial_enabled=True,database_path=tmp_path/'cold.sqlite3')
+    repo=EventRepository(settings.database_path);repo.publish('biletinial',[provisional],{})
+    events=EventService(settings,repository=repo);calls=[]
+    async def detail(identifier):
+        calls.append(identifier)
+        repo.publish('biletinial',[row],{},series_key=row.series_key)
+        return {'ok':True}
+    monkeypatch.setattr(events,'detail',detail)
+    result=await events.search(query=row.title,date_from='2030-11-10',date_to='2030-11-10')
+    assert calls==[row.event_id]
+    assert result['ok'] and not result['data']
+    assert result['result_info']['filter_counts']['excluded_entry_date']==1
+    assert result['result_info']['filter_counts']['detail_checks_succeeded']==1
+    clear_source_cache()

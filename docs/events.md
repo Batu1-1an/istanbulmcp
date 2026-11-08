@@ -423,3 +423,8 @@ boşluğu seçilen tek seansı bütün seriye dönüştürmez.
 pytest tests/test_events_qa_findings.py
 railway run .venv/bin/python -m scripts.events_100_uat --output .data/events-100-current.json
 ```
+
+İsim (`query`) içeren Biletinial aramaları da en fazla üç ilgili seriyi mevcut
+12 saniyelik detay bütçesi içinde doğrular. Böylece soğuk katalogdaki geçici
+saat, mekân ve kullanım günü bilgileri mümkün olduğunda ilk sorguda güncellenir;
+tüm eşleşmelerin doğrulandığı veya kısıtların tamamının çözüldüğü anlamına gelmez.

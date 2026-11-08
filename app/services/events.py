@@ -332,9 +332,9 @@ class EventService:
         initial_candidate_count = len(rows)
         detail_checks = 0
         successful_detail_checks = 0
-        # Price/category questions need recent evidence. Check a small relevant
+        # Named/price/category questions need recent evidence. Check a small relevant
         # subset on demand; unfiltered discovery stays in the local index.
-        if self.settings.events_biletinial_enabled and (max_price_try is not None or free_only or category is not None):
+        if self.settings.events_biletinial_enabled and (query is not None or max_price_try is not None or free_only or category is not None):
             possible = []
             for row in rows:
                 if row.source != "biletinial" or row.source not in usable:

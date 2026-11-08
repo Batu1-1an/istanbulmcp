@@ -55,6 +55,13 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 - Canlı `istanbul_transport_disruptions` hat testi yanlış parametre adı (`line_code`)
   yerine aracın gerçek parametresi `line` ile çağrılır.
 
+## [0.8.1] - 2026-11-09
+
+- Verify a bounded set of named Biletinial search matches on demand, so a cold
+  catalogue does not bypass published admission restrictions until background
+  detail enrichment. The existing three-series/12-second limits remain.
+- Add a cold-catalogue regression test; retain explicit partial coverage warnings.
+
 ## [0.8.0] - 2026-11-09
 
 ### Fixed

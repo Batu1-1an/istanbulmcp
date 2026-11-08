@@ -87,3 +87,24 @@ payload'lara varsayılanlarla uyumludur. Değişiklikler canlıda hedefli çağr
 kontrol edildikten sonra kullanıcı tarafından istenen 100 yeni soru hazırlanıp
 tek tek gerçek MCP'ye gönderilir. Kanıt raporu:
 `docs/qa/events-100-results-2026-11-09.md`.
+
+
+## Canlı ilk sorgu düzeltmesi — 0.8.1
+
+0.8.0 dağıtımı sonrası hedefli canlı kontrol, Go Kart isim aramasının soğuk
+katalogdaki geçici kaydı detail_checks_attempted=0 ile verdiğini gösterdi.
+Kaynak kuralı henüz indirilmediği için pazar filtresi uygulanamıyordu.
+Frida giriş aralığı ve ayrı plan kontrolleri aynı koşuda geçti.
+İlk beş çağrı `.data/events-080-targeted-live.json` içinde korundu.
+
+0.8.1 isim içeren aramaları da mevcut en fazla üç seri/12 saniyelik detay
+doğrulamasına dahil eder. Genel keşif tüm kataloğu indirmez. Detay başarısızsa
+geçici bilgi ve kapsam uyarıları korunur; bilinmeyen koşul geçerli diye onaylanmaz.
+Soğuk katalog regresyonu eski kodda başarısız oldu
+(`.data/events-081-before.xml`). İlk 100 soru bu canlı düzeltmeden sonra çağrılır;
+soru listesi daha önce hazırlanmıştır.
+
+0.8.1 tam paket: 1.801 test, 1.736 başarılı, 65 atlanan, sıfır hata
+(`.data/events-081-full.xml`). Önceki hedefli koşudaki changelog başlık
+biçimi düzeltilip sürüm metadata kontrolü tekrar geçti; ürün testleri aynı
+koşuda geçti. Canlı kontrol ve 100 soru sonuçları yerel QA raporuna yazılır.
