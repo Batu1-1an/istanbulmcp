@@ -34,8 +34,14 @@ def _fold_ics(line: str) -> str:
 
 def calendar_output(cards: list[dict]) -> dict:
     lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Istanbul MCP//Events//TR", "CALSCALE:GREGORIAN", "X-WR-TIMEZONE:Europe/Istanbul"]
-    links, omitted_ends = [], False
+    links, omitted_ends, omitted_flexible, omitted_unverified = [], False, False, False
     for card in cards:
+        if card.get("source") == "biletinial" and not card.get("detail_checked"):
+            omitted_unverified = True
+            continue
+        if card.get("timing_kind") == "flexible_entry":
+            omitted_flexible = True
+            continue
         start, end = event_time(card["start_at"]), event_time(card["end_at"])
         stamp = lambda dt: dt.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         venue = card["venue"]["name"]
@@ -53,13 +59,17 @@ def calendar_output(cards: list[dict]) -> dict:
         lines += ["END:VEVENT"]
     lines.append("END:VCALENDAR")
     return {"ics": "\r\n".join(_fold_ics(line) for line in lines) + "\r\n", "google_calendar_links": links,
-            "warnings": ["Unknown end time: ICS omits DTEND; no Google Calendar link was generated for that session."] if omitted_ends else []}
+            "warnings": (["Unknown end time: ICS omits DTEND; no Google Calendar link was generated for that session."] if omitted_ends else []) +
+                        (["Flexible-entry ticket: no fixed visit time; no calendar event was generated."] if omitted_flexible else []) +
+                        (["Biletinial catalogue-only timing needs event detail verification; no calendar event was generated."] if omitted_unverified else [])}
 
 
 def enumerate_plans(cards: list[dict], *, window_end: datetime, max_events=3, min_gap_minutes=30,
                     max_price_try=None, limit=3, interests=()) -> tuple[list[dict], list[dict]]:
     options = []
-    cards = sorted(cards, key=lambda c: (c["start_at"], c["performance_id"]))
+    cards = sorted((c for c in cards if c.get("timing_kind") != "flexible_entry"
+                    and not (c.get("source") == "biletinial" and not c.get("detail_checked"))),
+                   key=lambda c: (c["start_at"], c["performance_id"]))
     for size in range(1, max_events + 1):
         for path in combinations(cards, size):
             if len({c["event_id"] for c in path}) < len(path):
@@ -253,15 +263,18 @@ class EventPlanService:
                 cards.extend(response["data"])
                 truncated = truncated or response["result_info"]["truncated"]
         window_start, window_end = datetime.combine(day, start, ISTANBUL), datetime.combine(day, end, ISTANBUL)
-        rejected, candidates, seen = [], [], set()
+        rejected, candidates, flexible_entries, seen = [], [], [], set()
         for card in cards:
             if card["performance_id"] in seen:
                 continue
             seen.add(card["performance_id"])
             reason = None
-            if not window_start <= event_time(card["start_at"]) <= window_end:
+            flexible = card.get("timing_kind") == "flexible_entry"
+            if flexible and card["event_date"] != day.isoformat():
                 reason = "outside_time_window"
-            elif event_time(card["start_at"]) < datetime.now(ISTANBUL):
+            elif not flexible and not window_start <= event_time(card["start_at"]) <= window_end:
+                reason = "outside_time_window"
+            elif (day < datetime.now(ISTANBUL).date() if flexible else event_time(card["start_at"]) < datetime.now(ISTANBUL)):
                 reason = "session_already_started"
             elif card["program_status"] in {"cancelled", "postponed"}:
                 reason = "program_unavailable"
@@ -271,6 +284,14 @@ class EventPlanService:
                 reason = "outside_requested_categories"
             elif child_age is not None and age_suitability(card.get("age_limit"), child_age) != "within":
                 reason = "age_not_verified_or_outside"
+            elif card.get("source") == "biletinial" and not card.get("detail_checked"):
+                reason = "session_detail_required"
+            elif flexible:
+                if max_price_try is not None and card["price"]["minimum_observed_try"] is not None and card["price"]["minimum_observed_try"] > max_price_try:
+                    reason = "over_budget"
+                else:
+                    reason = "flexible_entry_requires_visit_time"
+                    flexible_entries.append(card)
             elif require_known_end and not card["end_known"]:
                 reason = "end_time_unknown"
             elif card["end_known"] and event_time(card["end_at"]) > window_end:
@@ -286,6 +307,8 @@ class EventPlanService:
                                               limit=safe_limit, interests=interests or ())
         envelope["data"] = [{"date": day.isoformat(), "window": {"start": start_time, "end": end_time},
                              "options": options, "unverified_budget": unverified, "rejected": rejected,
+                             "flexible_entries": flexible_entries[:20],
+                             "flexible_entry_count": len(flexible_entries), "flexible_entries_truncated": len(flexible_entries) > 20,
                              "candidate_count": candidate_count, "evaluated_candidates": min(candidate_count, 20),
                              "candidate_truncated": bool(truncated or candidate_count > 20),
                              "ranking_scope": "evaluated candidates only; not a city-wide optimum"}]
@@ -300,6 +323,11 @@ class EventPlanService:
                                 "Time gaps and straight-line distances do not establish travel feasibility.",
                                 "Unknown end times are allowed only at the final stop."]
         envelope["warnings"] += ["Ulaşım süresi hesaplanmadı; bilet durumu ve ücretler kaynakta yeniden kontrol edilmeli."]
+        if flexible_entries:
+            envelope["warnings"].append("Flexible-entry tickets are listed separately in flexible_entries: choose and verify a visit time, opening hours and admission conditions before making a timed plan or calendar entry.")
+            envelope["result_info"]["next_step"] = "Inspect flexible_entries and verify a visit time and admission conditions on the ticket page; no timed stop or calendar entry was generated for them."
+        if any(item["reason"] == "session_detail_required" for item in rejected):
+            envelope["warnings"].append("Biletinial catalogue-only sessions were not scheduled: call istanbul_event_detail to verify whether each ticket has a fixed start or flexible entry.")
         outside_window = sum(item["reason"] == "outside_time_window" for item in rejected)
         if event_ids is not None and outside_window:
             instruction = (f"{outside_window} selected session(s) are outside date={day.isoformat()} "

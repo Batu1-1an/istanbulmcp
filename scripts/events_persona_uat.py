@@ -37,7 +37,7 @@ def selection_workflow(client,url,headers):
          "question":"Seçtiğim seansı başka bir saatle değiştirmeden plana ekle."}
     try:
         search=call_tool(client,url,headers,"istanbul_events_search",{"date_from":"tomorrow","limit":20})
-        cards=search["data"]
+        cards=[card for card in search["data"] if card.get("timing_kind") != "flexible_entry"]
         if not search["ok"] or not cards:
             raise ValueError("No session available for selection check")
         card=next((c for c in cards if c["detail_checked"] and c["availability"] in {"in_stock","limited"}),cards[0])
@@ -115,6 +115,9 @@ def inspect_result(case, payload):
     options = data["options"]
     for option in options:
         cards = option["performances"]
+        if any(c.get("timing_kind") == "flexible_entry" or c.get("start_at") is None for c in cards):
+            errors.append("flexible_entry_scheduled_without_visit_time")
+            continue
         if args.get("interests") and any(c["category"] not in [normalize_category(i) for i in args["interests"]] for c in cards):
             errors.append("unrequested_category_in_plan")
         if args.get("max_price_try") is not None and (not option["total_price_known"] or option["known_minimum_total_try"] > args["max_price_try"]):

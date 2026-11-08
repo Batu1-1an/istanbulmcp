@@ -63,6 +63,13 @@ def inspect_case(case, args, payload):
         first = day(args.get("date_from"), today)
         last = day(args.get("date_to"), first + timedelta(days=6))
         for card in cards:
+            if card.get("timing_kind") == "flexible_entry":
+                listed_date = datetime.fromisoformat(card["event_date"]).date()
+                if not first <= listed_date <= last:
+                    failures.append("outside_search_dates")
+                if card["start_at"] is not None or args.get("time_from") or args.get("time_to"):
+                    failures.append("flexible_entry_presented_as_clock_match")
+                continue
             start = datetime.fromisoformat(card["start_at"]).astimezone(ISTANBUL)
             if not first <= start.date() <= last:
                 failures.append("outside_search_dates")
@@ -97,7 +104,7 @@ def inspect_case(case, args, payload):
 def workflow(client, url, headers, *, family=False):
     search = call_tool(client, url, headers, TOOLS["search"],
         {"date_from": "tomorrow", "limit": 20, **({"category": "family"} if family else {})})
-    candidates = search["data"] if search["ok"] else []
+    candidates = [card for card in search["data"] if card.get("timing_kind") != "flexible_entry"] if search["ok"] else []
     if not candidates:
         return ["workflow_no_source_candidate"], {"returned": 0}
     card = next((card for card in candidates if card["detail_checked"] and card["availability"] in {"in_stock", "limited"}), candidates[0])

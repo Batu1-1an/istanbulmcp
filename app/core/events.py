@@ -120,7 +120,9 @@ class EventObservation(BaseModel):
     category: Category = "other"
     category_source: Literal["provider", "title_marker", "unknown"] = "provider"
     start_at: datetime
-    start_time_basis: Literal["provider_datetime", "html_session", "json_ld"] = "provider_datetime"
+    start_time_basis: Literal["provider_datetime", "html_session", "html_date", "json_ld"] = "provider_datetime"
+    timing_kind: Literal["scheduled", "flexible_entry"] = "scheduled"
+    source_start_at: datetime | None = None
     source_time_conflict: bool = False
     end_at: datetime | None = None
     venue: EventVenue
@@ -139,7 +141,7 @@ class EventObservation(BaseModel):
     detail_checked: bool = False
     warnings: list[str] = Field(default_factory=list)
 
-    @field_validator("start_at", "end_at", "observed_at")
+    @field_validator("start_at", "end_at", "observed_at", "source_start_at")
     @classmethod
     def aware_time(cls, value):
         if value is not None and value.tzinfo is None:

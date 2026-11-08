@@ -302,6 +302,11 @@ Veriler gecikmeli, eksik veya hatalı olabilir. Nöbetçi eczane, su arızası v
 
 ## Etkinlik keşfi ve planlama
 
+0.7.0, görünür HTML seansıyla doğrulanmayan ek JSON saatlerini dışlar. Esnek giriş
+biletleri `timing_kind=flexible_entry`, `event_date` ve `start_at=null` ile
+gösterilir; planın `flexible_entries` bölümünde kalır, saatli plana/takvime
+yazılmaz. [Niloya ve esnek giriş düzeltmeleri](docs/events-flexible-entry-fix.md).
+
 Başlamış seansları yerel katalogda incelemek için `include_past=true`
 kullanılabilir; geçmiş fiyatın süresi dolduysa ücretsiz sayılmaz.
 [Ücretsiz arama, sayaçlar ve kayıt yaşam döngüsü](docs/events-free-lifecycle.md).
@@ -345,6 +350,8 @@ azaltılır. [100 senaryolu QA incelemesi](docs/events-100-review.md).
 pytest tests/test_event_personas.py tests/test_events.py
 # HTML/JSON-LD saat çelişkisi, gerçek UTC gece yarısı ve eski seans seçimi
 pytest tests/test_events_source_time.py
+# Doğrulanmayan ek saatler ve gün içinde kullanılabilen esnek girişler
+pytest tests/test_events_flexible_and_unconfirmed.py
 # Opt-in: çalışan MCP üzerinde farklı kullanıcı soruları; raw cevap/secret kaydetmez
 railway run .venv/bin/python scripts/events_persona_uat.py --output .data/events-persona-uat.json
 # QA raporundaki 100 niyetin kalıcı, opt-in yeniden koşusu

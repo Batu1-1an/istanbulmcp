@@ -55,6 +55,25 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 - Canlı `istanbul_transport_disruptions` hat testi yanlış parametre adı (`line_code`)
   yerine aracın gerçek parametresi `line` ile çağrılır.
 
+## [0.7.0] - 2026-11-08
+
+### Fixed
+- Withhold unmatched JSON-LD times when the same venue/date has visible HTML
+  sessions. The HTML date can use an explicit source year even when JSON's clock
+  differs; unconfirmed_json_sessions and partial-coverage warnings explain gaps.
+- Parse explicitly flexible-entry tickets without inventing a visit start.
+  Cards expose timing_kind, event_date and source_start_at; start_at is null for
+  flexible entries. Clock filters exclude them with excluded_unverified_time.
+- Keep flexible tickets in bounded plan flexible_entries with rejection/repair
+  guidance; never place source date timestamps in timed plans or calendars.
+- Prevent catalogue-only Biletinial timestamps from being scheduled before
+  detail verification establishes a fixed session or flexible entry.
+- Live QA consumers handle nullable visit starts and preserve timing semantics.
+
+### Tests
+- Source fixtures reproduce unconfirmed extra times and date-only admission;
+  date/clock search, midnight deduplication, selection and calendar guards tested.
+
 ## [0.6.1] - 2026-11-08
 
 ### Fixed

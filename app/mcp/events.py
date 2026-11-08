@@ -30,7 +30,11 @@ async def istanbul_events_search(
     and expired prices stay unknown. result_info.filter_counts explains exclusions.
     start_time_basis records the source of the time. source_time_conflict=true
     means published Istanbul HTML session times took precedence over conflicting
-    JSON-LD offsets; preserve per-event warnings and verify the ticket page.
+    JSON-LD times; preserve per-event warnings and verify the ticket page.
+    timing_kind=flexible_entry has event_date but start_at=null: its source_start_at
+    is catalogue metadata, never a visit or reservation time. Show the date and
+    ticket link, and verify opening hours/admission conditions. Clock-filtered
+    searches exclude date-only flexible tickets; excluded_unverified_time counts them.
     Categories: concert, theatre, opera_ballet, standup, family, festival, exhibition, workshop, sport, seminar,
     other. District: one of Istanbul's 39 districts. Coordinates must be paired;
     Turkish aliases such as tiyatro, konser, çocuk, atölye are accepted.
@@ -83,6 +87,8 @@ async def istanbul_event_detail(event_id: str) -> dict:
     retired catalogue coverage is not cancellation.
     Preserve start_time_basis, source_time_conflict and per-performance warnings;
     published HTML session times can resolve inconsistent JSON-LD offsets.
+    Flexible-entry tickets have start_at=null; use event_date and do not present
+    source_start_at as an appointment, opening hour or scheduled visit.
     catalogue_retired means retained local sessions are inactive; source_unavailable
     means active local records exist but their source snapshot is unusable.
     not_found without retained history cannot explain whether a deploy reset or
@@ -121,6 +127,11 @@ async def istanbul_events_plan(
     Unknown end times can appear only last, without a window-end guarantee.
     Preserve source-time-conflict warnings and ticket-type eligibility warnings;
     observed minimum prices need not be per-person general-admission prices.
+    Date-only flexible-entry tickets appear in flexible_entries (at most 20),
+    never timed options or calendars. flexible_entry_requires_visit_time explains
+    the rejection; verify a visit time and admission conditions on the ticket page.
+    Catalogue-only Biletinial sessions are rejected with session_detail_required;
+    call event_detail before treating their listed timestamp as a timed visit.
     Sold-out/cancelled sessions are excluded. No travel-time or live ticket
     guarantee: non-overlapping times do not prove venues are reachable.
     For every event in the presented plan, show a clickable event/ticket-page

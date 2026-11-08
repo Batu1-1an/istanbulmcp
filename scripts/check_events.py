@@ -28,9 +28,9 @@ async def check():
         if not payload["data"]:
             print(json.dumps({"ok": False, "stage": "search", "error": "No sessions for detail/plan verification"}))
             return False
-        card = payload["data"][0]
+        card = next((card for card in payload["data"] if card.get("timing_kind") != "flexible_entry"), payload["data"][0])
         detail = await client.call_tool("istanbul_event_detail", {"event_id": card["event_id"]})
-        plan = await client.call_tool("istanbul_events_plan", {"date": card["start_at"][:10], "start_time": "00:00", "end_time": "23:59", "event_ids": [card["event_id"]]})
+        plan = await client.call_tool("istanbul_events_plan", {"date": card.get("event_date") or card["start_at"][:10], "start_time": "00:00", "end_time": "23:59", "event_ids": [card["event_id"]]})
         for stage, result in (("detail", detail), ("plan", plan)):
             value = result.structured_content
             ok = bool(value and value["ok"] and not result.is_error)

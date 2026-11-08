@@ -93,7 +93,7 @@ def deduplicate(rows: list[EventObservation]) -> list[tuple[EventObservation, li
     groups: list[tuple[EventObservation, list[EventObservation]]] = []
     buckets: dict[tuple, list[int]] = {}
     for row in sorted(rows, key=lambda r: (r.source != "biletinial", r.performance_id)):
-        key = (search_text(row.title), row.start_at.isoformat(), search_text(row.venue.name))
+        key = (search_text(row.title), row.start_at.isoformat(), search_text(row.venue.name), row.timing_kind)
         candidates = buckets.setdefault(key, [])
         def compatible(other):
             if other.source == row.source:
@@ -128,11 +128,15 @@ def event_card(row: EventObservation, matches=None, *, max_price=None, distance=
                          and (offer.availability != "sold_out" or include_sold_out and availability(row)=="sold_out") and price is not None), None)
     return {
         "performance_id": row.performance_id, "event_id": row.event_id,
-        "title": row.title, "category": row.category, "category_source": row.category_source, "start_at": row.start_at.isoformat(),
+        "title": row.title, "category": row.category, "category_source": row.category_source,
+        "start_at": row.start_at.isoformat() if row.timing_kind == "scheduled" else None,
+        "timing_kind": row.timing_kind, "event_date": row.start_at.date().isoformat(),
+        "source_start_at": row.source_start_at.isoformat() if row.source_start_at else None,
         "start_time_basis": row.start_time_basis, "source_time_conflict": row.source_time_conflict,
         "warnings": list(row.warnings),
-        "end_at": row.end_at.isoformat() if row.end_at else None, "end_known": row.end_at is not None,
-        "end_source": (row.end_source if row.end_source != "unknown" else "source_end") if row.end_at else "unknown",
+        "end_at": row.end_at.isoformat() if row.end_at and row.timing_kind == "scheduled" else None,
+        "end_known": row.end_at is not None and row.timing_kind == "scheduled",
+        "end_source": (row.end_source if row.end_source != "unknown" else "source_end") if row.end_at and row.timing_kind == "scheduled" else "unknown",
         "age_limit": row.age_limit, "duration_minutes": row.duration_minutes,
         "venue": row.venue.model_dump(), "distance_m": round(distance) if distance is not None else None,
         "distance_kind": "straight_line" if distance is not None else None,
@@ -332,11 +336,12 @@ class EventService:
             for row in rows:
                 if row.source != "biletinial" or row.source not in usable:
                     continue
-                if row.start_at < datetime.now(ISTANBUL):
+                if (row.start_at.date() < datetime.now(ISTANBUL).date() if row.timing_kind == "flexible_entry"
+                        else row.start_at < datetime.now(ISTANBUL)):
                     continue
                 if category and row.category != category and not (category == "family" and row.category == "theatre") and row.category != "other":
                     continue
-                if clock_from and row.start_at.time() < clock_from or clock_to and row.start_at.time() > clock_to:
+                if row.timing_kind == "scheduled" and (clock_from and row.start_at.time() < clock_from or clock_to and row.start_at.time() > clock_to):
                     continue
                 if district and row.venue.district and normalize_place(row.venue.district) != normalize_place(district):
                     continue
@@ -385,14 +390,14 @@ class EventService:
         now = datetime.now(ISTANBUL)
         counts = dict(initial_indexed_candidates=initial_candidate_count,indexed_candidates=len(rows), usable_observations=sum(row.source in usable for row in rows),
                       deduplicated_sessions=0, excluded_started=0, excluded_program=0, excluded_category=0,
-                      excluded_age=0, excluded_clock=0, excluded_location=0, excluded_sold_out=0,
+                      excluded_age=0, excluded_clock=0, excluded_unverified_time=0, excluded_location=0, excluded_sold_out=0,
                       excluded_unknown_price=0, excluded_price=0, verified_free=0,
                       unknown_price_sessions=0, known_price_sessions=0,
                       detail_checks_attempted=detail_checks, detail_checks_succeeded=successful_detail_checks,
                       expired_offer_observations=sum(bool(row.offers) and (now-row.observed_at).total_seconds()>self.settings.events_detail_ttl_seconds for row in rows if row.source in usable))
         for row, matches in deduplicate([current_observation(row, self.settings) for row in rows if row.source in usable]):
             counts["deduplicated_sessions"] += 1
-            if not include_past and row.start_at < now:
+            if not include_past and (row.start_at.date() < now.date() if row.timing_kind == "flexible_entry" else row.start_at < now):
                 counts["excluded_started"] += 1
                 continue
             if any(item.program_status in {"cancelled", "postponed"} for item in matches):
@@ -404,7 +409,10 @@ class EventService:
             if child_age is not None and age_suitability(row.age_limit, child_age) != "within":
                 excluded_age += 1
                 continue
-            if clock_from and row.start_at.time() < clock_from or clock_to and row.start_at.time() > clock_to:
+            if row.timing_kind == "flexible_entry" and (clock_from or clock_to) and not _planning:
+                counts["excluded_unverified_time"] += 1
+                continue
+            if row.timing_kind == "scheduled" and (clock_from and row.start_at.time() < clock_from or clock_to and row.start_at.time() > clock_to):
                 counts["excluded_clock"] += 1
                 continue
             if district and normalize_place(row.venue.district or "") != normalize_place(district):
@@ -437,12 +445,17 @@ class EventService:
                 card["query_match"] = "exact_tokens" if query_tokens <= set(search_text(row.title).split()) else "prefix_or_venue"
             selected.append(card)
         selected.sort(key=lambda card: (card["budget_status"] == "unknown" if max_price_try is not None else False,
-                                        card.get("query_match") == "prefix_or_venue", card["start_at"], card["distance_m"] if card["distance_m"] is not None else math.inf, card["performance_id"]))
+                                        card.get("query_match") == "prefix_or_venue", card["event_date"], card["start_at"] is None,
+                                        card["start_at"] or "", card["distance_m"] if card["distance_m"] is not None else math.inf, card["performance_id"]))
         notes = [f"{unknown_budget} matching session(s) have unknown prices and are not verified within budget."] if unknown_budget else []
         if counts["excluded_started"]:
             notes.append(f"{counts['excluded_started']} session(s) already started and were excluded; use include_past=true to inspect retained past sessions.")
         if counts["expired_offer_observations"]:
             notes.append("Some price observations expired and are now unknown; old zero-price observations do not verify current free admission.")
+        if counts["excluded_unverified_time"]:
+            notes.append(f"{counts['excluded_unverified_time']} flexible-entry ticket(s) excluded: a date-only ticket cannot verify the requested start-time window.")
+        if any(card["timing_kind"] == "flexible_entry" for card in selected[:safe_limit]):
+            notes.append("Flexible-entry tickets have no fixed visit start; event_date is the listed date, not proof of opening hours or admission eligibility. Verify the ticket page before visiting.")
         if free_only:
             notes.append("Free-price verification is partial: at most 3 relevant series are refreshed per call. Zero results do not establish that no free events exist.")
         if include_past:

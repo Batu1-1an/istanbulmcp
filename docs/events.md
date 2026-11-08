@@ -2,6 +2,12 @@
 
 ## Etkinleştirme ve kapsam
 
+0.7.0, aynı mekân/tarihte HTML ile doğrulanmayan ek JSON saatlerini yayımlamaz.
+Esnek giriş bileti tarih ve bağlantısıyla keşfedilir; `start_at=null` ve
+`timing_kind=flexible_entry` kaynak zaman damgasının ziyaret saati olmadığını
+belirtir. Saat filtresi bu biletleri eşleştirmez; plan `flexible_entries` içinde
+ayrı sunar ve takvim üretmez. [Kanıt ve sözleşme](events-flexible-entry-fix.md).
+
 0.6.1, HTML'deki İstanbul seans saati ile JSON-LD offset'i çeliştiğinde
 aynı etkinliğin ertesi gün ek seans olarak üretilmesini önler. Karttaki
 `start_time_basis`, `source_time_conflict` ve `warnings` korunmalıdır.

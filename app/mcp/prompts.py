@@ -94,6 +94,9 @@ Gösterdiğin her etkinliğin başlığının yanında tıklanabilir etkinlik/bi
 linki ver. Yanıttaki ticket_url alanını, yoksa dolu ticket_links[].url değerini
 aynen kullan. Etkinlik linki yoksa açıkça belirt; adres uydurma. Takvim linki
 etkinlik/bilet sayfasının yerine geçmez.
+timing_kind=flexible_entry ise yalnız event_date ve bilet bağlantısını göster;
+start_at=null ve source_start_at ziyaret saati değildir. flexible_entries içindeki
+biletleri saatli plan veya takvime koyma; ziyaret saati ve giriş koşulları kaynakta doğrulanmalı.
 İlgi türleri dışından etkinlik ekleme. Çocuk yaşı verilmişse child_age kullan;
 yalnız kaynakta yayımlanmış uyumlu yaş aralığını kabul et. Kesin bitiş saati
 istenmişse end_time ile require_known_end=true kullan. Yalnız bilinen fiyatlar

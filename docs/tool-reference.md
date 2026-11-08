@@ -355,6 +355,13 @@ sources give `ok=false`/broken; checked-empty remains successful.
 
 ## Optional event tools
 
+0.7.0: `timing_kind=flexible_entry` has `event_date` and `start_at=null`.
+`source_start_at` is source catalogue metadata, never a reservation time.
+Date-only tickets remain discoverable, but clock filters exclude them and
+`excluded_unverified_time` explains the count. Plans expose at most 20
+`flexible_entries`, separate from timed options/calendar entries, with
+`flexible_entry_requires_visit_time` and repair guidance.
+
 0.6.1 cards expose `start_time_basis`, `source_time_conflict` and per-event
 `warnings`. Preserve source time and ticket eligibility warnings in user-facing
 search/detail/plans. [Time reconciliation and evidence](events-source-time-validation.md).

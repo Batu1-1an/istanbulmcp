@@ -96,6 +96,19 @@ Kontrol edilen güncel belge: Context7 `/modelcontextprotocol/python-sdk/v2.3.0`
 
 ## Optional event results
 
+In 0.7.0 cards add `timing_kind=scheduled|flexible_entry`, `event_date` and
+`source_start_at`. Scheduled sessions retain their ISO start_at. Explicitly
+flexible-entry tickets have start_at=null, end_at=null, end_known=false;
+event_date is a listed ticket date, not a guaranteed admission date or opening
+hour. source_start_at, when present, is the observed source timestamp only.
+Clients must not use it as a visit time. start_time_basis may be html_date.
+Search clock filters exclude flexible tickets (excluded_unverified_time);
+date searches keep them throughout their listed date. Plan data includes
+flexible_entries (max 20), flexible_entry_count and flexible_entries_truncated.
+These tickets have no timed option/calendar entry; rejected reason
+flexible_entry_requires_visit_time explains the required source verification.
+result_info.scope=data.options still counts only timed options.
+
 Event tools retain the same ResponseEnvelope, including list-valued data.
 Search data contains session cards. Detail data contains one object with
 performances and observed offers. Plan data contains one object with options,
