@@ -204,6 +204,16 @@ class EventRepository:
             row = conn.execute("SELECT payload FROM event_occurrences WHERE id=?", (identifier,)).fetchone()
         return EventObservation.model_validate_json(row[0]) if row else None
 
+    def lifecycle(self, identifier: str) -> dict:
+        """Only report retained local evidence; absence does not prove cancellation."""
+        self.initialize()
+        with connect(self.path) as conn:
+            rows = conn.execute("""SELECT source,active,start_at,last_seen_at FROM event_occurrences
+              WHERE id=? OR event_id=?""", (identifier,identifier)).fetchall()
+        return {"retained_sessions":len(rows), "active_sessions":sum(row["active"] for row in rows),
+                "last_seen_at":max((row["last_seen_at"] for row in rows),default=None),
+                "sources":sorted({row["source"] for row in rows})}
+
     def pending_details(self, *, limit: int, ttl_seconds: int) -> list[str]:
         self.initialize()
         cutoff = (datetime.now(timezone.utc) - timedelta(seconds=ttl_seconds)).isoformat()

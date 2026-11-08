@@ -302,6 +302,10 @@ Veriler gecikmeli, eksik veya hatalı olabilir. Nöbetçi eczane, su arızası v
 
 ## Etkinlik keşfi ve planlama
 
+Başlamış seansları yerel katalogda incelemek için `include_past=true`
+kullanılabilir; geçmiş fiyatın süresi dolduysa ücretsiz sayılmaz.
+[Ücretsiz arama, sayaçlar ve kayıt yaşam döngüsü](docs/events-free-lifecycle.md).
+
 İsteğe bağlı etkinlik katmanı `istanbul_events_search`, `istanbul_event_detail` ve
 `istanbul_events_plan` araçlarını ekler. `EVENTS_ENABLED=true` ve bir kaynak
 yapılandırması gerekir. Ticketmaster katalog, Biletinial doğrulanmış seans ve

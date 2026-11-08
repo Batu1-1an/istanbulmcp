@@ -55,6 +55,20 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 - Canlı `istanbul_transport_disruptions` hat testi yanlış parametre adı (`line_code`)
   yerine aracın gerçek parametresi `line` ile çağrılır.
 
+## [0.6.0] - 2026-11-08
+
+### Added
+- include_past search control for retained active sessions; default searches
+  consistently exclude already-started sessions, including explicit past ranges.
+- result_info.filter_counts explains time, availability and price exclusions,
+  expired price evidence, bounded detail checks, matched and returned counts.
+- Event detail distinguishes retained retired sessions (catalogue_retired),
+  unusable source snapshots (source_unavailable) and unknown local ID history.
+
+### Fixed
+- Free searches explicitly disclose partial/expired price coverage and excluded
+  started sessions. The price predicate still runs before the public result limit.
+
 ## [0.5.3] - 2026-11-08
 
 ### Fixed

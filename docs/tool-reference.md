@@ -389,6 +389,12 @@ returned. Missing links are stated explicitly; calendar links do not replace the
 
 ### Event QA controls (0.5.0)
 
+0.6.0 additionally accepts include_past (default false) for retained active
+past sessions. Started sessions are otherwise excluded for all date windows.
+Search result_info.filter_counts reports staged exclusions and bounded price
+verification. Detail errors distinguish catalogue_retired, source_unavailable
+and not_found with unknown local history. [Semantics and evidence](events-free-lifecycle.md).
+
 Search defaults to match_mode=words; match_mode=prefix explicitly enables
 stems/autocomplete. Empty query means no text filter. category_source identifies
 provider genre, explicit title_marker or unknown; absent indexed category

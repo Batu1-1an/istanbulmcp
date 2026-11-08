@@ -125,3 +125,10 @@ Plan options add total_observed_minimum_try: null if any session price is unknow
 otherwise the sum of observed minima. The old known_minimum_total_try still
 contains a partial subtotal when total_price_known=false. Tool names and
 list-valued data shapes are preserved; search's default is now complete words.
+
+0.6.0 adds optional result_info.filter_counts (event search only; null elsewhere).
+Counters describe sequential filtering of a bounded index and are not city totals.
+Search accepts include_past=false by default. Detail may return catalogue_retired
+with retained inactive local evidence or source_unavailable for active but unusable
+source data; not_found without retained history does not establish cancellation.
+See [free search and lifecycle semantics](events-free-lifecycle.md).

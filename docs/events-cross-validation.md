@@ -48,3 +48,17 @@ sunumu bu turun kapsamı değildir.
 İlk düzeltme sonrası hedefli koşu: 174 test, 0 hata/başarısızlık/skip;
 `.data/events-cross-final.xml`. Kaynakların gerçek içeriği ve şehir kapsamı
 bu ağsız sayılardan çıkarılmaz.
+
+## Tamamlanan canlı koşu
+
+0.5.3, 15:27:12–15:28:25 +03:00: 36 kontrol, 0 hata. 28 farklı filtre/plan
+çağrısı ve dört thread üzerinde sekiz arama tamamlandı. 20 çağrı sonuç buldu;
+16'sı koşullara uygun eşleşme bulamadı. Medyan 288 ms, en yavaş 8.846 ms;
+detay doğrulaması gecikmeye dahildir. Kaynaklar başlangıçta checked ve
+serving_stale=false; Ticketmaster 694, Biletinial 3.328 kayıt.
+
+Commit 04751c2, deployment 63db8b36-84fc-4c56-b2c5-699ee302f81d SUCCESS.
+GitHub CI test/conformance/Docker işleri başarılı. Canlı 36 çağrının tamamı
+yerel `docs/qa/events-cross-live-0.5.3.md` raporunda, özet JSON
+`.data/events-cross-live-0.5.3.json` içindedir. Sıfır kontrol hatası, kaynak
+türlerinin hepsinin doğru olduğu veya sınırsız yük kapasitesi anlamına gelmez.

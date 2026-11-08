@@ -11,7 +11,7 @@ import httpx
 
 from app.connectors.biletinial import BiletinialClient, plain_text
 from app.connectors.ticketmaster import TicketmasterClient
-from app.core.envelope import Freshness, Source, error_envelope, result_info, success_envelope
+from app.core.envelope import Freshness, Source, Repair, error_envelope, result_info, success_envelope
 from app.core.error_responses import validation_error_envelope
 from app.core.events import CATEGORIES, ISTANBUL, EventObservation, age_suitability, category_for, event_time, normalize_category, search_text
 from app.core.geo import haversine_m, radius_bbox
@@ -74,8 +74,10 @@ def availability(row: EventObservation) -> str:
     return "sold_out" if values and all(v == "sold_out" for v in values) else "unknown"
 
 
-def event_price(row: EventObservation) -> float | None:
+def event_price(row: EventObservation, *, include_sold_out=False) -> float | None:
     prices = [offer.price for offer in row.offers if offer.price is not None and offer.currency == "TRY" and offer.availability != "sold_out"]
+    if not prices and include_sold_out and availability(row) == "sold_out":
+        prices = [offer.price for offer in row.offers if offer.price is not None and offer.currency == "TRY"]
     return min(prices) if prices else None
 
 
@@ -112,7 +114,7 @@ def deduplicate(rows: list[EventObservation]) -> list[tuple[EventObservation, li
     return groups
 
 
-def event_card(row: EventObservation, matches=None, *, max_price=None, distance=None) -> dict:
+def event_card(row: EventObservation, matches=None, *, max_price=None, distance=None, include_sold_out=False) -> dict:
     observations = matches or [row]
     availability_values = [availability(item) for item in observations]
     stock = ("in_stock" if "in_stock" in availability_values else "limited" if "limited" in availability_values
@@ -121,9 +123,9 @@ def event_card(row: EventObservation, matches=None, *, max_price=None, distance=
                else "postponed" if any(item.program_status == "postponed" for item in observations) else row.program_status)
     sales = ("on_sale" if any(item.sales_status == "on_sale" for item in observations)
              else "sales_closed" if all(item.sales_status == "sales_closed" for item in observations) else "unknown")
-    price = event_price(row)
+    price = event_price(row, include_sold_out=include_sold_out)
     lowest_offer = next((offer for offer in row.offers if offer.price == price and offer.currency == "TRY"
-                         and offer.availability != "sold_out" and price is not None), None)
+                         and (offer.availability != "sold_out" or include_sold_out and availability(row)=="sold_out") and price is not None), None)
     return {
         "performance_id": row.performance_id, "event_id": row.event_id,
         "title": row.title, "category": row.category, "category_source": row.category_source, "start_at": row.start_at.isoformat(),
@@ -258,7 +260,7 @@ class EventService:
                      time_from=None, time_to=None, district=None, venue=None,
                      lat=None, lon=None, radius_m=None, free_only=False, max_price_try=None, limit=None,
                      include_unknown_prices=True, child_age=None, query_scope="title", include_sold_out=False,
-                     match_mode="words", _planning=False):
+                     match_mode="words", include_past=False, _planning=False):
         if not self.settings.events_enabled:
             return self.disabled()
         try:
@@ -318,13 +320,17 @@ class EventService:
                                            query=query, query_scope=query_scope, match_mode=match_mode, bbox=bbox, max_rows=self.settings.events_max_rows)
         except Exception:
             return error_envelope(summary="Event index could not be queried.", warning="The local index is unavailable; no events were verified.", code="source_unavailable", limits=EVENT_LIMITS)
+        initial_candidate_count = len(rows)
         detail_checks = 0
+        successful_detail_checks = 0
         # Price/category questions need recent evidence. Check a small relevant
         # subset on demand; unfiltered discovery stays in the local index.
         if self.settings.events_biletinial_enabled and (max_price_try is not None or free_only or category is not None):
             possible = []
             for row in rows:
                 if row.source != "biletinial" or row.source not in usable:
+                    continue
+                if row.start_at < datetime.now(ISTANBUL):
                     continue
                 if category and row.category != category and not (category == "family" and row.category == "theatre") and row.category != "other":
                     continue
@@ -356,7 +362,8 @@ class EventService:
                 detail_checks += 1
                 try:
                     async with asyncio.timeout(max(0.01, deadline - asyncio.get_running_loop().time())):
-                        await self.detail(row.event_id)
+                        checked = await self.detail(row.event_id)
+                        successful_detail_checks += bool(checked["ok"])
                 except TimeoutError:
                     break
                 except Exception:
@@ -374,37 +381,55 @@ class EventService:
         excluded_age = 0
         excluded_sold_out = 0
         now = datetime.now(ISTANBUL)
+        counts = dict(initial_indexed_candidates=initial_candidate_count,indexed_candidates=len(rows), usable_observations=sum(row.source in usable for row in rows),
+                      deduplicated_sessions=0, excluded_started=0, excluded_program=0, excluded_category=0,
+                      excluded_age=0, excluded_clock=0, excluded_location=0, excluded_sold_out=0,
+                      excluded_unknown_price=0, excluded_price=0, verified_free=0,
+                      unknown_price_sessions=0, known_price_sessions=0,
+                      detail_checks_attempted=detail_checks, detail_checks_succeeded=successful_detail_checks,
+                      expired_offer_observations=sum(bool(row.offers) and (now-row.observed_at).total_seconds()>self.settings.events_detail_ttl_seconds for row in rows if row.source in usable))
         for row, matches in deduplicate([current_observation(row, self.settings) for row in rows if row.source in usable]):
-            if first == now.date() and row.start_at < now:
+            counts["deduplicated_sessions"] += 1
+            if not include_past and row.start_at < now:
+                counts["excluded_started"] += 1
                 continue
             if any(item.program_status in {"cancelled", "postponed"} for item in matches):
+                counts["excluded_program"] += 1
                 continue
             if category and row.category != category:
+                counts["excluded_category"] += 1
                 continue
             if child_age is not None and age_suitability(row.age_limit, child_age) != "within":
                 excluded_age += 1
                 continue
             if clock_from and row.start_at.time() < clock_from or clock_to and row.start_at.time() > clock_to:
+                counts["excluded_clock"] += 1
                 continue
             if district and normalize_place(row.venue.district or "") != normalize_place(district):
+                counts["excluded_location"] += 1
                 continue
             if venue and search_text(venue) not in search_text(row.venue.name):
+                counts["excluded_location"] += 1
                 continue
             distance = haversine_m(lat, lon, row.venue.lat, row.venue.lon) if bbox and row.venue.lat is not None and row.venue.lon is not None else None
             if bbox and (distance is None or distance > radius_m):
+                counts["excluded_location"] += 1
                 continue
             if not include_sold_out and all(availability(item) == "sold_out" for item in matches):
                 excluded_sold_out += 1
                 continue
-            price = event_price(row)
-            if not include_unknown_prices and price is None:
+            price = event_price(row, include_sold_out=include_sold_out)
+            counts["unknown_price_sessions" if price is None else "known_price_sessions"] += 1
+            if (not include_unknown_prices or free_only) and price is None:
                 excluded_unknown_price += 1
                 continue
             if free_only and price != 0 or max_price_try is not None and price is not None and price > max_price_try:
+                counts["excluded_price"] += 1
                 continue
             if max_price_try is not None and price is None:
                 unknown_budget += 1
-            card = event_card(row, matches, max_price=max_price_try, distance=distance)
+            card = event_card(row, matches, max_price=max_price_try, distance=distance, include_sold_out=include_sold_out)
+            counts["verified_free"] += price == 0
             if query:
                 query_tokens = set(search_text(query).split())
                 card["query_match"] = "exact_tokens" if query_tokens <= set(search_text(row.title).split()) else "prefix_or_venue"
@@ -412,6 +437,14 @@ class EventService:
         selected.sort(key=lambda card: (card["budget_status"] == "unknown" if max_price_try is not None else False,
                                         card.get("query_match") == "prefix_or_venue", card["start_at"], card["distance_m"] if card["distance_m"] is not None else math.inf, card["performance_id"]))
         notes = [f"{unknown_budget} matching session(s) have unknown prices and are not verified within budget."] if unknown_budget else []
+        if counts["excluded_started"]:
+            notes.append(f"{counts['excluded_started']} session(s) already started and were excluded; use include_past=true to inspect retained past sessions.")
+        if counts["expired_offer_observations"]:
+            notes.append("Some price observations expired and are now unknown; old zero-price observations do not verify current free admission.")
+        if free_only:
+            notes.append("Free-price verification is partial: at most 3 relevant series are refreshed per call. Zero results do not establish that no free events exist.")
+        if include_past:
+            notes.append("Past sessions are limited to the retained active local catalogue; this is not an archive. Expired prices remain unknown.")
         if excluded_unknown_price:
             notes.append(f"{excluded_unknown_price} session(s) excluded because their prices could not be verified.")
         if excluded_age:
@@ -432,12 +465,16 @@ class EventService:
             notes.append("Distances are straight-line, not walking distance or travel time; a radius may include the opposite Bosphorus shore.")
         if not selected:
             notes.append("No matches in the usable indexed sources; this does not mean there are no Istanbul events.")
-        return self._envelope(f"{min(len(selected), safe_limit)} indexed event session(s) found.", selected[:safe_limit], snapshots,
+        result = self._envelope(f"{min(len(selected), safe_limit)} indexed event session(s) found.", selected[:safe_limit], snapshots,
                               matched=len(selected), warnings=notes,
                               limits=[f"limit={safe_limit}", f"date_from={first}", f"date_to={last}", f"query_scope={query_scope}",
-                                      f"match_mode={match_mode}",
+                                      f"match_mode={match_mode}", f"include_past={str(include_past).lower()}",
                                       *([f"category_coverage={'observed' if category_observed else 'not_observed'}; scope=indexed date/query; classification is partial"] if category else []),
                                       "On-demand detail checks: at most 3 series per search.", "No cursor; narrow filters when truncated."])
+        counts.update(excluded_age=excluded_age,excluded_sold_out=excluded_sold_out,
+                      excluded_unknown_price=excluded_unknown_price,matched=len(selected),returned=len(result["data"]))
+        result["result_info"]["filter_counts"] = counts
+        return result
 
     async def detail(self, identifier: str):
         if not self.settings.events_enabled:
@@ -453,7 +490,18 @@ class EventService:
         rows = await asyncio.to_thread(self.repository.detail, identifier)
         rows = [r for r in rows if r.source in self._usable(snapshots)]
         if not rows:
-            return error_envelope(summary="Event not found in usable catalogue.", warning="Search again for a current event ID.", code="not_found", freshness_status="unknown", limits=EVENT_LIMITS)
+            state = await asyncio.to_thread(self.repository.lifecycle, identifier)
+            if state["active_sessions"]:
+                code, reason = "source_unavailable", "Active local sessions exist, but their source snapshot is not usable."
+            elif state["retained_sessions"]:
+                code, reason = "catalogue_retired", "Previously observed sessions are inactive in the current local snapshot; this does not prove cancellation."
+            else:
+                code, reason = "not_found", "No retained local history for this ID. A rebuilt/deployed catalogue or provider changes may explain absence; the exact reason is unknown."
+            return error_envelope(summary="Event not found in usable catalogue.", warning=reason,
+                                  code=code, data=[{"catalogue_state":state}], sources=self._sources(snapshots),
+                                  repair=Repair(next_step="Retry when the source is available." if code=="source_unavailable" else
+                                      "Search the current catalogue again; inactive or missing local history is not proof of cancellation.",tool="istanbul_events_search"),
+                                  freshness_status="unknown", limits=[*EVENT_LIMITS,"Inactive local observations are retained for up to two days; storage may reset on deploy without a volume."])
         warnings = []
         if rows[0].source == "biletinial" and self.settings.events_biletinial_enabled:
             async def load():

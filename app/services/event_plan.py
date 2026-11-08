@@ -257,7 +257,7 @@ class EventPlanService:
             reason = None
             if not window_start <= event_time(card["start_at"]) <= window_end:
                 reason = "outside_time_window"
-            elif day == datetime.now(ISTANBUL).date() and event_time(card["start_at"]) < datetime.now(ISTANBUL):
+            elif event_time(card["start_at"]) < datetime.now(ISTANBUL):
                 reason = "session_already_started"
             elif card["program_status"] in {"cancelled", "postponed"}:
                 reason = "program_unavailable"

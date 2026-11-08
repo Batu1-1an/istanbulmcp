@@ -116,3 +116,9 @@ kullanılabilir olduğunu anlatır. TTL içinde hata da freshness=stale üretir.
 `coverage_status=unavailable` tek başına fallback verisinin atıldığı anlamına
 gelmez. İlgili tür sorgularının da azami üç detay çağrısı yapabildiği hesaba
 katılmalıdır; doğrulama gecikmesini yalnız yerel indeks gecikmesi diye ölçmeyin.
+
+0.6.0 etkinlik araması result_info.filter_counts ile başlamış seans, tükenmişlik,
+bilinmeyen/zamanı dolmuş fiyat, ücretsiz eşleşme ve detay doğrulama sayısını
+yanıtta gösterir. Bunlar ham argümanları veya kullanıcı geçmişini loglamaz.
+Pasif kaydın last_seen_at alanı kaldırılma zamanı değildir. Kalıcı volume
+olmayan deploy sonrası not_found'dan kayıt iptali veya kesin silinme nedeni çıkarılmaz.

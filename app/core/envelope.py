@@ -98,6 +98,7 @@ class ErrorInfo(BaseModel):
 
 
 class ResultInfo(BaseModel):
+    filter_counts: dict[str, int] | None = None
     # Counts describe the named result scope, not total city/source coverage.
     returned: int = Field(ge=0)
     matched: int | None = Field(default=None, ge=0)

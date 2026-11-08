@@ -2,6 +2,10 @@
 
 ## Etkinleştirme ve kapsam
 
+0.6.0 başlamış seansları varsayılan dışlar; `include_past=true` halen aktif
+yerel geçmiş kayıtlara izin verir. Fiyat zaman aşımı korunur. Sayaçlar ve
+detay yaşam döngüsü [ücretsiz etkinlik incelemesinde](events-free-lifecycle.md).
+
 0.5.1 müzikal türünün yanlışlıkla konser sayılmasını ve diskteki snapshot
 yeniden kullanılırken TTL'in baştan başlamasını düzeltir.
 [Kanıt ve regresyonlar](events-musical-refresh-fix.md).
