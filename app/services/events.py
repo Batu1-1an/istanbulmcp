@@ -122,7 +122,8 @@ def event_card(row: EventObservation, matches=None, *, max_price=None, distance=
     sales = ("on_sale" if any(item.sales_status == "on_sale" for item in observations)
              else "sales_closed" if all(item.sales_status == "sales_closed" for item in observations) else "unknown")
     price = event_price(row)
-    lowest_offer = next((offer for offer in row.offers if offer.price == price and offer.currency == "TRY" and price is not None), None)
+    lowest_offer = next((offer for offer in row.offers if offer.price == price and offer.currency == "TRY"
+                         and offer.availability != "sold_out" and price is not None), None)
     return {
         "performance_id": row.performance_id, "event_id": row.event_id,
         "title": row.title, "category": row.category, "category_source": row.category_source, "start_at": row.start_at.isoformat(),

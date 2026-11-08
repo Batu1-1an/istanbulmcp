@@ -55,6 +55,16 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 - Canlı `istanbul_transport_disruptions` hat testi yanlış parametre adı (`line_code`)
   yerine aracın gerçek parametresi `line` ile çağrılır.
 
+## [0.5.3] - 2026-11-08
+
+### Fixed
+- An available offer no longer inherits the ticket type/eligibility label of a
+  sold-out offer with the same price.
+
+### Tests
+- Combined-filter oracles, bounded radius/limit relations, concurrent refresh
+  deduplication, budget/window checks and source-timezone boundaries.
+
 ## [0.5.2] - 2026-11-08
 
 ### Fixed

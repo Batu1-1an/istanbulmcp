@@ -6,6 +6,10 @@
 yeniden kullanılırken TTL'in baştan başlamasını düzeltir.
 [Kanıt ve regresyonlar](events-musical-refresh-fix.md).
 
+0.5.3, eşit fiyattaki tükenmiş bir teklifin satıştaki biletin tür/indirim
+etiketini belirlemesini düzeltir. Birleşik filtreler, zaman sınırları ve
+eşzamanlı okuma/yenileme kontrolleri [ayrı rapordadır](events-cross-validation.md).
+
 `istanbul_events_search`, `istanbul_event_detail`, `istanbul_events_plan` aynı
 ResponseEnvelope sözleşmesini kullanır. `EVENTS_ENABLED=true` araçları açar;
 varsayılan kapalıdır. Kapalı araçlar listelenmez ama `feature_disabled` ile

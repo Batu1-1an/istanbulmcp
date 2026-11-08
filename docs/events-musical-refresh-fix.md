@@ -28,7 +28,7 @@ Tekrar testinde Biletinial snapshot'ı stale idi. Örnek 500 production logu
 failed kaydı görülmedi. Bu örnek, önceki tüm kaynak/işletim olaylarını
 açıklamaz ve stale gözleminin tek nedenini kanıtlamaz.
 
-Kodda bağımsız bir hata yeniden üretildi: süreç önbelleği boş/evrilmişken
+Kodda bağımsız bir hata yeniden üretildi: süreç önbelleği boşaldığında veya süresi dolduğunda
 SQLite'taki henüz TTL'i dolmamış snapshot tekrar kullanılıyor ve ona yeni
 tam TTL veriliyordu. Örneğin 60 dakikalık snapshot'ın son beş saniyesinde
 yeniden kullanım, bir 60 dakika daha yenilemeyi geciktirebiliyordu.
@@ -58,3 +58,11 @@ Son hedefli koşu: 116 test, 0 hata/başarısızlık/skip; rapor
 Müzikli Oyun olduğu görüldü. 0.5.2 bu eşdeğer türü de theatre'a yöneltir;
 çocuk/aile önceliği korunur. İlgili regresyon örnekleri eklendi. Bu ikinci
 kaynak etiketi ilk düzeltmeden sonraki canlı denetimde bulunmuştur.
+
+Son doğrulama: 0.5.2 canlıda, commit 35604d9, deployment
+da781fc6-1de6-42e6-8c46-4d8718b3b05f SUCCESS. 118 hedefli test ve GitHub CI
+test/conformance/Docker işleri geçti. Aynı 100 soru 0 kontrol hatası verdi.
+İki kaynak müzikalinin toplam 10 seansı theatre döndü; aynı başlıkların konser
+aramasında Biletinial yanlış eşleşmesi kalmadı. Ayrıntılı yerel tekrar raporu
+`docs/qa/events-my-100-after-fix-0.5.2.md` içindedir. Kalan TTL, sahte saatli
+regresyonla doğrulandı; kısa canlı test tüm bir saatlik döngüyü ölçmez.

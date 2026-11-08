@@ -338,4 +338,6 @@ pytest tests/test_event_personas.py tests/test_events.py
 railway run .venv/bin/python scripts/events_persona_uat.py --output .data/events-persona-uat.json
 # QA raporundaki 100 niyetin kalıcı, opt-in yeniden koşusu
 railway run .venv/bin/python -m scripts.events_100_uat --output .data/events-100-current.json
+# Birleşik filtreler ve sınırlı eşzamanlı etkinlik aramaları
+railway run .venv/bin/python -m scripts.events_cross_uat --output .data/events-cross-live.json
 ```
