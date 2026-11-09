@@ -104,3 +104,15 @@ bilinmeyen kalır; böyle bir sonuç kullanıcı ihtiyacı çözüldü sayılmaz
 MCP sınırında kaldırıldığını gösterdi. Bu koşu başarısızlık olarak saklanır.
 0.9.1 alanları sınırlı tipli modele ekler ve gerçek Streamable HTTP regresyonuyla
 korur. Salt servis dict kontrolü yayın kanıtı yerine kullanılmaz.
+
+## Bilinen fiyat alt sınırı — 0.9.2
+
+0.9.1'in 100 soruluk tekrarında H012, 600 TL sınırına rağmen en düşük teklifi
+1.450 TL olan bir kaydı, kişi birimi belirsiz olduğundan bilinmeyen grup tutarı
+olarak tutabildi. Ham minimum fiyat bilgisi grup birimi bilinmese de en az bir
+bilet satın almanın gözlenen alt sınırıdır. 0.9.2 budget_lower_bound_try ve
+price_quote.observed_lower_bound_try ile bu kanıtı korur. Bilinen alt sınır
+bütçeden büyükse include_unknown_prices=true bunu gizlemez; planda alt sınırlar
+toplanır, free_only pozitif alt sınırı ücretsiz saymaz. Bu yalnız gözlenen
+tekliflere aittir; gözlenmeyen kampanya, kişisel indirim veya canlı sepet iddiası
+yapılmaz. İlk hatalı koşu ayrı saklanır; başarısız sonuç silinmez.

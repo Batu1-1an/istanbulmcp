@@ -63,3 +63,11 @@ görüldü. Başarısız koşu live-targeted-090-failed.json/log olarak sakland�
 0.9.1 alanları ortak tipe ekler; servis→envelope ve Streamable HTTP testleri
 bu aktarımı ayrıca korur. Hedefli 88 kontrol geçti; tüm paket ve canlı/100 soru
 onayı son kabul maddesine tabidir.
+
+## 0.9.1 insan soruları ve 0.9.2
+
+100 soru tamamlandı; H012'de tek ihlal bulundu: toplam birimi belirsiz teklifin
+gözlenen minimumu 1.450 TL iken 600 TL bütçede bilinmeyen tutar olarak tutuldu.
+Koşu human-091-results-failed.json içinde korunur. 0.9.2 gözlenen alt sınırı
+arama/plan/ücretsiz filtrede korur; arama ve seçilmiş plan regresyonları önce
+başarısız oldu. Yeni canlı ve yüz soru onayı beklenmeden son madde tamamlanmaz.

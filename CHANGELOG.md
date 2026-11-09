@@ -55,6 +55,13 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 - Canlı `istanbul_transport_disruptions` hat testi yanlış parametre adı (`line_code`)
   yerine aracın gerçek parametresi `line` ile çağrılır.
 
+## [0.9.2] - 2026-11-09
+
+### Fixed
+- Preserve observed ticket lower bounds when a party quote is unknown. Do not
+  retain an observed minimum above budget as an unknown-price alternative;
+  apply the same bound to plan combinations and free-only searches.
+
 ## [0.9.1] - 2026-11-09
 
 ### Fixed

@@ -344,3 +344,24 @@ def test_event_empty_reasons_and_coverage_survive_streamable_http(tmp_path,monke
         assert 'location_unverified' in p['result_info']['empty_reasons']
         assert not p['result_info']['coverage']['city_wide_absence_verified']
     finally:get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_unknown_ticket_unit_does_not_hide_an_observed_minimum_above_budget(catalogue):
+    events,row=catalogue;r=row('one');r.offers=[offer('5. Kategori',1450)];events.repository.publish('ticketmaster',[r],{})
+    p=await events.search(date_from='2030-11-10',date_to='2030-11-10',party_size=1,max_price_try=600,include_unknown_prices=True)
+    assert not p['data'] and p['result_info']['filter_counts']['excluded_price']==1
+
+
+@pytest.mark.asyncio
+async def test_unknown_party_quote_with_expensive_observed_lower_bound_is_not_a_budget_alternative(catalogue):
+    events,row=catalogue;r=row('one');r.offers=[offer('5. Kategori',1450)];events.repository.publish('ticketmaster',[r],{})
+    p=await EventPlanService(events.settings,events=events).plan(date='2030-11-10',start_time='10:00',end_time='20:00',event_ids=[r.performance_id],party_size=1,max_price_try=600)
+    assert not p['data'][0]['options'] and not p['data'][0]['unverified_budget']
+
+
+@pytest.mark.asyncio
+async def test_positive_observed_lower_bound_is_not_a_free_group_candidate(catalogue):
+    events,row=catalogue;r=row('one');r.offers=[offer('5. Kategori',100)];events.repository.publish('ticketmaster',[r],{})
+    p=await events.search(date_from='2030-11-10',date_to='2030-11-10',party_size=1,free_only=True)
+    assert not p['data'] and p['result_info']['filter_counts']['excluded_price']==1

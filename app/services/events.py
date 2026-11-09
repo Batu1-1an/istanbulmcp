@@ -502,6 +502,10 @@ class EventService:
                 if price is None:
                     unknown_quote_reason='excluded_unknown_fees' if budget_includes_fees and card['price_quote']['observed_ticket_subtotal_try'] is not None else 'excluded_unknown_ticket_terms'
             counts["unknown_price_sessions" if price is None else "known_price_sessions"] += 1
+            lower=card.get('budget_lower_bound_try')
+            if lower is not None and (max_price_try is not None and lower>max_price_try or free_only and lower>0):
+                counts['excluded_price'] += 1
+                continue
             if (not include_unknown_prices or free_only) and price is None:
                 excluded_unknown_price += 1
                 if unknown_quote_reason:counts[unknown_quote_reason] += 1

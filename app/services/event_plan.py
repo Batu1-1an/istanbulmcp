@@ -130,7 +130,8 @@ def enumerate_plans(cards: list[dict], *, window_end: datetime, max_events=3, mi
                 continue
             prices = [c.get("budget_price_try",c["price"]["minimum_observed_try"]) for c in path]
             known_total = float(sum((Decimal(str(p)) for p in prices if p is not None),Decimal(0)))
-            if max_price_try is not None and known_total > max_price_try:
+            lower_total=float(sum((Decimal(str(c.get('budget_lower_bound_try',p) or 0)) for c,p in zip(path,prices)),Decimal(0)))
+            if max_price_try is not None and lower_total > max_price_try:
                 if diagnostics is not None:diagnostics['over_budget_combinations']=diagnostics.get('over_budget_combinations',0)+1
                 continue
             budget_status = "unknown" if any(p is None for p in prices) else "within" if max_price_try is not None else "not_requested"

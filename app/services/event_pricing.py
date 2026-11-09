@@ -133,6 +133,11 @@ def apply_party_quote(card, offers, party, *, budget=None, includes_fees=False):
     value=quote['observed_fee_inclusive_total_try'] if includes_fees else quote['observed_ticket_subtotal_try']
     quote['budget_includes_fees']=includes_fees
     quote['budget_status']='unknown' if value is None else 'over' if budget is not None and value>budget else 'within_observed_amount' if budget is not None else 'not_requested'
+    observed=[o.price for o in offers if o.price is not None and o.currency=='TRY' and o.availability!='sold_out']
+    lower=value if value is not None else quote['observed_ticket_subtotal_try']
+    if lower is None:lower=min(observed) if observed else None
+    quote['observed_lower_bound_try']=lower
+    card['budget_lower_bound_try']=lower
     card['price_quote']=quote
     card['budget_price_try']=value
     card['budget_price_basis']='observed_fee_inclusive_party_total' if includes_fees else 'observed_party_ticket_subtotal'
