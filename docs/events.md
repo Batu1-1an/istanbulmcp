@@ -452,3 +452,31 @@ onaylamaz. Plan min_events ve required_categories koşullarını karşılamıyor
 partial_options içinde eksikleriyle döner, tam plan veya takvim sayılmaz.
 Konumun bilinmemesi ile alan dışında olması ayrı sayılır; participation_conditions
 yalnız kaynakta yayımlanmış kapsamlı ifadeleri taşır.
+
+## Etkinliğin konusu — 0.9.3
+
+Arama, detay içindeki seanslar ve plan kartları `about` alanını taşır. `text`,
+kaynak açıklamasından en fazla 500 karakterlik düz metin alıntısıdır; otomatik
+üretilmiş hikâye özeti değildir. `kind=source_excerpt`, `truncated`, `source_url`,
+`observed_at` ve `is_untrusted_source_text` kökeni ve kapsamı korur.
+
+`status=available` açıklama metni bulunduğunu, `not_checked` Biletinial detayının
+henüz incelenmediğini, `not_published` incelenen kayıt/açıklamada metin
+bulunmadığını gösterir. Son durum etkinliğin konusu yok demek değildir. Eksik
+metin başka sağlayıcının benzer başlığından veya kategoriden tamamlanmaz.
+HTML/script/style ve gömülü URL'ler temizlenir; etkinliğin asıl `ticket_url`
+bağlantısı ayrı korunur. Kaynak metni talimat değil veridir.
+
+MCP sunucu/araç/plan prompt talimatı, her önerinin konusunu mevcut kaynak
+metninden 1–2 kısa cümleyle anlatmayı ister. Açıklama incelenmemişse seçilmiş
+etkinliğin detayına bakılır; aynı seri için detay tekrarlanmaz. Açıklama yine
+bulunamazsa açıkça belirtilir. Başlıktan hikâye, sanatçı ya da atölye içeriği
+uydurulmaz. Alıntının kesilmesi, tam açıklama veya katılım koşullarının yerine
+geçmez. Mevcut üç-seri/12-saniye arama doğrulama bütçesi ve araç adları korunur;
+bu ekleme şehirdeki bütün etkinliklerin konusunun bilindiğini iddia etmez.
+
+Bu değişiklik mevcut kaynak açıklaması alanlarını kullanır; yeni sağlayıcı/API,
+SDK davranışı, veritabanı şeması veya LLM özeti bağımlılığı eklemez. Kaynak
+çıkarımı Biletinial etkinlik açıklaması ve Ticketmaster eventInfo alanıdır.
+Doğrulama: fixture üzerinden içerik/HTML temizleme, eksik ve incelenmemiş ayrımı,
+uzun metin sınırı, arama→detay→plan aktarımı ve gerçek Streamable HTTP gövdesi.

@@ -55,6 +55,15 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 - Canlı `istanbul_transport_disruptions` hat testi yanlış parametre adı (`line_code`)
   yerine aracın gerçek parametresi `line` ile çağrılır.
 
+## [0.9.3] - 2026-11-09
+
+### Added
+- Arama, detay seansları ve günlük plan kartları `about` içinde en fazla 500
+  karakterlik kaynak açıklaması, eksik/bakılmamış durumu, köken, gözlem tarihi
+  ve kesilme bilgisini taşır. HTML/script/style ve gömülü URL'ler temizlenir.
+- MCP talimatları her önerinin konusunu kaynak açıklamasından 1–2 kısa cümleyle
+  anlatır; açıklama yoksa başlık/türden hikâye veya tema uydurulmaz.
+
 ## [0.9.2] - 2026-11-09
 
 ### Fixed

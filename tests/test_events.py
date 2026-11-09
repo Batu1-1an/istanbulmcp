@@ -62,6 +62,49 @@ def test_ticketmaster_keeps_unknown_price_and_availability_and_filters_city():
     assert rows[1].program_status=="cancelled"
 
 
+def test_event_card_explains_source_topic_without_html_scripts_or_embedded_links():
+    row = observation(description='<p>İki kardeşin yıllar sonra karşılaşmasını anlatan bir oyun.</p>'
+                      '<script>secret_script()</script><style>hidden_css</style>'
+                      '<p>Ayrıntı: https://example.test/story</p>')
+    about = event_card(row)['about']
+    assert 'İki kardeşin yıllar sonra karşılaşmasını anlatan bir oyun.' in about['text']
+    assert not any(value in about['text'] for value in ('<p>', 'secret_script', 'hidden_css', 'https://'))
+    assert about['source_url'] == row.ticket_url and about['observed_at'] == row.observed_at.isoformat()
+    assert about['status'] == 'available' and about['is_untrusted_source_text']
+
+
+@pytest.mark.parametrize('source,checked,status', [
+    ('biletinial', False, 'not_checked'), ('biletinial', True, 'not_published'),
+    ('ticketmaster', False, 'not_published'),
+])
+def test_missing_topic_is_distinct_from_uninspected_detail_and_not_invented(source,checked,status):
+    about = event_card(observation(source=source, detail_checked=checked, description=None))['about']
+    assert about['text'] is None and about['status'] == status
+
+
+def test_long_source_description_stays_bounded_and_marks_the_excerpt_incomplete():
+    about = event_card(observation(description='Kentin hafızasını keşfeden bir sergi. ' * 100))['about']
+    assert len(about['text']) <= 500 and about['truncated']
+    assert about['kind'] == 'source_excerpt'
+
+
+@pytest.mark.asyncio
+async def test_topic_reaches_search_selected_detail_and_daily_plan(service, monkeypatch):
+    row = observation(description='Eski bir dostluğu yeniden kuran iki kişinin hikâyesi.')
+    async def source_detail(self, *args):
+        return [row], {}
+    monkeypatch.setattr('app.connectors.biletinial.BiletinialClient.detail', source_detail)
+    service.repository.publish('biletinial', [row], {})
+    search = await service.search(date_from='2030-11-08', date_to='2030-11-08')
+    detail = await service.detail(row.performance_id)
+    plan = await EventPlanService(service.settings, events=service).plan(
+        date='2030-11-08', start_time='17:00', end_time='22:00', event_ids=[row.performance_id])
+    cards = [search['data'][0], detail['data'][0]['performances'][0],
+             plan['data'][0]['options'][0]['performances'][0]]
+    assert all(card['about']['text'] == row.description for card in cards)
+    assert detail['data'][0]['description'] == row.description
+
+
 def test_biletinial_list_does_not_assign_series_price_or_representative_venue_to_sessions():
     rows,more=parse_biletinial_list(json.loads((FIXTURES/"biletinial-list.json").read_text()),"tiyatro")
     assert not more and len(rows)==2
@@ -318,7 +361,7 @@ def test_event_tools_work_over_streamable_http_with_feature_enabled(tmp_path,mon
     from app.main import create_app
     import app.main as main
     path=tmp_path/"http-events.sqlite3"
-    EventRepository(path).publish("biletinial",[observation()],{})
+    EventRepository(path).publish("biletinial",[observation(description="Bir ailenin şehirde yeniden buluşma hikâyesi.")],{})
     monkeypatch.setenv("DATABASE_PATH",str(path))
     monkeypatch.setenv("EVENTS_ENABLED","true")
     monkeypatch.setenv("EVENTS_BILETINIAL_ENABLED","true")
@@ -335,6 +378,7 @@ def test_event_tools_work_over_streamable_http_with_feature_enabled(tmp_path,mon
             "name":"istanbul_events_search","arguments":{"date_from":"2030-11-08","date_to":"2030-11-08"}}})
         result=response.json()["result"]
         assert result["structuredContent"]["ok"] and result["structuredContent"]["data"]
+        assert result["structuredContent"]["data"][0]["about"]["text"] == "Bir ailenin şehirde yeniden buluşma hikâyesi."
         assert json.loads(result["content"][0]["text"])==result["structuredContent"]
 
 

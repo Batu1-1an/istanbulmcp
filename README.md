@@ -370,3 +370,7 @@ railway run .venv/bin/python -m scripts.events_cross_uat --output .data/events-c
 
 Etkinlik grup fiyatı, katılım koşulları ve zorunlu durak/tür sözleşmesi:
 [karar kalitesi](docs/events-decision-quality.md).
+
+Etkinlik önerileri kaynak açıklamasından kısa konu bilgisi de taşır:
+`about.text`; açıklama eksik veya henüz incelenmemişse bu durum ayrı belirtilir.
+[Etkinlik konusu ve kaynak kapsamı](docs/events.md#etkinliğin-konusu--093).

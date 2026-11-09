@@ -132,6 +132,26 @@ def deduplicate(rows: list[EventObservation]) -> list[tuple[EventObservation, li
     return groups
 
 
+def event_about(row: EventObservation) -> dict:
+    """A bounded source excerpt, not an inferred synopsis or participation rule."""
+    raw = re.sub(r"<(script|style)\b[^>]*>.*?</\1\s*>", "", row.description or "", flags=re.I | re.S)
+    text = re.sub(r"https?://\S+", "", plain_text(raw, 8001))
+    text = " ".join(text.split())
+    truncated = len(text) > 500
+    excerpt = text
+    if truncated:
+        excerpt = text[:497].rsplit(" ", 1)[0] or text[:497]
+        excerpt += "…"
+    return {
+        "text": excerpt or None,
+        "status": "available" if excerpt else "not_published" if row.detail_checked or row.source == "ticketmaster" else "not_checked",
+        "kind": "source_excerpt", "truncated": truncated,
+        "source_url": row.ticket_url,
+        "observed_at": row.observed_at.isoformat(),
+        "is_untrusted_source_text": True,
+    }
+
+
 def event_card(row: EventObservation, matches=None, *, max_price=None, distance=None, include_sold_out=False) -> dict:
     observations = matches or [row]
     availability_values = [availability(item) for item in observations]
@@ -148,6 +168,7 @@ def event_card(row: EventObservation, matches=None, *, max_price=None, distance=
     return {
         "performance_id": row.performance_id, "event_id": row.event_id,
         "title": row.title, "category": row.category, "category_source": row.category_source,
+        "about": event_about(row),
         "start_at": row.start_at.isoformat() if row.timing_kind == "scheduled" else None,
         "timing_kind": row.timing_kind, "event_date": row.start_at.date().isoformat(),
         "source_start_at": row.source_start_at.isoformat() if row.source_start_at else None,

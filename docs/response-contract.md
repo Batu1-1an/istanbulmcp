@@ -196,3 +196,13 @@ uyarı alanı, bu dar elemenin gerçek katılımcı uygunluğu onayı olmadığ�
 
 Ayrıntı: [karar kalitesi](events-decision-quality.md). Eski araçlar ve varsayılan
 min_events=1 korunur; yeni sayısal/profil girişleri sınırlandırılır.
+
+### Etkinlik konusu — 0.9.3
+
+Her etkinlik kartının `about` nesnesi: `text` (string/null, en fazla 500 karakter),
+`status` (available/not_checked/not_published), `kind=source_excerpt`, `truncated`,
+`source_url`, `observed_at`, `is_untrusted_source_text=true`. Kaynak alıntısıdır;
+özgün özet veya katılım uygunluğu kararı değildir. Arama, detayın performances
+listesi ve planın tüm performans kartlarında aynı sözleşme kullanılır. Detayın
+mevcut 1.200 karakterlik `description` alanı korunur. Kaynak metni eksikse konu
+başlıktan/kategoriden türetilmez. [Ayrıntı](events.md#etkinliğin-konusu--093).
