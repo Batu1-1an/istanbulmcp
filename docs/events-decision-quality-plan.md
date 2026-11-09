@@ -24,7 +24,7 @@ bulguları kapsamı belirler; bu belge tamamlanma kanıtı olmadan işaretlenmez
   uyumlu kalır.
 - [x] Her dört alan için fixture regresyonları ve uygun mevcut kontroller geçer.
 - [x] Sürüm/araç şeması/response contract/prompt/README/changelog belgelenir.
-- [ ] Tam paket, CI ve yayın doğrulaması; gerçek MCP ile hedefli ve insan
+- [x] Tam paket, CI ve yayın doğrulaması; gerçek MCP ile hedefli ve insan
   sorularının tekrar çağrıları yapılır. Başarısız ilk koşular saklanır; veri
   bulunamaması veya bilinmeyen kaynak bilgisi başarı diye yazılmaz.
 
@@ -71,3 +71,31 @@ gözlenen minimumu 1.450 TL iken 600 TL bütçede bilinmeyen tutar olarak tutuld
 Koşu human-091-results-failed.json içinde korunur. 0.9.2 gözlenen alt sınırı
 arama/plan/ücretsiz filtrede korur; arama ve seçilmiş plan regresyonları önce
 başarısız oldu. Yeni canlı ve yüz soru onayı beklenmeden son madde tamamlanmaz.
+
+## Son kabul kanıtı — 0.9.2
+
+Kod `43031c0`; 1.848 test: 1.783 başarılı, 65 atlanan, 0 başarısız/0 hata.
+43 karar-kalitesi regresyonu dahildir. Aynı commit'in CI test/docker/conformance
+kontrolleri [başarılı](https://github.com/Batu1-1an/istanbulmcp/actions/runs/42578328171).
+Railway dağıtımı `7c8a6d7f-056b-4687-89ec-78a7564895ad` başarılı; uzak MCP 0.9.2,
+21 araç ve checked/stale-olmayan iki etkinlik kaynağı doğrulandı.
+
+11 hedefli gerçek tools/call geçti. Sonra aynı 100 doğal soru 20 rol bağlamında
+145 gerçek senaryo çağrısı + 1 hazırlık çağrısıyla tekrarlandı; retry/429 yok.
+19 USEFUL, 25 PARTIAL, 5 ANSWERED_NEGATIVE, 51 NO_MATCH; 0 araç hatası ve
+0 denetlenen sözleşme ihlali. Soru parmak izi/sıra ve bilet toplamı/yaş/tarih/
+bağlantı/eksik plan/kaynak kökeni denetimleri geçti. Bu sonuç 100 ihtiyacın
+karşılandığı veya şehir genelindeki etkinliklerin eksiksiz tarandığı iddiası değildir.
+
+Yerel rapor `docs/qa/events-decision-quality-2026-11-09.md`; 100 kullanıcı
+cevabı ve her sorunun gerçek parametre/uyarı/sayaç kanıtı birlikte bulunur.
+`.data/events-decision-quality/verification-092.json`, `live-targeted.json`,
+`human-092/results.json`, `human-092/answers.json`, `human-092/audit.json` kanıtı
+saklar. QA ve büyük koşu dosyaları kullanıcının mevcut ignore tercihine uyar;
+sırlar ve ham sağlayıcı sayfaları commit edilmez. İlk başarısız koşular korunur.
+Yüz sorunun doğal dil→araç eşlemesi elle yapılmıştır; ayrı model sohbetleri
+veya gerçek katılımcı araştırması değildir.
+
+Son belge commit'i uygulama/test/sürüm yapılandırmasını değiştirmez. Yeni bir
+otomatik dağıtım oluşursa uygulama ağaç kimliği ve uzak kaynak hazırlığı ayrıca
+kontrol edilir; aynı kod için tekrar test koşusu uydurulmaz.

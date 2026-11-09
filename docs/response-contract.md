@@ -173,7 +173,7 @@ kayıtların elendiğini gösterir. Seçili planda `rejected[].reason`
 `child_only_age_range` olabilir. Bilinmeyen yaşlar uygun diye işaretlenmez;
 uyarı alanı, bu dar elemenin gerçek katılımcı uygunluğu onayı olmadığını açıklar.
 
-### Etkinlik karar kalitesi — 0.9.0
+### Etkinlik karar kalitesi — 0.9.2
 
 - result_info.empty_reasons ve coverage, sıralı eleme/kapsam nedenlerini taşır.
   excluded_unknown_location + excluded_outside_location = excluded_location.
@@ -183,6 +183,10 @@ uyarı alanı, bu dar elemenin gerçek katılımcı uygunluğu onayı olmadığ�
   price_quote; party, basket adetleri, gözlenen ara toplam, bilinmeyen ücret ve
   stok/yan yana koltuk doğrulanmadı alanlarını içerir. budget_price_basis ve
   plandaki total_price_scope, max_price_try'nin neye uygulandığını belirtir.
+- budget_lower_bound_try ve price_quote.observed_lower_bound_try, kişi birimi
+  veya hizmet bedeli bilinmese de gözlenen fiyat alt sınırını korur. Bu sınır
+  bütçeyi aşıyorsa include_unknown_prices=true kaydı geri getirmez; pozitif alt
+  sınır free_only için uygun değildir. Plan alt sınırları birlikte toplar.
 - participation_conditions: inspected/unknown/expired, source_observed_at,
   bounded statements, provenance, truncated ve unverified_topics. Bunlar
   yayımlanmış kaynak ifadeleri, kişisel veya hukuki uygunluk onayı değildir.

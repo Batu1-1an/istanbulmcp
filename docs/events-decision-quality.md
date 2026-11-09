@@ -1,4 +1,4 @@
-# Etkinlik kararı için konum, fiyat, kaynak koşulu ve plan — 0.9.0
+# Etkinlik kararı için konum, fiyat, kaynak koşulu ve plan — 0.9.2
 
 9 Kasım 2026. [Kabul koşulları](events-decision-quality-plan.md).
 
@@ -116,3 +116,30 @@ bütçeden büyükse include_unknown_prices=true bunu gizlemez; planda alt sın�
 toplanır, free_only pozitif alt sınırı ücretsiz saymaz. Bu yalnız gözlenen
 tekliflere aittir; gözlenmeyen kampanya, kişisel indirim veya canlı sepet iddiası
 yapılmaz. İlk hatalı koşu ayrı saklanır; başarısız sonuç silinmez.
+
+## Tamamlanan yayın ve 100 soru doğrulaması
+
+0.9.2 (`43031c0`) tam paketinde 1.783 test geçti, 65 test atlandı, başarısız
+veya hata yok; 43 karar-kalitesi regresyonu dahildir. Aynı commit'in
+[CI kontrolleri](https://github.com/Batu1-1an/istanbulmcp/actions/runs/42578328171)
+geçti. Railway üretim dağıtımı başarılı; 21 araç, uzak MCP sürümü ve iki
+checked/stale-olmayan kaynak kontrol edildi. 11 hedefli gerçek MCP çağrısında
+grup hesabı/bütçe, kısmi plan, konum açıklaması, kaynak koşulu ve H012 alt sınırı
+geçti. İlk ek fiyat kontrolündeki yanlış aynı-adlı kaynak seçimi test hazırlığı
+hatası olarak ayrı korunur; fiyatı bilinmeyen Ticketmaster kaydına fiyat atanmamıştır.
+
+Önceden hazırlanan 100 soru değişmeden 145 gerçek senaryo araç çağrısı + 1
+hazırlık kontrolüyle tekrarlandı: 19 USEFUL, 25 PARTIAL, 5 ANSWERED_NEGATIVE,
+51 NO_MATCH. Araç hatası/sözleşme ihlali yok; eşleşmesiz ve eksik ihtiyaçlar
+başarıya çevrilmedi. Bu 100 ayrı model sohbeti veya katılımcı çalışması değildir;
+natürel soruların filtrelere aktarımı elle yapıldı, cevaplar gerçek MCP
+kayıtlarından biçimlendirildi. Kaynak ve önbellek değişimi nedeniyle eski
+koşuya göre sayı farkı yalnız koda atfedilemez.
+
+Yerel ayrıntı: `docs/qa/events-decision-quality-2026-11-09.md`. Kullanıcının
+ignore tercihine uygun olarak QA/ham koşu dosyaları izlenmez; izlenen bu belge ve
+[kabul kanıtı](events-decision-quality-plan.md) sonuçları özetler. Eksik konum,
+bilet birimi, ücret, erişilebilirlik/duyusal koşul ve canlı stok hâlâ kaynak
+sınırıdır; yayımlanmış bir kural kişisel uygunluk veya iade garantisi sayılmaz.
+Konu etiketleri ilgili kaynak ifadesini buldurur; fotoğraf kredisi/pazarlama
+metni çekim izni kanıtı değildir.
