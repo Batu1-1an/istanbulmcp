@@ -137,6 +137,21 @@ def event_about(row: EventObservation) -> dict:
     raw = re.sub(r"<(script|style)\b[^>]*>.*?</\1\s*>", "", row.description or "", flags=re.I | re.S)
     text = re.sub(r"https?://\S+", "", plain_text(raw, 8001))
     text = " ".join(text.split())
+    # Provider headings/buttons are not a topic description. Strip only known
+    # UI suffixes and exact leading titles; do not infer a synopsis from a genre.
+    for pattern in (
+        r"\s*Etkinliğe Gitmeden önce kuralları okuyun[.!]?\s*→?\s*$",
+        r"\s*Daha fazlasını göster\s*!?\s*$",
+    ):
+        text = re.sub(pattern, "", text, flags=re.I).strip()
+    text = re.sub(r"^HAKKINDA\b[\s:–—-]*", "", text, flags=re.I)
+    title = re.escape(" ".join(row.title.split()))
+    for _ in range(3):
+        text = re.sub(rf"^{title}(?=$|[\s:–—-])[\s:–—-]*", "", text, count=1, flags=re.I)
+    if normalize_place(text) in {"konser", "konseri", "tiyatro oyunu", "stand up", "stand up gosterisi",
+                                 "gosteri", "gosterisi", "etkinlik", "etkinligi", "cocuk oyunu",
+                                 "bilet", "biletleri", "sergi", "sergisi"}:
+        text = ""
     truncated = len(text) > 500
     excerpt = text
     if truncated:

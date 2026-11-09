@@ -480,3 +480,17 @@ SDK davranışı, veritabanı şeması veya LLM özeti bağımlılığı eklemez
 çıkarımı Biletinial etkinlik açıklaması ve Ticketmaster eventInfo alanıdır.
 Doğrulama: fixture üzerinden içerik/HTML temizleme, eksik ve incelenmemiş ayrımı,
 uzun metin sınırı, arama→detay→plan aktarımı ve gerçek Streamable HTTP gövdesi.
+
+### Gerçek içerik kontrolü — 0.9.4
+
+43 gerçek MCP çağrısı/30 keşif sorusunda 236 farklı seans/144 kaynak seri
+incelendi. Teknik sözleşme geçti; Quintet Dinleti ve Mengü Ertel'in Tiyatro
+Evreni Sergi Turu kayıtlarında açıklama yalnız başlık/tür ve sayfa düğmeleriydi.
+0.9.4 about içinde bilinen HAKKINDA/düğme metinleri ve tam eşleşen tekrarlı
+başlıkları ayıklar. Yalnız Konseri/Biletleri gibi genel etiket kalırsa text=null,
+incelenmiş kaynak için status=not_published döner. Bu bir içerik üretimi veya
+anlamsal eksiksizlik sınıflandırıcısı değildir. Kurallar ve ham detay description
+silinmez; gerçek konu metni korunur. Dört regresyon, gerçek iki kaynak örneğini,
+başlık harfleriyle başlayan farklı kelimenin korunmasını ve gerçek öykünün
+kalmasını doğrular. Açıklamadaki eski tarihler güncel seans saatinin kanıtı
+sayılmaz; start_at/event_date ve kaynak güncelliği ayrı değerlendirilir.

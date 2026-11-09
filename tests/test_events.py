@@ -88,6 +88,29 @@ def test_long_source_description_stays_bounded_and_marks_the_excerpt_incomplete(
     assert about['kind'] == 'source_excerpt'
 
 
+@pytest.mark.parametrize('title,label', [
+    ('Quintet Dinleti', 'Konseri'),
+    ("Mengü Ertel'in Tiyatro Evreni Sergi Turu", 'Biletleri'),
+])
+def test_heading_and_buttons_alone_do_not_count_as_a_published_topic(title, label):
+    raw = f'HAKKINDA {title} {title} {label} Daha fazlasını göster ! Etkinliğe Gitmeden önce kuralları okuyun. →'
+    about = event_card(observation(title=title, description=raw))['about']
+    assert about['text'] is None and about['status'] == 'not_published'
+
+
+def test_topic_retains_real_story_after_duplicate_titles_and_buttons_are_removed():
+    row = observation(title='Kavuşma', description='HAKKINDA Kavuşma Kavuşma İki eski dost yıllar sonra karşılaşır. '
+                      'Daha fazlasını göster ! Etkinliğe Gitmeden önce kuralları okuyun. →')
+    about = event_card(row)['about']
+    assert about['text'] == 'İki eski dost yıllar sonra karşılaşır.'
+    assert about['status'] == 'available'
+
+
+def test_title_cleanup_preserves_words_that_only_start_with_the_same_letters():
+    about = event_card(observation(title='Ada', description='Adalar arasında geçen bir yolculuk hikâyesi.'))['about']
+    assert about['text'] == 'Adalar arasında geçen bir yolculuk hikâyesi.'
+
+
 @pytest.mark.asyncio
 async def test_topic_reaches_search_selected_detail_and_daily_plan(service, monkeypatch):
     row = observation(description='Eski bir dostluğu yeniden kuran iki kişinin hikâyesi.')

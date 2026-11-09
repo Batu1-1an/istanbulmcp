@@ -55,6 +55,16 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 - Canlı `istanbul_transport_disruptions` hat testi yanlış parametre adı (`line_code`)
   yerine aracın gerçek parametresi `line` ile çağrılır.
 
+## [0.9.4] - 2026-11-09
+
+### Fixed
+- Gerçek MCP testlerinde yalnız başlık/tür ve sayfa düğmelerinden oluşan iki
+  açıklama bulundu. `about` artık bilinen arayüz artıklarını ve tam eşleşen
+  tekrarlı başlıkları temizler; yalnız genel etiket kalırsa konu yayımlanmış
+  sayılmaz. Gerçek açıklama ve ham detay metni korunur; konu uydurulmaz.
+- Açıklamadaki eski tarih/mekân ifadeleri seçilmiş seansın yapılandırılmış
+  tarih/saat/mekân alanlarının yerine geçirilmez; MCP talimatında açıkça belirtilir.
+
 ## [0.9.3] - 2026-11-09
 
 ### Added
