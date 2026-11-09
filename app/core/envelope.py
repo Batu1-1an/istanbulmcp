@@ -98,6 +98,8 @@ class ErrorInfo(BaseModel):
 
 
 class ResultInfo(BaseModel):
+    empty_reasons: list[str] | None = Field(default=None, max_length=30)
+    coverage: dict[str, Any] | None = Field(default=None, max_length=20)
     filter_counts: dict[str, int] | None = None
     # Counts describe the named result scope, not total city/source coverage.
     returned: int = Field(ge=0)

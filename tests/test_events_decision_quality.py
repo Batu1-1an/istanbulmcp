@@ -311,3 +311,36 @@ async def test_fee_inclusive_budget_can_choose_a_higher_but_verified_fee_inclusi
     p=await events.search(date_from='2030-11-10',date_to='2030-11-10',party_size=1,max_price_try=120,include_unknown_prices=False,budget_includes_fees=True)
     assert p['data'][0]['price_quote']['observed_fee_inclusive_total_try']==110
     assert not p['data'][0]['price_quote']['checkout_total_verified']
+
+
+@pytest.mark.asyncio
+async def test_search_diagnostics_survive_the_actual_response_envelope_serialization(catalogue):
+    from app.core.envelope import ResponseEnvelope
+    events,row=catalogue;r=row('unknown');r.venue=EventVenue(name='Unknown venue');events.repository.publish('ticketmaster',[r],{})
+    p=await events.search(date_from='2030-11-10',date_to='2030-11-10',district='Kadıköy')
+    wire=ResponseEnvelope.model_validate(p).model_dump(mode='json')
+    assert 'location_unverified' in wire['result_info']['empty_reasons']
+    assert wire['result_info']['coverage']['city_wide_absence_verified'] is False
+
+
+def test_event_empty_reasons_and_coverage_survive_streamable_http(tmp_path,monkeypatch):
+    import asyncio
+    from starlette.testclient import TestClient
+    import app.main as main
+    from app.core.settings import get_settings
+    path=tmp_path/'wire.sqlite3'
+    row=EventObservation(source='ticketmaster',source_id='wire',series_key='wire',title='Wire',
+        start_at=datetime(2030,11,10,18,tzinfo=ISTANBUL),venue=EventVenue(name='Unknown venue'),observed_at=datetime.now(ISTANBUL))
+    EventRepository(path).publish('ticketmaster',[row],{})
+    for name,value in [('DATABASE_PATH',str(path)),('EVENTS_ENABLED','true'),('EVENTS_BILETINIAL_ENABLED','false'),('TICKETMASTER_API_KEY','fixture-only'),('MCP_API_KEYS','')]:monkeypatch.setenv(name,value)
+    async def idle(settings):await asyncio.Event().wait()
+    monkeypatch.setattr(main,'keep_events_fresh',idle);get_settings.cache_clear()
+    try:
+        with TestClient(main.create_app()) as client:
+            r=client.post('/mcp/',headers={'accept':'application/json,text/event-stream'},json={'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':'istanbul_events_search','arguments':{'date_from':'2030-11-10','date_to':'2030-11-10','district':'Kadıköy'}}})
+        assert r.status_code==200
+        import json
+        result=r.json()['result'];p=result.get('structuredContent') or json.loads(result['content'][0]['text'])
+        assert 'location_unverified' in p['result_info']['empty_reasons']
+        assert not p['result_info']['coverage']['city_wide_absence_verified']
+    finally:get_settings.cache_clear()

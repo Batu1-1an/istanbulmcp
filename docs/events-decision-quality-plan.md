@@ -54,3 +54,12 @@ kontrolleriyle 266 test geçti (`release-checks.xml`). Önceki tam paket de geç
 paket/fiyat uç durumlarının son düzeltmesinden sonraki tam doğrulama exact
 commit üzerinde CI ile tamamlanacak. Canlı yayın/100 soru kanıtı elde edilmeden
 son kabul maddesi tamamlanmış sayılmaz.
+
+## 0.9.0 canlı kontrolü ve 0.9.1
+
+İlk yedi canlı çağrıda fiyat ve kısmi plan doğrulandı; arama diags alanlarının
+ortak ResultInfo modelinde tanımlı olmadığı için MCP sınırında kaybolduğu
+görüldü. Başarısız koşu live-targeted-090-failed.json/log olarak saklandı.
+0.9.1 alanları ortak tipe ekler; servis→envelope ve Streamable HTTP testleri
+bu aktarımı ayrıca korur. Hedefli 88 kontrol geçti; tüm paket ve canlı/100 soru
+onayı son kabul maddesine tabidir.

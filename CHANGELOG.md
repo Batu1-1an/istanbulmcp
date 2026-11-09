@@ -55,6 +55,13 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 - Canlı `istanbul_transport_disruptions` hat testi yanlış parametre adı (`line_code`)
   yerine aracın gerçek parametresi `line` ile çağrılır.
 
+## [0.9.1] - 2026-11-09
+
+### Fixed
+- Preserve typed empty-result reasons and coverage through the common MCP
+  response envelope. Add a Streamable HTTP regression; the 0.9.0 live check
+  caught these fields being stripped despite correct service-level output.
+
 ## [0.9.0] - 2026-11-09
 
 ### Fixed

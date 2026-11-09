@@ -96,3 +96,11 @@ entegrasyon başarısızlıkları `.data/events-decision-quality/` içinde korun
 README'deki test komutuyla hedefli/tam paket, ardından canlı MCP hedefli ve
 100 insan sorusu tekrar koşusu yapılır. Kaynak ya da koşul bilinmiyorsa raporda
 bilinmeyen kalır; böyle bir sonuç kullanıcı ihtiyacı çözüldü sayılmaz.
+
+## Canlı aktarım düzeltmesi — 0.9.1
+
+0.9.0 hedefli canlı koşuda grup fiyatı ve eksik plan kontrolleri geçti; yedinci
+çağrı, empty_reasons/coverage alanlarının ortak ResultInfo modeli tarafından
+MCP sınırında kaldırıldığını gösterdi. Bu koşu başarısızlık olarak saklanır.
+0.9.1 alanları sınırlı tipli modele ekler ve gerçek Streamable HTTP regresyonuyla
+korur. Salt servis dict kontrolü yayın kanıtı yerine kullanılmaz.
