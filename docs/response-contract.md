@@ -172,3 +172,23 @@ guaranteed per-person general-admission prices.
 kayıtların elendiğini gösterir. Seçili planda `rejected[].reason`
 `child_only_age_range` olabilir. Bilinmeyen yaşlar uygun diye işaretlenmez;
 uyarı alanı, bu dar elemenin gerçek katılımcı uygunluğu onayı olmadığını açıklar.
+
+### Etkinlik karar kalitesi — 0.9.0
+
+- result_info.empty_reasons ve coverage, sıralı eleme/kapsam nedenlerini taşır.
+  excluded_unknown_location + excluded_outside_location = excluded_location.
+  Mekân tamamlama kökeni venue.field_evidence içinde açıkça belirtilir.
+- price.minimum_observed_try ham tek teklif minimumudur. price.unit ve
+  general_admission_quote bunun kişi/grup tutarı sayılmasını önler. Yeni
+  price_quote; party, basket adetleri, gözlenen ara toplam, bilinmeyen ücret ve
+  stok/yan yana koltuk doğrulanmadı alanlarını içerir. budget_price_basis ve
+  plandaki total_price_scope, max_price_try'nin neye uygulandığını belirtir.
+- participation_conditions: inspected/unknown/expired, source_observed_at,
+  bounded statements, provenance, truncated ve unverified_topics. Bunlar
+  yayımlanmış kaynak ifadeleri, kişisel veya hukuki uygunluk onayı değildir.
+- Plan options ile unverified_budget yalnız durak/tür koşullarını karşılayan
+  seçeneklerdir. partial_options eksik durak/türleri gösterir; takvim içermez.
+  fulfillment ve reason_codes ile discovery/combination_diagnostics korunur.
+
+Ayrıntı: [karar kalitesi](events-decision-quality.md). Eski araçlar ve varsayılan
+min_events=1 korunur; yeni sayısal/profil girişleri sınırlandırılır.

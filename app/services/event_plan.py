@@ -5,15 +5,17 @@ from datetime import datetime, time, timedelta, timezone
 from collections import defaultdict
 from hashlib import sha256
 from itertools import combinations
+from decimal import Decimal
 import math
 from urllib.parse import urlencode
 
 from app.core.envelope import error_envelope
 from app.core.error_responses import validation_error_envelope
-from app.core.events import CATEGORIES, ISTANBUL, age_suitability, child_only_age_range, event_time, normalize_category, published_age_range
+from app.core.events import CATEGORIES, ISTANBUL, EventOffer, age_suitability, child_only_age_range, event_time, normalize_category, published_age_range
 from app.core.geo import haversine_m
 from app.core.validation import InputValidationError, resolve_limit, validate_text
 from app.services.events import EventService, event_clock, event_date
+from app.services.event_pricing import resolve_party, apply_party_quote
 
 
 def _ics_text(value: str) -> str:
@@ -79,7 +81,7 @@ def _common_age_range(cards: tuple) -> tuple[bool, str, dict | None]:
 
 
 def enumerate_plans(cards: list[dict], *, window_end: datetime, max_events=3, min_gap_minutes=30,
-                    max_price_try=None, limit=3, interests=(), diagnostics=None) -> tuple[list[dict], list[dict]]:
+                    max_price_try=None, limit=3, interests=(), diagnostics=None, min_events=1, required_categories=(), partial_output=None) -> tuple[list[dict], list[dict]]:
     options = []
     cards = sorted((c for c in cards if c.get("timing_kind") != "flexible_entry" and not c.get("entry_date_restricted")
                     and not (c.get("source") == "biletinial" and not c.get("detail_checked"))),
@@ -124,10 +126,12 @@ def enumerate_plans(cards: list[dict], *, window_end: datetime, max_events=3, mi
                     gaps.append({"minutes": gap, "straight_line_distance_m": round(distance) if distance is not None else None,
                                  "travel_time_minutes": None})
             if not valid:
+                if diagnostics is not None:diagnostics['timing_incompatible_combinations']=diagnostics.get('timing_incompatible_combinations',0)+1
                 continue
-            prices = [c["price"]["minimum_observed_try"] for c in path]
-            known_total = sum(p for p in prices if p is not None)
+            prices = [c.get("budget_price_try",c["price"]["minimum_observed_try"]) for c in path]
+            known_total = float(sum((Decimal(str(p)) for p in prices if p is not None),Decimal(0)))
             if max_price_try is not None and known_total > max_price_try:
+                if diagnostics is not None:diagnostics['over_budget_combinations']=diagnostics.get('over_budget_combinations',0)+1
                 continue
             budget_status = "unknown" if any(p is None for p in prices) else "within" if max_price_try is not None else "not_requested"
             if budget_status == "unknown":
@@ -146,7 +150,15 @@ def enumerate_plans(cards: list[dict], *, window_end: datetime, max_events=3, mi
                 "availability": sum(10 if c["availability"] in {"in_stock", "limited"} else 5 for c in path),
                 "category_diversity": 30 * max(0, len({c["category"] for c in path}) - 1),
             }
-            options.append({"score": round(sum(breakdown.values()), 2), "score_breakdown": breakdown,
+            missing_categories=sorted(set(required_categories)-{c['category'] for c in path})
+            missing_events=max(0,min_events-len(path))
+            fulfillment={'status':'partial' if missing_events or missing_categories else 'complete',
+                         'requested_min_events':min_events,'actual_events':len(path),
+                         'missing_events':missing_events,'missing_categories':missing_categories}
+            options.append({"fulfillment":fulfillment,"checkout_total_verified":False,
+                            "total_price_scope":("observed_fee_inclusive_party_totals" if any(c.get('budget_price_basis')=='observed_fee_inclusive_party_total' for c in path)
+                                                 else "observed_party_ticket_subtotals" if any('price_quote' in c for c in path)
+                                                 else "observed_minimum_ticket_prices_not_per_person"),"score": round(sum(breakdown.values()), 2), "score_breakdown": breakdown,
                             "performances": list(path), "gaps": gaps, "known_minimum_total_try": known_total,
                             "total_observed_minimum_try": known_total if all(p is not None for p in prices) else None,
                             "total_price_known": all(p is not None for p in prices), "budget_status": budget_status,
@@ -155,6 +167,10 @@ def enumerate_plans(cards: list[dict], *, window_end: datetime, max_events=3, mi
                                        "age_compatibility": age_status, "common_published_age_range": age_range},
                             "warnings": list(dict.fromkeys(warnings))})
     options.sort(key=lambda p: (-p["score"], tuple(c["start_at"] for c in p["performances"]), tuple(c["performance_id"] for c in p["performances"])))
+    partials=[p for p in options if p['fulfillment']['status']=='partial']
+    options=[p for p in options if p['fulfillment']['status']=='complete']
+    if partial_output is not None:
+        partial_output.extend(diverse_options(partials,limit))
     verified = [p for p in options if max_price_try is None or p["budget_status"] != "unknown"]
     unverified = [p for p in options if max_price_try is not None and p["budget_status"] == "unknown"]
     verified, unverified = diverse_options(verified, limit), diverse_options(unverified, limit)
@@ -186,8 +202,18 @@ def diverse_options(options: list[dict], limit: int) -> list[dict]:
     return selected
 
 
-def choose_candidates(cards: list[dict], limit: int = 20) -> list[dict]:
+def choose_candidates(cards: list[dict], limit: int = 20, required_categories=()) -> list[dict]:
     """Spread the finite candidate budget over the day and distinct series."""
+    if required_categories:
+        quota=max(1,limit//len(required_categories));selected=[];seen=set()
+        for category in required_categories:
+            for c in choose_candidates([c for c in cards if c['category']==category],quota):
+                if c['performance_id'] not in seen:
+                    selected.append(c);seen.add(c['performance_id'])
+        for c in choose_candidates([c for c in cards if c['performance_id'] not in seen],limit):
+            if len(selected)>=limit:break
+            selected.append(c)
+        return selected
     buckets = defaultdict(list)
     for card in sorted(cards, key=lambda c: (not c["end_known"], not c["detail_checked"], c["start_at"], c["performance_id"])):
         buckets[card["start_at"][:13]].append(card)
@@ -219,16 +245,28 @@ class EventPlanService:
 
     async def plan(self, *, date=None, start_time="18:00", end_time="23:59", interests=None,
                    district=None, event_ids=None, max_price_try=None, min_gap_minutes=30, max_events=3, limit=None,
-                   child_age=None, require_known_end=False, exclude_child_only=False):
+                   child_age=None, require_known_end=False, exclude_child_only=False,
+                   min_events=1, required_categories=None, party_size=None, ticket_profile=None,
+                   party=None, budget_includes_fees=False):
         if not self.events.settings.events_enabled:
             return self.events.disabled()
         try:
+            party=resolve_party(party_size,ticket_profile,party)
+            if budget_includes_fees and party is None:party={'general':1}
             day = event_date(date, field="date")
             start, end = event_clock(start_time, "start_time"), event_clock(end_time, "end_time")
             if start is None or end is None or end <= start:
                 raise InputValidationError("Provide an increasing same-day HH:MM window", field="end_time")
             if isinstance(max_events, bool) or not isinstance(max_events, int) or not 1 <= max_events <= 3:
                 raise InputValidationError("max_events must be 1–3", field="max_events")
+            if isinstance(min_events,bool) or not isinstance(min_events,int) or not 1<=min_events<=max_events:
+                raise InputValidationError('min_events must be 1–max_events',field='min_events')
+            if required_categories is not None:
+                if not required_categories or len(required_categories)>3:
+                    raise InputValidationError('required_categories must contain 1–3 supported types',field='required_categories')
+                required_categories=list(dict.fromkeys(normalize_category(c) for c in required_categories))
+                if any(c not in CATEGORIES for c in required_categories) or len(required_categories)>max_events:
+                    raise InputValidationError('required_categories must fit max_events and use supported types',field='required_categories')
             if isinstance(min_gap_minutes, bool) or not isinstance(min_gap_minutes, int) or not 0 <= min_gap_minutes <= 240:
                 raise InputValidationError("min_gap_minutes must be 0–240", field="min_gap_minutes")
             if max_price_try is not None and (isinstance(max_price_try, bool) or not math.isfinite(max_price_try) or max_price_try < 0):
@@ -245,6 +283,8 @@ class EventPlanService:
                 if interests and "family" not in interests:
                     raise InputValidationError("child_age requires family interests", field="interests")
                 interests = ["family"]
+            if required_categories and interests and not set(required_categories)<=set(interests):
+                raise InputValidationError('required_categories must be allowed by interests',field='required_categories')
             if event_ids is not None and (not event_ids or len(event_ids) > 20):
                 raise InputValidationError("event_ids must contain 1–20 IDs from search", field="event_ids")
             if event_ids is not None:
@@ -254,6 +294,7 @@ class EventPlanService:
             safe_limit = resolve_limit(limit, 3, 5)
         except InputValidationError as exc:
             return validation_error_envelope(exc)
+        discovery_diagnostics=[]
         if event_ids is not None:
             cards = []
             for identifier in sorted(set(event_ids)):
@@ -277,15 +318,20 @@ class EventPlanService:
             for category in interests or [None]:
                 response = await self.events.search(date_from=day.isoformat(), date_to=day.isoformat(), time_from=start_time,
                                                    time_to=end_time, district=district, category=category, child_age=child_age, exclude_child_only=exclude_child_only,
-                                                   max_price_try=max_price_try, limit=self.events.settings.events_max_rows, _planning=True)
+                                                   max_price_try=max_price_try, limit=self.events.settings.events_max_rows, party=party, budget_includes_fees=budget_includes_fees, _planning=True)
                 if not response["ok"]:
                     return response
                 if envelope is None:
                     envelope = response
                 else:
                     envelope["warnings"].extend(response["warnings"])
+                discovery_diagnostics.append({"category":category,"result_info":response.get("result_info")})
                 cards.extend(response["data"])
                 truncated = truncated or response["result_info"]["truncated"]
+        if party is not None and event_ids is not None:
+            for card in cards:
+                apply_party_quote(card,[EventOffer.model_validate(o) for o in card.get('offers',[])],party,
+                                  budget=max_price_try,includes_fees=budget_includes_fees)
         window_start, window_end = datetime.combine(day, start, ISTANBUL), datetime.combine(day, end, ISTANBUL)
         rejected, candidates, flexible_entries, seen = [], [], [], set()
         for card in cards:
@@ -315,7 +361,7 @@ class EventPlanService:
             elif card.get("source") == "biletinial" and not card.get("detail_checked"):
                 reason = "session_detail_required"
             elif flexible:
-                if max_price_try is not None and card["price"]["minimum_observed_try"] is not None and card["price"]["minimum_observed_try"] > max_price_try:
+                if max_price_try is not None and card.get("budget_price_try",card["price"]["minimum_observed_try"]) is not None and card.get("budget_price_try",card["price"]["minimum_observed_try"]) > max_price_try:
                     reason = "over_budget"
                 else:
                     reason = "flexible_entry_requires_visit_time"
@@ -329,19 +375,39 @@ class EventPlanService:
             else:
                 candidates.append(card)
         candidate_count = len(candidates)
-        evaluated = choose_candidates(candidates)
+        evaluated = choose_candidates(candidates,required_categories=required_categories or ())
         diagnostics = {"age_incompatible_combinations":0}
+        partials=[]
         options, unverified = enumerate_plans(evaluated, window_end=window_end, max_events=max_events,
                                               min_gap_minutes=min_gap_minutes, max_price_try=max_price_try,
-                                              limit=safe_limit, interests=interests or (), diagnostics=diagnostics)
+                                              limit=safe_limit, interests=interests or (), diagnostics=diagnostics,
+                                              min_events=min_events,required_categories=required_categories or (),partial_output=partials)
         envelope["data"] = [{"date": day.isoformat(), "window": {"start": start_time, "end": end_time},
-                             "options": options, "unverified_budget": unverified, "rejected": rejected,
+                             "discovery_diagnostics":discovery_diagnostics,"combination_diagnostics":diagnostics,
+                             "options": options, "unverified_budget": unverified, "partial_options":partials,"rejected": rejected,
+                             "fulfillment":{"status":"complete" if options else "partial" if partials else "unverified_budget" if unverified else "unmet",
+                                            "requested_min_events":min_events,"requested_max_events":max_events,
+                                            "required_categories":required_categories or [],"complete_option_count":len(options),
+                                            "partial_option_count":len(partials)},"party":party,"budget_includes_fees":budget_includes_fees,
                              "flexible_entries": flexible_entries[:20],
                              "flexible_entry_count": len(flexible_entries), "flexible_entries_truncated": len(flexible_entries) > 20,
                              "age_incompatible_combinations": diagnostics["age_incompatible_combinations"],
                              "candidate_count": candidate_count, "evaluated_candidates": min(candidate_count, 20),
                              "candidate_truncated": bool(truncated or candidate_count > 20),
                              "ranking_scope": "evaluated candidates only; not a city-wide optimum"}]
+        reasons=[]
+        if not options:
+            if partials:
+                if any(p['fulfillment']['missing_events'] for p in partials):reasons.append('minimum_stops_not_met')
+                if any(p['fulfillment']['missing_categories'] for p in partials):reasons.append('required_categories_not_met')
+            if unverified:reasons.append('party_budget_unverified')
+            reasons += sorted({r['reason'] for r in rejected})
+            if diagnostics.get('over_budget_combinations'):reasons.append('observed_basket_over_budget')
+            if diagnostics.get('timing_incompatible_combinations'):reasons.append('no_compatible_observed_times')
+            for discovery in discovery_diagnostics:
+                reasons += (discovery.get('result_info') or {}).get('empty_reasons',[])
+            if not reasons:reasons=['no_complete_option_in_evaluated_candidates']
+        envelope['data'][0]['fulfillment']['reason_codes']=list(dict.fromkeys(reasons))
         envelope["data"][0]["requested_categories"] = interests
         envelope["data"][0]["child_age"] = child_age
         envelope["data"][0]["require_known_end"] = require_known_end
@@ -372,6 +438,11 @@ class EventPlanService:
             envelope["warnings"].append(instruction)
             if not options:
                 envelope["result_info"]["next_step"] = instruction
+        if partials:
+            envelope['warnings'].append('partial_options do not satisfy the requested minimum stops or required categories; no calendar is generated until the user chooses a partial alternative.')
+            if not options:envelope['result_info']['next_step']='Inspect partial_options.fulfillment for missing stops/categories; do not present a partial alternative as a complete requested plan.'
+        if party is not None:
+            envelope['warnings'].append('Plan prices use the requested party ticket baskets. Fees, eligibility, live group quantities and adjacent seats remain unverified unless explicitly observed; this is not a checkout confirmation.')
         if not options:
             envelope["warnings"].append("No verified plan was found; inspect unverified_budget and rejected sessions.")
         return envelope

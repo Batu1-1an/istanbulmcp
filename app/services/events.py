@@ -18,14 +18,26 @@ from app.core.geo import haversine_m, radius_bbox
 from app.core.settings import Settings
 from app.core.source_cache import SourceLoadResult, cached_source_data_with_status
 from app.core.validation import InputValidationError, resolve_limit, validate_lat_lon, validate_radius, validate_text
-from app.services.places import normalize_place, resolve_district
+from app.services.places import normalize_place, resolve_district, district_from_text
 from app.storage.events import EventRepository
+
+from app.connectors.event_conditions import conditions_output
+from app.services.event_pricing import offer_terms, ticket_quote, resolve_party, apply_party_quote
+from app.services.event_locations import enrich_verified_venues
 
 logger = logging.getLogger("istanbul_mcp.events")
 EVENT_LIMITS = ["Istanbul source inventory only; not a complete city calendar.",
                 "Prices and availability are observations, not live seat inventory or checkout quotes."]
 SOURCE_NAMES = {"ticketmaster": "Ticketmaster Discovery Feed / Biletix", "biletinial": "Biletinial"}
 _refreshing_sources: set[tuple[str, str]] = set()
+
+
+def index_query_error(exc):
+    if isinstance(exc,ValueError) and str(exc)=='Indexed query exceeds event row budget':
+        return error_envelope(summary='Event query exceeds the bounded candidate budget.',
+            warning='Narrow the date range or event title; this is a query limit, not a source outage or proof of no events.',
+            code='query_too_broad',repair=Repair(next_step='Use a shorter date range or a more specific event title.',tool='istanbul_events_search'),limits=EVENT_LIMITS)
+    return error_envelope(summary='Event index could not be queried.',warning='The local index is unavailable; no events were verified.',code='source_unavailable',limits=EVENT_LIMITS)
 
 
 def validate_events_settings(settings: Settings):
@@ -82,9 +94,15 @@ def event_price(row: EventObservation, *, include_sold_out=False) -> float | Non
 
 
 def current_observation(row: EventObservation, settings: Settings) -> EventObservation:
-    if row.offers and (datetime.now(timezone.utc) - row.observed_at).total_seconds() > settings.events_detail_ttl_seconds:
-        return row.model_copy(update={"offers": [], "warnings": [*row.warnings, "Ticket price/availability observation expired; recheck event detail."]})
-    return row
+    expired=(datetime.now(timezone.utc)-row.observed_at).total_seconds()>settings.events_detail_ttl_seconds
+    updates={};warnings=list(row.warnings)
+    if row.offers and expired:
+        updates['offers']=[]
+        warnings.append('Ticket price/availability observation expired; recheck event detail.')
+    if row.conditions_checked and expired:
+        updates['conditions_stale']=True
+        warnings.append('Participation condition observation expired; inspect current event detail and source rules before relying on it.')
+    return row.model_copy(update={**updates,'warnings':warnings}) if updates else row
 
 
 def deduplicate(rows: list[EventObservation]) -> list[tuple[EventObservation, list[EventObservation]]]:
@@ -143,9 +161,13 @@ def event_card(row: EventObservation, matches=None, *, max_price=None, distance=
         "age_limit": row.age_limit, "duration_minutes": row.duration_minutes,
         "venue": row.venue.model_dump(), "distance_m": round(distance) if distance is not None else None,
         "distance_kind": "straight_line" if distance is not None else None,
+        "participation_conditions": conditions_output(row.conditions, checked=row.conditions_checked,observed_at=row.observed_at.isoformat(),stale=row.conditions_stale,extraction_truncated=row.conditions_truncated),
         "price": {"minimum_observed_try": price, "status": "known" if price is not None else "unknown",
-                  "fees_included": None, "ticket_type": lowest_offer.name if lowest_offer else None,
-                  "eligibility_may_apply": (normalize_place(lowest_offer.name) not in {"tam", "genel", "normal", "genel giris"}) if lowest_offer and lowest_offer.name != "Standard" else None},
+                  "fees_included": lowest_offer.fees_included if lowest_offer else None,
+                  "ticket_type": lowest_offer.name if lowest_offer else None,
+                  "unit": offer_terms(lowest_offer) if lowest_offer else None,
+                  "general_admission_quote": ticket_quote(row.offers,1,'general'),
+                  "eligibility_may_apply": offer_terms(lowest_offer)["eligibility_requires_confirmation"] if lowest_offer else None},
         "budget_status": "unknown" if price is None else "over" if max_price is not None and price > max_price else "within" if max_price is not None else "not_requested",
         "availability": stock, "availability_is_live": False,
         "program_status": program, "sales_status": sales,
@@ -269,10 +291,14 @@ class EventService:
                      time_from=None, time_to=None, district=None, venue=None,
                      lat=None, lon=None, radius_m=None, free_only=False, max_price_try=None, limit=None,
                      include_unknown_prices=True, child_age=None, query_scope="title", include_sold_out=False,
-                     match_mode="words", include_past=False, exclude_child_only=False, _planning=False):
+                     match_mode="words", include_past=False, exclude_child_only=False,
+                     party_size=None, ticket_profile=None, party=None, budget_includes_fees=False, _planning=False):
         if not self.settings.events_enabled:
             return self.disabled()
         try:
+            party = resolve_party(party_size,ticket_profile,party)
+            if budget_includes_fees and party is None:
+                party = {'general':1}
             safe_limit = resolve_limit(limit, 10, self.settings.events_max_rows if _planning else 50)
             first = event_date(date_from, field="date_from")
             last = event_date(date_to, field="date_to", default=first + timedelta(days=6))
@@ -326,15 +352,16 @@ class EventService:
         try:
             rows = await asyncio.to_thread(self.repository.search,
                                            datetime.combine(first, time.min, ISTANBUL), datetime.combine(last + timedelta(days=1), time.min, ISTANBUL),
-                                           query=query, query_scope=query_scope, match_mode=match_mode, bbox=bbox, max_rows=self.settings.events_max_rows)
-        except Exception:
-            return error_envelope(summary="Event index could not be queried.", warning="The local index is unavailable; no events were verified.", code="source_unavailable", limits=EVENT_LIMITS)
+                                           query=query, query_scope=query_scope, match_mode=match_mode, bbox=None, max_rows=self.settings.events_max_rows)
+        except Exception as exc:
+            return index_query_error(exc)
+        rows, venue_fields_filled = enrich_verified_venues(rows,usable_sources=usable)
         initial_candidate_count = len(rows)
         detail_checks = 0
         successful_detail_checks = 0
         # Named/price/category questions need recent evidence. Check a small relevant
         # subset on demand; unfiltered discovery stays in the local index.
-        if self.settings.events_biletinial_enabled and (query is not None or max_price_try is not None or free_only or category is not None or exclude_child_only):
+        if self.settings.events_biletinial_enabled and (query is not None or max_price_try is not None or free_only or category is not None or exclude_child_only or venue is not None or district is not None or bbox is not None or party is not None):
             possible = []
             for row in rows:
                 if row.source != "biletinial" or row.source not in usable:
@@ -362,7 +389,15 @@ class EventService:
                 if free_only:
                     return not (row.catalogue_is_free is True or hint == 0)
                 return max_price_try is not None and (hint is None or hint > max_price_try)
-            possible.sort(key=lambda row: (row.category != category if category else False,
+            def location_priority(row):
+                hint=row.catalogue_venue_hint or ''
+                if venue:
+                    return not (search_text(venue) in search_text(row.venue.name) or hint and search_text(venue) in search_text(hint))
+                if district:
+                    known=row.venue.district or district_from_text(hint)
+                    return known!=district
+                return False
+            possible.sort(key=lambda row: (location_priority(row),row.category != category if category else False,
                                             category_for(row.title) != category if category else False, price_priority(row),
                                             row.venue.name == "Unknown venue", row.start_at, row.event_id))
             seen_series = set()
@@ -383,9 +418,14 @@ class EventService:
                 if detail_checks == 3:
                     break
             if detail_checks:
-                rows = await asyncio.to_thread(self.repository.search,
-                                               datetime.combine(first, time.min, ISTANBUL), datetime.combine(last + timedelta(days=1), time.min, ISTANBUL),
-                                               query=query, query_scope=query_scope, match_mode=match_mode, bbox=bbox, max_rows=self.settings.events_max_rows)
+                try:
+                    rows = await asyncio.to_thread(self.repository.search,
+                                                   datetime.combine(first, time.min, ISTANBUL), datetime.combine(last + timedelta(days=1), time.min, ISTANBUL),
+                                                   query=query, query_scope=query_scope, match_mode=match_mode, bbox=None, max_rows=self.settings.events_max_rows)
+                except Exception as exc:
+                    return index_query_error(exc)
+        rows, extra_filled = enrich_verified_venues(rows,usable_sources=usable)
+        venue_fields_filled = sum(len(r.venue.field_evidence) for r in rows)
         category_observed = category is None or any(row.source in usable and row.category == category for row in rows)
         selected = []
         unknown_budget = 0
@@ -397,6 +437,9 @@ class EventService:
                       deduplicated_sessions=0, excluded_started=0, excluded_program=0, excluded_category=0,
                       excluded_age=0, excluded_child_only=0, excluded_clock=0, excluded_unverified_time=0, excluded_entry_date=0, excluded_location=0, excluded_sold_out=0,
                       excluded_unknown_price=0, excluded_price=0, verified_free=0,
+                      excluded_unknown_location=0, excluded_outside_location=0,
+                      excluded_unknown_ticket_terms=0, excluded_unknown_fees=0,
+                      excluded_unverified_text_match=0, verified_venue_fields_filled=venue_fields_filled,
                       unknown_price_sessions=0, known_price_sessions=0,
                       detail_checks_attempted=detail_checks, detail_checks_succeeded=successful_detail_checks,
                       expired_offer_observations=sum(bool(row.offers) and (now-row.observed_at).total_seconds()>self.settings.events_detail_ttl_seconds for row in rows if row.source in usable))
@@ -426,30 +469,48 @@ class EventService:
             if row.timing_kind == "scheduled" and (clock_from and row.start_at.time() < clock_from or clock_to and row.start_at.time() > clock_to):
                 counts["excluded_clock"] += 1
                 continue
-            if district and normalize_place(row.venue.district or "") != normalize_place(district):
-                counts["excluded_location"] += 1
+            unknown_location = bool(district and not row.venue.district or venue and row.venue.name=='Unknown venue'
+                                    or bbox and (row.venue.lat is None or row.venue.lon is None))
+            distance = haversine_m(lat,lon,row.venue.lat,row.venue.lon) if bbox and row.venue.lat is not None and row.venue.lon is not None else None
+            outside_location = bool(district and row.venue.district and normalize_place(row.venue.district)!=normalize_place(district)
+                                    or venue and row.venue.name!='Unknown venue' and search_text(venue) not in search_text(row.venue.name)
+                                    or distance is not None and distance>radius_m)
+            if outside_location:
+                counts['excluded_outside_location'] += 1
+                counts['excluded_location'] += 1
                 continue
-            if venue and search_text(venue) not in search_text(row.venue.name):
-                counts["excluded_location"] += 1
+            if unknown_location:
+                counts['excluded_unknown_location'] += 1
+                counts['excluded_location'] += 1
                 continue
-            distance = haversine_m(lat, lon, row.venue.lat, row.venue.lon) if bbox and row.venue.lat is not None and row.venue.lon is not None else None
-            if bbox and (distance is None or distance > radius_m):
-                counts["excluded_location"] += 1
-                continue
+            if query and query_scope=='all':
+                actual=search_text(row.title+' '+row.venue.name).split()
+                tokens=search_text(query).split()
+                matched=all(any(word.startswith(t) for word in actual) for t in tokens) if match_mode=='prefix' else all(t in actual for t in tokens)
+                if not matched:
+                    counts['excluded_unverified_text_match'] += 1
+                    continue
             if not include_sold_out and all(availability(item) == "sold_out" for item in matches):
                 excluded_sold_out += 1
                 continue
+            card = event_card(row,matches,max_price=max_price_try,distance=distance,include_sold_out=include_sold_out)
             price = event_price(row, include_sold_out=include_sold_out)
+            unknown_quote_reason = None
+            if party is not None:
+                apply_party_quote(card,row.offers,party,budget=max_price_try,includes_fees=budget_includes_fees)
+                price=card['budget_price_try']
+                if price is None:
+                    unknown_quote_reason='excluded_unknown_fees' if budget_includes_fees and card['price_quote']['observed_ticket_subtotal_try'] is not None else 'excluded_unknown_ticket_terms'
             counts["unknown_price_sessions" if price is None else "known_price_sessions"] += 1
             if (not include_unknown_prices or free_only) and price is None:
                 excluded_unknown_price += 1
+                if unknown_quote_reason:counts[unknown_quote_reason] += 1
                 continue
             if free_only and price != 0 or max_price_try is not None and price is not None and price > max_price_try:
                 counts["excluded_price"] += 1
                 continue
             if max_price_try is not None and price is None:
                 unknown_budget += 1
-            card = event_card(row, matches, max_price=max_price_try, distance=distance, include_sold_out=include_sold_out)
             counts["verified_free"] += price == 0
             if query:
                 query_tokens = set(search_text(query).split())
@@ -459,6 +520,12 @@ class EventService:
                                         card.get("query_match") == "prefix_or_venue", card["event_date"], card["start_at"] is None,
                                         card["start_at"] or "", card["distance_m"] if card["distance_m"] is not None else math.inf, card["performance_id"]))
         notes = [f"{unknown_budget} matching session(s) have unknown prices and are not verified within budget."] if unknown_budget else []
+        if party is not None:
+            notes.append("Party amounts are observed ticket baskets, not live checkout/seat confirmations. Unknown fees, ticket units and eligibility remain unverified; minimum ticket prices are not per-person group totals.")
+        if counts['excluded_unknown_location']:
+            notes.append(f"{counts['excluded_unknown_location']} session(s) have unverified requested location fields; this is not evidence they are outside the area.")
+        if counts['excluded_outside_location']:
+            notes.append(f"{counts['excluded_outside_location']} verified session location(s) are outside the requested area/venue/radius.")
         if exclude_child_only:
             notes.append("exclude_child_only excludes only published upper age limits below 18; unknown age requirements and the participant's actual age suitability are not verified.")
         if counts["excluded_started"]:
@@ -508,12 +575,31 @@ class EventService:
         counts.update(excluded_age=excluded_age,excluded_sold_out=excluded_sold_out,
                       excluded_unknown_price=excluded_unknown_price,matched=len(selected),returned=len(result["data"]))
         result["result_info"]["filter_counts"] = counts
+        reasons=[]
+        if not result['data']:
+            for key,value in (('no_indexed_sessions',counts['indexed_candidates']==0),
+                              ('location_unverified',counts['excluded_unknown_location']>0),
+                              ('outside_requested_location',counts['excluded_outside_location']>0),
+                              ('ticket_units_or_profile_unverified',counts['excluded_unknown_ticket_terms']>0),
+                              ('fees_unverified',counts['excluded_unknown_fees']>0),
+                              ('over_budget_or_not_free',counts['excluded_price']>0),
+                              ('outside_requested_hours',counts['excluded_clock']>0),
+                              ('age_not_verified_or_outside',counts['excluded_age']>0),
+                              ('price_unverified',counts['excluded_unknown_price']>0)):
+                if value:reasons.append(key)
+            if not reasons:reasons.append('no_eligible_indexed_sessions')
+        result['result_info']['empty_reasons']=reasons
+        result['result_info']['coverage']={'scope':'bounded indexed date/text candidates; sequential filter counts',
+            'unverified_biletinial_sessions':sum(r.source=='biletinial' and not r.detail_checked for r in rows),
+            'detail_check_limit':3,'city_wide_absence_verified':False}
         return result
 
-    async def detail(self, identifier: str):
+    async def detail(self, identifier: str, *, party_size=None,ticket_profile=None,party=None,budget_includes_fees=False):
         if not self.settings.events_enabled:
             return self.disabled()
         try:
+            party=resolve_party(party_size,ticket_profile,party)
+            if budget_includes_fees and party is None:party={'general':1}
             identifier = validate_text(identifier, field="event_id", max_length=64)
             if not re.fullmatch(r"(?:event|perf)_[a-f0-9]{24}", identifier):
                 raise InputValidationError("Use event_id or performance_id returned by event search", field="event_id")
@@ -562,12 +648,17 @@ class EventService:
                 await asyncio.to_thread(self.repository.detail_checked, rows[0].event_id, succeeded=False,
                                         retry_seconds=300, error_type=type(exc).__name__)
         rows = [current_observation(row, self.settings) for row in rows]
+        rows,_ = enrich_verified_venues(rows)
         for row in rows:
             warnings.extend(row.warnings)
+        performances=[{**event_card(r), "offers":[{**offer.model_dump(),"terms":offer_terms(offer)} for offer in r.offers],
+                       "participation_conditions":conditions_output(r.conditions,checked=r.conditions_checked,limit=60,observed_at=r.observed_at.isoformat(),stale=r.conditions_stale,extraction_truncated=r.conditions_truncated)} for r in rows]
+        if party is not None:
+            for performance,row in zip(performances,rows):apply_party_quote(performance,row.offers,party,includes_fees=budget_includes_fees)
         detail = {"event_id": rows[0].event_id, "title": rows[0].title,
                   "description": plain_text(re.sub(r"https?://\S+", "", rows[0].description or ""), 1200) or None,
-                  "description_is_untrusted_source_text": True, "organizer": rows[0].organizer,
-                  "performances": [{**event_card(r), "offers": [offer.model_dump() for offer in r.offers]} for r in rows],
+                  "description_is_untrusted_source_text": True, "description_truncated":len(rows[0].description or "")>1200,
+                  "organizer": rows[0].organizer,"performances":performances,
                   "catalogue_status": {source: {"refreshed_at": value["refreshed_at"], **value["metadata"]} for source, value in snapshots.items() if source in self.configured_sources}}
         if requested is not None:
             selected = [row for row in rows if row.performance_id == identifier]

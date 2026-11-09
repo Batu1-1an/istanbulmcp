@@ -108,6 +108,7 @@ class EventVenue(BaseModel):
     lat: float | None = None
     lon: float | None = None
     side: Literal["europe", "asia"] | None = None
+    field_evidence: dict[str, dict[str, str]] = Field(default_factory=dict, max_length=4)
 
     @field_validator("lat", "lon")
     @classmethod
@@ -130,6 +131,14 @@ class EventAdmissionWindow(BaseModel):
     opens_at: str | None = Field(default=None, pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
     last_entry_at: str | None = Field(default=None, pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
     closes_at: str | None = Field(default=None, pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+
+
+class PublishedEventCondition(BaseModel):
+    topic: Literal["reservation", "refund_exchange", "accessibility", "language", "ticket_requirement", "materials", "certificate", "photography", "seating", "sensory", "fees", "other"]
+    statement: str = Field(min_length=5, max_length=600)
+    source_url: str
+    source_section: Literal["description", "rules", "facts"]
+    interpretation: Literal["published_statement_only"] = "published_statement_only"
 
 
 class EventObservation(BaseModel):
@@ -157,6 +166,11 @@ class EventObservation(BaseModel):
     age_limit: str | None = None
     duration_minutes: int | None = Field(default=None, ge=1, le=1440)
     end_source: Literal["source_end", "published_duration", "unknown"] = "unknown"
+    catalogue_venue_hint: str | None = Field(default=None, max_length=300)
+    conditions: list[PublishedEventCondition] = Field(default_factory=list, max_length=60)
+    conditions_checked: bool = False
+    conditions_stale: bool = False
+    conditions_truncated: bool = False
     catalogue_min_price_try: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     catalogue_is_free: bool | None = None
     observed_at: datetime

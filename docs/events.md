@@ -442,3 +442,13 @@ Aramada sayaç `excluded_child_only`; seçilmiş planda ret nedeni
 Bu, yetişkin/grup bilet uygunluğu, her katılımcının yaşı veya bilinmeyen kaynak
 kuralları için onay değildir. Kanıt ve insan senaryoları:
 [gerçek kullanım turu](events-human-personas.md).
+
+## Karar kalitesi — 0.9.0
+
+[Konum, fiyat, kaynak koşulları ve tam/kısmi plan sözleşmesi](events-decision-quality.md).
+Arama ve planlamada party_size/ticket_profile veya karma party haritası grubun
+bilet ara toplamını hesaplar; budget_includes_fees bilinmeyen hizmet bedelini
+onaylamaz. Plan min_events ve required_categories koşullarını karşılamıyorsa
+partial_options içinde eksikleriyle döner, tam plan veya takvim sayılmaz.
+Konumun bilinmemesi ile alan dışında olması ayrı sayılır; participation_conditions
+yalnız kaynakta yayımlanmış kapsamlı ifadeleri taşır.

@@ -431,3 +431,13 @@ Etkinlik arama/planlama: `exclude_child_only` (bool, varsayılan false), açık
 Üst sınırı olmayan veya bilinmeyen yaş, yetişkin uygunluğu doğrulandı diye
 yorumlanmaz. Yetişkin bağlamı için kullanılabilir; mevcut family/child_age
 sözleşmesi korunur.
+
+### Etkinlik arama/planlama ek girişleri — 0.9.0
+
+party_size (1–50), ticket_profile (general/adult/student/child/senior/any) veya
+party={"adult":2,"child":1}; budget_includes_fees. Bu bağlamda bütçe tüm grubun
+gözlenen ara toplamına uygulanır; planda tüm duraklar toplanır. Birim/profil/
+ücret bilinmiyorsa fiyat doğrulanmış sayılmaz. İndirim hakkı ve canlı stok ayrıca
+onaylanmaz. Plan min_events (1–max_events) ve required_categories alır; eksik
+alternatif partial_options içindedir. Kaynak koşulları ve konum tanıları
+[ayrıntılı sözleşmede](events-decision-quality.md) açıklanır.

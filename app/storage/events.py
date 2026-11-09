@@ -126,7 +126,7 @@ class EventRepository:
                   venue_norm=excluded.venue_norm,payload=excluded.payload,last_seen_at=excluded.last_seen_at""",
                              (row.performance_id, row.event_id, venue_id, source, row.source_id,
                               row.start_at.astimezone(timezone.utc).isoformat(), search_text(row.title),
-                              search_text(row.venue.name), row.model_dump_json(), now, now))
+                              search_text(row.venue.name + " " + (row.catalogue_venue_hint or "")), row.model_dump_json(), now, now))
                 conn.execute("INSERT OR IGNORE INTO event_external_ids VALUES(?,?,?)", (source, row.source_id, row.performance_id))
                 rowid = conn.execute("SELECT rowid FROM event_occurrences WHERE id=?", (row.performance_id,)).fetchone()[0]
                 conn.execute("DELETE FROM event_rtree WHERE rowid=?", (rowid,))

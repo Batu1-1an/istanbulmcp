@@ -55,6 +55,20 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 - Canlı `istanbul_transport_disruptions` hat testi yanlış parametre adı (`line_code`)
   yerine aracın gerçek parametresi `line` ile çağrılır.
 
+## [0.9.0] - 2026-11-09
+
+### Fixed
+- Separate unverified and outside-area locations and explain empty search/plan
+  outcomes; prioritize bounded detail checks with catalogue venue hints without
+  assigning them as session facts. Reuse only non-conflicting verified venue facts.
+- Add observed party ticket baskets with normal/adult/student/child/senior profiles,
+  explicit package quantities, mixed-party allocation, fee uncertainty and unverified
+  group inventory. Preserve raw minimum observations without presenting them as totals.
+- Surface scoped event participation statements and provenance from description,
+  rules and facts; keep missing/expired conditions unknown and footer content excluded.
+- Add required minimum stops and categories. Complete, budget-unverified and partial
+  plans remain distinct; partial alternatives explain unmet constraints and omit calendars.
+
 ## [0.8.2] - 2026-11-09
 
 ### Fixed

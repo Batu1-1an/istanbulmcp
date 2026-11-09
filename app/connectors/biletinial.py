@@ -14,6 +14,7 @@ import httpx
 
 from app.connectors.events_http import EventSourceError, event_json, read_event_body
 from app.core.events import EventObservation, EventOffer, ISTANBUL, category_for, event_time, event_url, venue_from
+from app.connectors.event_conditions import parse_event_conditions, published_fees_included, legacy_rules_sections
 from app.services.places import normalize_place
 
 BASE = "https://biletinial.com"
@@ -152,6 +153,7 @@ def parse_biletinial_list(payload, category: str) -> tuple[list[EventObservation
             result.append(EventObservation(
                 source="biletinial", source_id=f"{slug}:listing:{start.isoformat()}", series_key=slug,
                 title=item["name"], category=kind, category_source=category_source, start_at=start,
+                catalogue_venue_hint=plain_text(str(item.get("saloonName") or ""),300) or None,
                 catalogue_min_price_try=hint, catalogue_is_free=item.get("isFree") if isinstance(item.get("isFree"), bool) else None,
                 venue=venue_from("Unknown venue"), observed_at=observed,
                 ticket_url=f"https://biletinial.com/tr-tr/{category}/{slug}",
@@ -275,6 +277,14 @@ def parse_biletinial_detail(html: str, url: str, known_starts=()) -> tuple[list[
     missing = 0
     html_days = set()
     descriptions = page_description + " " + " ".join(str(item.get("description") or "") for item in json_events)
+    rules_parser = SessionParser(target_class="event-rules-v2__content")
+    rules_parser.feed(html)
+    rule_sections = [("rules", fragment) for _,fragment in rules_parser.sessions[:2]]
+    if not rule_sections:rule_sections=legacy_rules_sections(html)
+    condition_sections = [("description", page_description)] + rule_sections
+    condition_sections += [("description", str(item.get("description") or "")) for item in json_events[:20]]
+    condition_diagnostics={}
+    published_conditions = parse_event_conditions(condition_sections, url,condition_diagnostics)
     flexible_rule = _flexible_entry(descriptions)
     global_window = _admission_window(descriptions)
     excluded_weekdays = _excluded_weekdays(descriptions)
@@ -372,12 +382,23 @@ def parse_biletinial_detail(html: str, url: str, known_starts=()) -> tuple[list[
     facts = {}
     for label, value in re.findall(r'<dt\b[^>]*>(.*?)</dt>\s*<dd\b[^>]*>(.*?)</dd>', fact_block[1] if fact_block else html, re.S):
         facts.setdefault(normalize_place(plain_text(label)).rstrip(":"), plain_text(value, 200))
+    published_conditions = list({(c.topic,c.statement):c for c in [*published_conditions,
+        *parse_event_conditions([('facts', f'{key}: {value}') for key,value in facts.items()],url,condition_diagnostics)]}.values())
+    if len(published_conditions)>60:condition_diagnostics['truncated']=True
+    published_conditions=published_conditions[:60]
     genre = facts.get("etkinlik turu", "")
     if not genre:
         genre = " ".join(plain_text(value) for value in re.findall(r'<a\b[^>]*class=["\'][^"\']*yds_genres_link[^"\']*["\'][^>]*>(.*?)</a>', html, re.S))
     folded_genre = normalize_place(genre)
     published_duration = re.fullmatch(r"(\d{1,3})\s*(?:dakika|dk\.?|min(?:utes)?)", facts.get("sure", ""), re.I)
     for observation in result:
+        observation.conditions = published_conditions
+        observation.conditions_checked = True
+        observation.conditions_truncated = condition_diagnostics.get("truncated",False)
+        for offer in observation.offers:
+            offer.fees_included = published_fees_included(published_conditions)
+        if page_description:
+            observation.description = page_description[:8000]
         if observation.excluded_weekdays:
             observation.warnings.append("Explicit source weekday restrictions apply; excluded_weekdays uses Monday=0 through Sunday=6. A listed date is not proof of admission.")
         observation.age_limit = facts.get("yas siniri") or None
@@ -436,7 +457,7 @@ def _detail_observation(item, category, slug, source_id, start, venue_name, url,
         admission_window=admission_window,
         end_at=end if end and end > start else None, venue=venue_from(venue_name, address_text, geo.get("latitude"), geo.get("longitude")),
         program_status={"EventScheduled": "scheduled", "EventCancelled": "cancelled", "EventPostponed": "postponed", "EventRescheduled": "rescheduled"}.get(str(item.get("eventStatus", "")).rsplit("/", 1)[-1], "unknown") if linked else "unknown",
-        offers=parsed_offers, ticket_url=url, description=plain_text(str(item.get("description") or "")) or None,
+        offers=parsed_offers, ticket_url=url, description=plain_text(str(item.get("description") or ""),8000) or None,
         organizer=(item.get("organizer") or {}).get("name"), observed_at=observed, detail_checked=True,
         warnings=["Observed ticket prices may depend on ticket type, promotions and service fees; not a checkout quote.",
                   *([TIME_CONFLICT_WARNING] if source_time_conflict else []),

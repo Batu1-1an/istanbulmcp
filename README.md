@@ -359,6 +359,7 @@ pytest tests/test_events_flexible_and_unconfirmed.py
 # Giriş aralığı, geçersiz kullanım günü ve ortak katılımcı yaşı
 pytest tests/test_events_admission_and_age.py
 pytest tests/test_events_adult_discovery.py
+pytest tests/test_events_decision_quality.py
 # Opt-in: çalışan MCP üzerinde farklı kullanıcı soruları; raw cevap/secret kaydetmez
 railway run .venv/bin/python scripts/events_persona_uat.py --output .data/events-persona-uat.json
 # QA raporundaki 100 niyetin kalıcı, opt-in yeniden koşusu
@@ -366,3 +367,6 @@ railway run .venv/bin/python -m scripts.events_100_uat --output .data/events-100
 # Birleşik filtreler ve sınırlı eşzamanlı etkinlik aramaları
 railway run .venv/bin/python -m scripts.events_cross_uat --output .data/events-cross-live.json
 ```
+
+Etkinlik grup fiyatı, katılım koşulları ve zorunlu durak/tür sözleşmesi:
+[karar kalitesi](docs/events-decision-quality.md).
