@@ -20,6 +20,7 @@ async def istanbul_events_search(
     include_sold_out: bool = False,
     match_mode: str = "words",
     include_past: bool = False,
+    exclude_child_only: bool = False,
 ) -> dict:
     """Search indexed Istanbul event sessions; use event_detail for full verification.
 
@@ -51,10 +52,15 @@ async def istanbul_events_search(
     Radius/distance are straight-line; the opposite shore may be included.
     Price-unknown sessions remain labeled unknown with max_price_try; they are
     not verified within budget. free_only requires observed zero price.
-    Set include_unknown_prices=false for verified-price-only results. Budget,
-    free and category queries may refresh up to three relevant Biletinial details.
+    Set include_unknown_prices=false for verified-price-only results. Named,
+    budget, free, category and exclude_child_only queries may refresh up to three
+    relevant Biletinial details.
     Category coverage is partial; category_source distinguishes provider genres
     from explicit type markers in titles. Zero matches do not prove no city events.
+    For users explicitly seeking adult participation, exclude_child_only=true
+    removes published ranges with an upper age below 18 before result/plan limits.
+    Unknown ages and minimum-only limits are retained, not verified for the user;
+    this is not a general adult eligibility guarantee or a guessed numeric age.
     child_age (0–17) requires a published matching age range and family genre;
     missing age evidence is excluded, not guessed. Ticket-type eligibility and
     service fees still need checking on the ticket page.
@@ -78,7 +84,7 @@ async def istanbul_events_search(
         include_unknown_prices=include_unknown_prices, child_age=child_age, query_scope=query_scope,
         include_sold_out=include_sold_out,
         match_mode=match_mode,
-        include_past=include_past,
+        include_past=include_past, exclude_child_only=exclude_child_only,
     )
 
 
@@ -113,6 +119,7 @@ async def istanbul_events_plan(
     event_ids: list[str] | None = None, max_price_try: float | None = None,
     min_gap_minutes: int = 30, max_events: int = 3, limit: int | None = None,
     child_age: int | None = None, require_known_end: bool = False,
+    exclude_child_only: bool = False,
 ) -> dict:
     """Build deterministic one-day event options, with ICS and calendar links.
 
@@ -124,6 +131,11 @@ async def istanbul_events_plan(
     the session's date and explicit start_time/end_time for daytime selections.
     interests accepts up to five search categories. Window is same-day HH:MM.
     interests restricts allowed categories; unrelated fallback is never added.
+    When the user is explicitly participating as an adult, exclude_child_only=true
+    removes known upper age limits below 18 before the 20-candidate plan budget;
+    selected child-only sessions are rejected with child_only_age_range. Default
+    false preserves family discovery. Unknown/minimum-only age rules remain
+    unverified for the actual participant; do not infer a numeric age.
     child_age (0–17) restricts to family sessions with a published matching age range.
     Set require_known_end=true when the user must finish by end_time; unknown
     ends are then excluded. Otherwise an unknown end is allowed only last.
@@ -156,5 +168,5 @@ async def istanbul_events_plan(
         date=date, start_time=start_time, end_time=end_time, interests=interests,
         district=district, event_ids=event_ids, max_price_try=max_price_try,
         min_gap_minutes=min_gap_minutes, max_events=max_events, limit=limit,
-        child_age=child_age, require_known_end=require_known_end,
+        child_age=child_age, require_known_end=require_known_end, exclude_child_only=exclude_child_only,
     )

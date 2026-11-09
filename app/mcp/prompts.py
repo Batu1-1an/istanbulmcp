@@ -100,6 +100,9 @@ biletleri saatli plan veya takvime koyma; ziyaret saati ve giriş koşulları ka
 admission_window içindeki son giriş saatini etkinlik başlangıcı sayma.
 entry_date_restricted=true tarihleri önerme. Planın common_published_age_range
 alanını kullanıcının gerçek yaşıyla karşılaştır; bilinmeyen yaş uygunluğunu varsayma.
+Kullanıcı yetişkinlerin katılımını arıyorsa exclude_child_only=true kullan;
+üst yaşı 18 altındaki çocuk grupları plan adaylarını doldurmasın. Bu filtre
+bilinmeyen yaş uygunluğunu onaylamaz; kullanıcının sayısal yaşını tahmin etme.
 İlgi türleri dışından etkinlik ekleme. Çocuk yaşı verilmişse child_age kullan;
 yalnız kaynakta yayımlanmış uyumlu yaş aralığını kabul et. Kesin bitiş saati
 istenmişse end_time ile require_known_end=true kullan. Yalnız bilinen fiyatlar

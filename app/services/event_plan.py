@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 
 from app.core.envelope import error_envelope
 from app.core.error_responses import validation_error_envelope
-from app.core.events import CATEGORIES, ISTANBUL, age_suitability, event_time, normalize_category, published_age_range
+from app.core.events import CATEGORIES, ISTANBUL, age_suitability, child_only_age_range, event_time, normalize_category, published_age_range
 from app.core.geo import haversine_m
 from app.core.validation import InputValidationError, resolve_limit, validate_text
 from app.services.events import EventService, event_clock, event_date
@@ -219,7 +219,7 @@ class EventPlanService:
 
     async def plan(self, *, date=None, start_time="18:00", end_time="23:59", interests=None,
                    district=None, event_ids=None, max_price_try=None, min_gap_minutes=30, max_events=3, limit=None,
-                   child_age=None, require_known_end=False):
+                   child_age=None, require_known_end=False, exclude_child_only=False):
         if not self.events.settings.events_enabled:
             return self.events.disabled()
         try:
@@ -276,7 +276,7 @@ class EventPlanService:
             cards, truncated, envelope = [], False, None
             for category in interests or [None]:
                 response = await self.events.search(date_from=day.isoformat(), date_to=day.isoformat(), time_from=start_time,
-                                                   time_to=end_time, district=district, category=category, child_age=child_age,
+                                                   time_to=end_time, district=district, category=category, child_age=child_age, exclude_child_only=exclude_child_only,
                                                    max_price_try=max_price_try, limit=self.events.settings.events_max_rows, _planning=True)
                 if not response["ok"]:
                     return response
@@ -308,6 +308,8 @@ class EventPlanService:
                 reason = "ticket_sales_unavailable"
             elif interests and card["category"] not in interests:
                 reason = "outside_requested_categories"
+            elif exclude_child_only and child_only_age_range(card.get("age_limit")):
+                reason = "child_only_age_range"
             elif child_age is not None and age_suitability(card.get("age_limit"), child_age) != "within":
                 reason = "age_not_verified_or_outside"
             elif card.get("source") == "biletinial" and not card.get("detail_checked"):
@@ -351,6 +353,8 @@ class EventPlanService:
                                 "Time gaps and straight-line distances do not establish travel feasibility.",
                                 "Unknown end times are allowed only at the final stop."]
         envelope["warnings"] += ["Ulaşım süresi hesaplanmadı; bilet durumu ve ücretler kaynakta yeniden kontrol edilmeli."]
+        if exclude_child_only:
+            envelope["warnings"].append("exclude_child_only excludes only published upper age limits below 18; unknown age requirements and the participant's actual age suitability are not verified.")
         if diagnostics["age_incompatible_combinations"]:
             envelope["warnings"].append(f"{diagnostics['age_incompatible_combinations']} combination(s) excluded because published age ranges have no common participant age.")
         if any(item["reason"] == "entry_date_restricted" for item in rejected):

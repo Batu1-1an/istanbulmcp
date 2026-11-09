@@ -428,3 +428,17 @@ railway run .venv/bin/python -m scripts.events_100_uat --output .data/events-100
 12 saniyelik detay bütçesi içinde doğrular. Böylece soğuk katalogdaki geçici
 saat, mekân ve kullanım günü bilgileri mümkün olduğunda ilk sorguda güncellenir;
 tüm eşleşmelerin doğrulandığı veya kısıtların tamamının çözüldüğü anlamına gelmez.
+
+### Yetişkinlerin katılımında çocuk gruplarını eleme — 0.8.2
+
+Arama ve planlamada `exclude_child_only=true`, yayımlanmış üst yaşı 18 altındaki
+kapalı yaş aralıklarını eler. Örneğin 6–9/7–17 elenir; 6+/18+ ve bilinmeyen yaş
+aynı anlamda değerlendirilmez. Bilinmeyen yaş uygun diye onaylanmaz. Varsayılan
+false, mevcut çocuk/aile keşfini korur. Filtre yetişkinlerin katılımı istenen
+senaryoda kullanılmalı; kullanıcı yaşı sayısal olarak tahmin edilmemeli.
+
+Aramada sayaç `excluded_child_only`; seçilmiş planda ret nedeni
+`child_only_age_range` olur. Eleme 20 adaylık plan havuzundan önce uygulanır.
+Bu, yetişkin/grup bilet uygunluğu, her katılımcının yaşı veya bilinmeyen kaynak
+kuralları için onay değildir. Kanıt ve insan senaryoları:
+[gerçek kullanım turu](events-human-personas.md).

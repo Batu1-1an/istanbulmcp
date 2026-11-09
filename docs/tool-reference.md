@@ -424,3 +424,10 @@ date/window even with event_ids and give a specific repair for excluded selected
 sessions. Alternatives reduce repeated series sets and prefer known observed
 totals. total_observed_minimum_try is null for partial prices; the previous
 known_minimum_total_try stays a subtotal in that case.
+
+Etkinlik arama/planlama: `exclude_child_only` (bool, varsayılan false), açık
+üst yaş sınırı 18 altındaki kayıtları plan adayları seçilmeden önce eler.
+`excluded_child_only` ve `child_only_age_range` elemenin kanıtlarıdır.
+Üst sınırı olmayan veya bilinmeyen yaş, yetişkin uygunluğu doğrulandı diye
+yorumlanmaz. Yetişkin bağlamı için kullanılabilir; mevcut family/child_age
+sözleşmesi korunur.

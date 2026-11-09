@@ -42,6 +42,12 @@ def published_age_range(age_limit: str | None) -> tuple[int, int | None] | None:
     return None
 
 
+def child_only_age_range(age_limit: str | None) -> bool:
+    """Only an explicit upper age below 18; unknown and minimum-only stay unknown/open."""
+    bounds = published_age_range(age_limit)
+    return bounds is not None and bounds[1] is not None and bounds[1] < 18
+
+
 def age_suitability(age_limit: str | None, child_age: int) -> str:
     bounds = published_age_range(age_limit)
     if bounds is None:

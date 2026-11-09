@@ -166,3 +166,9 @@ published Istanbul HTML session; the conflicting JSON end is discarded. A real
 UTC instant matching an HTML session still keeps its normal converted time.
 Search and plan warnings also explain conditional ticket minima, which are not
 guaranteed per-person general-admission prices.
+
+`exclude_child_only=true` ile arama sayacı
+`result_info.filter_counts.excluded_child_only`, açık üst yaşı 18 altı
+kayıtların elendiğini gösterir. Seçili planda `rejected[].reason`
+`child_only_age_range` olabilir. Bilinmeyen yaşlar uygun diye işaretlenmez;
+uyarı alanı, bu dar elemenin gerçek katılımcı uygunluğu onayı olmadığını açıklar.

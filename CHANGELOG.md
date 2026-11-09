@@ -55,6 +55,15 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 - Canlı `istanbul_transport_disruptions` hat testi yanlış parametre adı (`line_code`)
   yerine aracın gerçek parametresi `line` ile çağrılır.
 
+## [0.8.2] - 2026-11-09
+
+### Fixed
+- Add opt-in `exclude_child_only` to event search and planning: remove explicitly
+  published upper age limits below 18 before plan candidate selection. Selected
+  sessions report `child_only_age_range`; unknown ages are not claimed verified.
+- Preserve default family discovery, published names, and minimum-only age rules.
+  Document the adult workflow found in the 100 human-persona question round.
+
 ## [0.8.1] - 2026-11-09
 
 - Verify a bounded set of named Biletinial search matches on demand, so a cold

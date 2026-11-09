@@ -13,7 +13,7 @@ from app.connectors.biletinial import BiletinialClient, plain_text
 from app.connectors.ticketmaster import TicketmasterClient
 from app.core.envelope import Freshness, Source, Repair, error_envelope, result_info, success_envelope
 from app.core.error_responses import validation_error_envelope
-from app.core.events import CATEGORIES, ISTANBUL, EventObservation, age_suitability, category_for, event_time, normalize_category, search_text
+from app.core.events import CATEGORIES, ISTANBUL, EventObservation, age_suitability, child_only_age_range, category_for, event_time, normalize_category, search_text
 from app.core.geo import haversine_m, radius_bbox
 from app.core.settings import Settings
 from app.core.source_cache import SourceLoadResult, cached_source_data_with_status
@@ -269,7 +269,7 @@ class EventService:
                      time_from=None, time_to=None, district=None, venue=None,
                      lat=None, lon=None, radius_m=None, free_only=False, max_price_try=None, limit=None,
                      include_unknown_prices=True, child_age=None, query_scope="title", include_sold_out=False,
-                     match_mode="words", include_past=False, _planning=False):
+                     match_mode="words", include_past=False, exclude_child_only=False, _planning=False):
         if not self.settings.events_enabled:
             return self.disabled()
         try:
@@ -334,7 +334,7 @@ class EventService:
         successful_detail_checks = 0
         # Named/price/category questions need recent evidence. Check a small relevant
         # subset on demand; unfiltered discovery stays in the local index.
-        if self.settings.events_biletinial_enabled and (query is not None or max_price_try is not None or free_only or category is not None):
+        if self.settings.events_biletinial_enabled and (query is not None or max_price_try is not None or free_only or category is not None or exclude_child_only):
             possible = []
             for row in rows:
                 if row.source != "biletinial" or row.source not in usable:
@@ -349,6 +349,8 @@ class EventService:
                 if district and row.venue.district and normalize_place(row.venue.district) != normalize_place(district):
                     continue
                 if venue and row.venue.name != "Unknown venue" and search_text(venue) not in search_text(row.venue.name):
+                    continue
+                if exclude_child_only and child_only_age_range(row.age_limit):
                     continue
                 if row.detail_checked and (datetime.now(timezone.utc) - row.observed_at).total_seconds() <= self.settings.events_detail_ttl_seconds:
                     continue
@@ -393,7 +395,7 @@ class EventService:
         now = datetime.now(ISTANBUL)
         counts = dict(initial_indexed_candidates=initial_candidate_count,indexed_candidates=len(rows), usable_observations=sum(row.source in usable for row in rows),
                       deduplicated_sessions=0, excluded_started=0, excluded_program=0, excluded_category=0,
-                      excluded_age=0, excluded_clock=0, excluded_unverified_time=0, excluded_entry_date=0, excluded_location=0, excluded_sold_out=0,
+                      excluded_age=0, excluded_child_only=0, excluded_clock=0, excluded_unverified_time=0, excluded_entry_date=0, excluded_location=0, excluded_sold_out=0,
                       excluded_unknown_price=0, excluded_price=0, verified_free=0,
                       unknown_price_sessions=0, known_price_sessions=0,
                       detail_checks_attempted=detail_checks, detail_checks_succeeded=successful_detail_checks,
@@ -411,6 +413,9 @@ class EventService:
                 continue
             if category and row.category != category:
                 counts["excluded_category"] += 1
+                continue
+            if exclude_child_only and child_only_age_range(row.age_limit):
+                counts["excluded_child_only"] += 1
                 continue
             if child_age is not None and age_suitability(row.age_limit, child_age) != "within":
                 excluded_age += 1
@@ -454,6 +459,8 @@ class EventService:
                                         card.get("query_match") == "prefix_or_venue", card["event_date"], card["start_at"] is None,
                                         card["start_at"] or "", card["distance_m"] if card["distance_m"] is not None else math.inf, card["performance_id"]))
         notes = [f"{unknown_budget} matching session(s) have unknown prices and are not verified within budget."] if unknown_budget else []
+        if exclude_child_only:
+            notes.append("exclude_child_only excludes only published upper age limits below 18; unknown age requirements and the participant's actual age suitability are not verified.")
         if counts["excluded_started"]:
             notes.append(f"{counts['excluded_started']} session(s) already started and were excluded; use include_past=true to inspect retained past sessions.")
         if counts["expired_offer_observations"]:
@@ -495,7 +502,7 @@ class EventService:
         result = self._envelope(f"{min(len(selected), safe_limit)} indexed event session(s) found.", selected[:safe_limit], snapshots,
                               matched=len(selected), warnings=notes,
                               limits=[f"limit={safe_limit}", f"date_from={first}", f"date_to={last}", f"query_scope={query_scope}",
-                                      f"match_mode={match_mode}", f"include_past={str(include_past).lower()}",
+                                      f"match_mode={match_mode}", f"include_past={str(include_past).lower()}", f"exclude_child_only={str(exclude_child_only).lower()}",
                                       *([f"category_coverage={'observed' if category_observed else 'not_observed'}; scope=indexed date/query; classification is partial"] if category else []),
                                       "On-demand detail checks: at most 3 series per search.", "No cursor; narrow filters when truncated."])
         counts.update(excluded_age=excluded_age,excluded_sold_out=excluded_sold_out,
