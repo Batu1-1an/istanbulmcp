@@ -159,7 +159,10 @@ taraması Ticketmaster sonuçlarını bekletmez. İlk katalog yoksa araç sını
 ilk yüklemeyi deneyebilir. TTL sonrası azami yaş içindeki snapshot stale döner;
 aşırı eski kaynak sorguya katılmaz. İndirme zamanı kaynak yayın zamanı değildir.
 Kaynak kontrol/başarı ve kapsam sayıları sources içinde, detay gözlem zamanı
-karttadır. Boş sonuç şehirde etkinlik olmadığı anlamına gelmez.
+karttadır. Boş sonuç şehirde etkinlik olmadığı anlamına gelmez. İstenen
+aralığın tamamı İstanbul'daki bugünün tarihinden önceyse boş sonucun ilk nedeni
+`requested_dates_before_today` olur. Uyarı bugünün tarihini verir; katalog arşiv
+değildir.
 
 `sources[].refresh_status` süreç içindeki idle/refreshing/failed/unavailable
 durumunu, `serving_stale` halen kullanılabilir son iyi snapshot'ın stale

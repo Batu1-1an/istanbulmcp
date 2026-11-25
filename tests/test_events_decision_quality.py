@@ -365,3 +365,21 @@ async def test_positive_observed_lower_bound_is_not_a_free_group_candidate(catal
     events,row=catalogue;r=row('one');r.offers=[offer('5. Kategori',100)];events.repository.publish('ticketmaster',[r],{})
     p=await events.search(date_from='2030-11-10',date_to='2030-11-10',party_size=1,free_only=True)
     assert not p['data'] and p['result_info']['filter_counts']['excluded_price']==1
+
+
+@pytest.mark.asyncio
+async def test_search_window_before_today_explains_the_past_dates(catalogue):
+    events,row=catalogue;events.repository.publish('ticketmaster',[row('future')],{})
+    p=await events.search(date_from='2026-01-10',date_to='2026-01-12')
+    assert p['ok'] and not p['data']
+    assert p['result_info']['empty_reasons'][0]=='requested_dates_before_today'
+    today=datetime.now(ISTANBUL).date().isoformat()
+    assert any('before today' in w and today in w for w in p['warnings'])
+
+
+@pytest.mark.asyncio
+async def test_plan_for_a_past_day_reports_the_past_date_reason(catalogue):
+    events,row=catalogue;events.repository.publish('ticketmaster',[row('future')],{})
+    p=await EventPlanService(events.settings,events=events).plan(date='2026-01-10',start_time='10:00',end_time='20:00')
+    assert 'requested_dates_before_today' in p['data'][0]['fulfillment']['reason_codes']
+    assert any('before today' in w for w in p['warnings'])

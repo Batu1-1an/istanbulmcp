@@ -604,6 +604,9 @@ class EventService:
             notes.append("Sessions with unverified venues cannot match location filters; inspect event details to verify them.")
         if bbox:
             notes.append("Distances are straight-line, not walking distance or travel time; a radius may include the opposite Bosphorus shore.")
+        today = now.date()
+        if last < today:
+            notes.append(f"Requested dates {first}–{last} are before today in Istanbul ({today}); started sessions are excluded and the catalogue is not an archive. Search from {today} or later.")
         if not selected:
             notes.append("No matches in the usable indexed sources; this does not mean there are no Istanbul events.")
         result = self._envelope(f"{min(len(selected), safe_limit)} indexed event session(s) found.", selected[:safe_limit], snapshots,
@@ -617,7 +620,8 @@ class EventService:
         result["result_info"]["filter_counts"] = counts
         reasons=[]
         if not result['data']:
-            for key,value in (('no_indexed_sessions',counts['indexed_candidates']==0),
+            for key,value in (('requested_dates_before_today',last<today),
+                              ('no_indexed_sessions',counts['indexed_candidates']==0),
                               ('location_unverified',counts['excluded_unknown_location']>0),
                               ('outside_requested_location',counts['excluded_outside_location']>0),
                               ('ticket_units_or_profile_unverified',counts['excluded_unknown_ticket_terms']>0),

@@ -41,6 +41,9 @@ htmlcov/
 .ruff_cache/
 .artifacts/
 
+# Local QA reports and generated test notes
+docs/qa/
+
 # Python packaging output
 /build/
 /dist/
