@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from app.connectors.iett import IettClient
@@ -85,7 +86,10 @@ class TransitService:
             )
         rows.sort(key=lambda row: (row.get("YON") or "", int(row.get("SIRANO") or 0)))
         data = [self._stop_row(row) for row in rows]
-        self.geo.upsert_features([self._stop_feature(row) for row in data if row.get("lat") and row.get("lon")])
+        await asyncio.to_thread(
+            self.geo.upsert_features,
+            [self._stop_feature(row) for row in data if row.get("lat") and row.get("lon")],
+        )
         return success_envelope(
             summary=f"{len(data)} stop record(s) found for line {safe_line_code}.",
             data=data,

@@ -100,8 +100,13 @@ class CityService:
             return validation_error_envelope(exc, sources=[CITY_SOURCE])
         except Exception as exc:
             return self._source_error("Parking source is unavailable.", exc)
-        self.geo.upsert_features([self._ispark_feature(park) for park in parks if park.get("lat") and park.get("lng")])
-        candidates = self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=safe_limit + 1, types=["parking"])
+        await asyncio.to_thread(
+            self.geo.upsert_features,
+            [self._ispark_feature(park) for park in parks if park.get("lat") and park.get("lng")],
+        )
+        candidates = await asyncio.to_thread(
+            self.geo.nearby, lat=lat, lon=lon, radius_m=radius_m, limit=safe_limit + 1, types=["parking"],
+        )
         data = candidates[:safe_limit]
         return success_envelope(
             summary=f"{len(data)} parking lot(s) found within {radius_m} meters.",
@@ -153,8 +158,13 @@ class CityService:
             return validation_error_envelope(exc, sources=[CITY_SOURCE])
         except Exception as exc:
             return self._source_error("Metro source is unavailable.", exc)
-        self.geo.upsert_features([self._metro_feature(station) for station in stations if self._metro_coordinates(station)])
-        candidates = self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=safe_limit + 1, types=["metro_station"])
+        await asyncio.to_thread(
+            self.geo.upsert_features,
+            [self._metro_feature(station) for station in stations if self._metro_coordinates(station)],
+        )
+        candidates = await asyncio.to_thread(
+            self.geo.nearby, lat=lat, lon=lon, radius_m=radius_m, limit=safe_limit + 1, types=["metro_station"],
+        )
         data = candidates[:safe_limit]
         return success_envelope(
             summary=f"{len(data)} metro station(s) found within {radius_m} meters.",
@@ -173,8 +183,13 @@ class CityService:
             return validation_error_envelope(exc, sources=[CITY_SOURCE])
         except Exception as exc:
             return self._source_error("Air quality station source is unavailable.", exc)
-        self.geo.upsert_features([self._aq_feature(station) for station in stations if parse_wkt_point(station.get("Location"))])
-        candidates = self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=safe_limit + 1, types=["air_quality_station"])
+        await asyncio.to_thread(
+            self.geo.upsert_features,
+            [self._aq_feature(station) for station in stations if parse_wkt_point(station.get("Location"))],
+        )
+        candidates = await asyncio.to_thread(
+            self.geo.nearby, lat=lat, lon=lon, radius_m=radius_m, limit=safe_limit + 1, types=["air_quality_station"],
+        )
         nearby = candidates[:safe_limit]
         warnings = []
         for station in nearby:
@@ -518,7 +533,9 @@ class CityService:
             return self._source_error("City feature sources are unavailable.", exc)
         if not refresh.types:
             return self._city_refresh_error(refresh)
-        candidates = self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=safe_limit + 1, types=refresh.types)
+        candidates = await asyncio.to_thread(
+            self.geo.nearby, lat=lat, lon=lon, radius_m=radius_m, limit=safe_limit + 1, types=refresh.types,
+        )
         data = candidates[:safe_limit]
         return success_envelope(
             summary=f"{len(data)} city feature(s) found within {radius_m} meters.",
@@ -541,7 +558,8 @@ class CityService:
             return self._source_error("City feature sources are unavailable.", exc)
         if not refresh.types:
             return self._city_refresh_error(refresh)
-        candidates = self.geo.bbox_search(
+        candidates = await asyncio.to_thread(
+            self.geo.bbox_search,
             min_lon=min_lon, min_lat=min_lat, max_lon=max_lon, max_lat=max_lat,
             limit=safe_limit + 1, types=refresh.types,
         )
@@ -602,19 +620,28 @@ class CityService:
         if "parking" in refresh.types:
             try:
                 parks = await self._parks()
-                self.geo.upsert_features([self._ispark_feature(park) for park in parks if park.get("lat") and park.get("lng")])
+                await asyncio.to_thread(
+                    self.geo.upsert_features,
+                    [self._ispark_feature(park) for park in parks if park.get("lat") and park.get("lng")],
+                )
             except Exception as exc:
                 failed("parking", "Parking", exc)
         if "metro_station" in refresh.types:
             try:
                 stations = await self._metro_stations()
-                self.geo.upsert_features([self._metro_feature(station) for station in stations if self._metro_coordinates(station)])
+                await asyncio.to_thread(
+                    self.geo.upsert_features,
+                    [self._metro_feature(station) for station in stations if self._metro_coordinates(station)],
+                )
             except Exception as exc:
                 failed("metro_station", "Metro", exc)
         if "air_quality_station" in refresh.types:
             try:
                 stations = await self._air_quality_stations()
-                self.geo.upsert_features([self._aq_feature(station) for station in stations if parse_wkt_point(station.get("Location"))])
+                await asyncio.to_thread(
+                    self.geo.upsert_features,
+                    [self._aq_feature(station) for station in stations if parse_wkt_point(station.get("Location"))],
+                )
             except Exception as exc:
                 failed("air_quality_station", "Air quality station", exc)
         if "public_transport_stop" in refresh.types:
@@ -631,7 +658,10 @@ class CityService:
         if "wifi" in refresh.types:
             try:
                 wifi_locations = await self._wifi_locations()
-                self.geo.upsert_features([feature for row in wifi_locations if (feature := self._wifi_feature(row))])
+                await asyncio.to_thread(
+                    self.geo.upsert_features,
+                    [feature for row in wifi_locations if (feature := self._wifi_feature(row))],
+                )
             except Exception as exc:
                 failed("wifi", "WiFi", exc)
         for layer in ("ev_charging", "taxi_stand", "market"):
@@ -645,7 +675,8 @@ class CityService:
                 ]
                 if not features:
                     raise OpenDataLayerError(f"{layer} has no usable Istanbul coordinates")
-                self.geo.replace_features(
+                await asyncio.to_thread(
+                    self.geo.replace_features,
                     source=f"ibb_open_data_{layer}", feature_type=layer, features=features,
                 )
                 refresh.sources.append(self._open_data_source(payload, accepted=len(features)))
@@ -731,7 +762,8 @@ class CityService:
             await asyncio.sleep(0)
             if asyncio.get_running_loop().time() >= deadline:
                 raise TimeoutError("GTFS stops exceeded its load deadline before indexing")
-            self.geo.replace_features(
+            await asyncio.to_thread(
+                self.geo.replace_features,
                 source="gtfs", feature_type="public_transport_stop", features=features,
             )
             return SourceLoadResult(
@@ -859,18 +891,30 @@ class CityService:
         limit: int,
     ) -> tuple[list[dict[str, Any]], Source, CachedSourceData]:
         cached = await self._gtfs_stops()
-        nearby = self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=limit, types=["public_transport_stop"])
+        nearby = await asyncio.to_thread(
+            self.geo.nearby, lat=lat, lon=lon, radius_m=radius_m, limit=limit, types=["public_transport_stop"],
+        )
         return nearby, self._gtfs_source(cached), cached
 
     async def _wifi_nearby(self, *, lat: float, lon: float, radius_m: int, limit: int) -> list[dict[str, Any]]:
         locations = await self._wifi_locations()
-        self.geo.upsert_features([feature for row in locations if (feature := self._wifi_feature(row))])
-        return self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=limit, types=["wifi"])
+        await asyncio.to_thread(
+            self.geo.upsert_features,
+            [feature for row in locations if (feature := self._wifi_feature(row))],
+        )
+        return await asyncio.to_thread(
+            self.geo.nearby, lat=lat, lon=lon, radius_m=radius_m, limit=limit, types=["wifi"],
+        )
 
     async def _air_quality_stations_nearby_summary(self, *, lat: float, lon: float, radius_m: int, limit: int) -> list[dict[str, Any]]:
         stations = await self._air_quality_stations()
-        self.geo.upsert_features([self._aq_feature(station) for station in stations if parse_wkt_point(station.get("Location"))])
-        return self.geo.nearby(lat=lat, lon=lon, radius_m=radius_m, limit=limit, types=["air_quality_station"])
+        await asyncio.to_thread(
+            self.geo.upsert_features,
+            [self._aq_feature(station) for station in stations if parse_wkt_point(station.get("Location"))],
+        )
+        return await asyncio.to_thread(
+            self.geo.nearby, lat=lat, lon=lon, radius_m=radius_m, limit=limit, types=["air_quality_station"],
+        )
 
     async def _libraries_for_district(self, district: str, *, limit: int) -> list[dict[str, Any]]:
         rows = await self._library_locations()

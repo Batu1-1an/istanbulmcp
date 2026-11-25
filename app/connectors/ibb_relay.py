@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
@@ -28,6 +30,9 @@ RELAY_ERRORS: dict[str, type[httpx.TransportError]] = {
     "connect_error": httpx.ConnectError,
     "read_timeout": httpx.ReadTimeout,
 }
+POOL_LIMITS = httpx.Limits(max_connections=40, max_keepalive_connections=20, keepalive_expiry=30.0)
+
+_shared_pool: tuple[tuple[str | None, str | None], httpx.AsyncClient] | None = None
 
 
 def validate_ibb_relay_settings(settings: Settings) -> bool:
@@ -47,7 +52,7 @@ class IbbRelayTransport(httpx.AsyncBaseTransport):
     def __init__(self, base_url: str, token: str, inner: httpx.AsyncBaseTransport | None = None):
         self.base_url = httpx.URL(base_url.rstrip("/"))
         self.token = token
-        self.inner = inner or httpx.AsyncHTTPTransport()
+        self.inner = inner or httpx.AsyncHTTPTransport(limits=POOL_LIMITS)
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         url = request.url
@@ -71,8 +76,86 @@ class IbbRelayTransport(httpx.AsyncBaseTransport):
         await self.inner.aclose()
 
 
-def ibb_http_client(**kwargs: Any) -> httpx.AsyncClient:
-    settings = get_settings()
+class _BorrowedAsyncClient:
+    """Non-owning facade over the lifespan-managed httpx.AsyncClient pool."""
+
+    def __init__(
+        self,
+        pool: httpx.AsyncClient,
+        *,
+        timeout: Any = None,
+        follow_redirects: bool | None = None,
+    ):
+        self._pool = pool
+        self.timeout = httpx.Timeout(timeout) if timeout is not None else pool.timeout
+        self._follow_redirects = follow_redirects
+
+    @property
+    def _transport(self) -> httpx.AsyncBaseTransport:
+        return self._pool._transport
+
+    def _defaults(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        merged = dict(kwargs)
+        merged.setdefault("timeout", self.timeout)
+        if self._follow_redirects is not None:
+            merged.setdefault("follow_redirects", self._follow_redirects)
+        return merged
+
+    async def request(self, method: str, url: str | httpx.URL, **kwargs: Any) -> httpx.Response:
+        return await self._pool.request(method, url, **self._defaults(kwargs))
+
+    async def get(self, url: str | httpx.URL, **kwargs: Any) -> httpx.Response:
+        return await self.request("GET", url, **kwargs)
+
+    async def post(self, url: str | httpx.URL, **kwargs: Any) -> httpx.Response:
+        return await self.request("POST", url, **kwargs)
+
+    def stream(self, method: str, url: str | httpx.URL, **kwargs: Any):
+        return self._pool.stream(method, url, **self._defaults(kwargs))
+
+    async def __aenter__(self) -> _BorrowedAsyncClient:
+        return self
+
+    async def __aexit__(self, *_exc: Any) -> None:
+        return None
+
+    async def aclose(self) -> None:
+        return None
+
+
+def _build_client(settings: Settings, **kwargs: Any) -> httpx.AsyncClient:
     if "transport" not in kwargs and settings.ibb_relay_base_url and settings.ibb_relay_token:
         kwargs["transport"] = IbbRelayTransport(settings.ibb_relay_base_url, settings.ibb_relay_token)
+    kwargs.setdefault("limits", POOL_LIMITS)
     return httpx.AsyncClient(**kwargs)
+
+
+@contextlib.asynccontextmanager
+async def shared_http_pool(settings: Settings) -> AsyncIterator[httpx.AsyncClient]:
+    """Open one pooled AsyncClient for the app lifespan and close it on shutdown."""
+    global _shared_pool
+    previous = _shared_pool
+    key = (settings.ibb_relay_base_url, settings.ibb_relay_token)
+    client = _build_client(settings, timeout=settings.request_timeout_seconds)
+    _shared_pool = (key, client)
+    try:
+        yield client
+    finally:
+        _shared_pool = previous
+        await client.aclose()
+
+
+def ibb_http_client(**kwargs: Any) -> Any:
+    settings = get_settings()
+    key = (settings.ibb_relay_base_url, settings.ibb_relay_token)
+    if (
+        _shared_pool is not None
+        and _shared_pool[0] == key
+        and set(kwargs) <= {"timeout", "follow_redirects"}
+    ):
+        return _BorrowedAsyncClient(
+            _shared_pool[1],
+            timeout=kwargs.get("timeout"),
+            follow_redirects=kwargs.get("follow_redirects"),
+        )
+    return _build_client(settings, **kwargs)

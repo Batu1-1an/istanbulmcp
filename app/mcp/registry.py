@@ -4,17 +4,20 @@ from __future__ import annotations
 from importlib import metadata
 from typing import Any
 
-from mcp.server import MCPServer
+from mcp.server import CacheHint, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
-from mcp.types import Tool as MCPTool, ToolAnnotations
+from mcp.types import Icon, Tool as MCPTool, ToolAnnotations
 
+from app.core.server_card import SERVER_DESCRIPTION, SERVER_TITLE, WEBSITE_URL
 from app.core.settings import Settings
 from app.core.tool_telemetry import ToolTelemetry
+from app.mcp.apps import TOOL_APP_URIS, create_istanbul_apps
+from app.mcp.completions import register_completions
+from app.mcp.events import EVENT_TOOL_NAMES
 from app.mcp.instructions import SERVER_INSTRUCTIONS
 from app.mcp.prompts import register_prompts
 from app.mcp.resources import register_resources
 from app.mcp.structured import STRUCTURED_LEGACY_TOOL_NAMES, STRUCTURED_TOOL_NAMES, with_envelope_output
-from app.mcp.events import EVENT_TOOL_NAMES
 
 READ_ONLY = ToolAnnotations(
     read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=True,
@@ -122,12 +125,36 @@ class IstanbulMCPServer(MCPServer):
             ) from None
 
 
+def _cache_hints(settings: Settings) -> dict[str, CacheHint]:
+    scope = "private" if (settings.mcp_auth_required or settings.mcp_api_keys) else "public"
+    return {
+        "server/discover": CacheHint(ttl_ms=300_000, scope=scope),
+        "tools/list": CacheHint(ttl_ms=300_000, scope=scope),
+        "resources/list": CacheHint(ttl_ms=300_000, scope=scope),
+        "resources/templates/list": CacheHint(ttl_ms=300_000, scope=scope),
+        "prompts/list": CacheHint(ttl_ms=300_000, scope=scope),
+        "resources/read": CacheHint(ttl_ms=60_000, scope=scope),
+    }
+
+
 def create_mcp_server(settings: Settings) -> MCPServer:
     # Lazy import avoids a cycle: the module's compatibility singleton is built
     # only after its functions have been defined.
     from app.mcp import server as handlers
 
-    server = IstanbulMCPServer("istanbul-mcp", title="Istanbul MCP", version=package_version(), instructions=SERVER_INSTRUCTIONS)
+    icon_url = f"{settings.mcp_public_base_url.rstrip('/')}/icon.png"
+    server = IstanbulMCPServer(
+        "istanbul-mcp",
+        title=SERVER_TITLE,
+        description=SERVER_DESCRIPTION,
+        version=package_version(),
+        website_url=WEBSITE_URL,
+        icons=[Icon(src=icon_url, mime_type="image/png", sizes=["512x512"])],
+        instructions=SERVER_INSTRUCTIONS,
+        subscriptions=False,
+        cache_hints=_cache_hints(settings),
+        extensions=[create_istanbul_apps()],
+    )
     names = DEFAULT_TOOL_NAMES + LEGACY_TOOL_NAMES
     names += EVENT_TOOL_NAMES
     hidden = set() if settings.mcp_legacy_tools_enabled else set(LEGACY_TOOL_NAMES)
@@ -138,18 +165,24 @@ def create_mcp_server(settings: Settings) -> MCPServer:
     names += ("istanbul_next_departures", "istanbul_gtfs_snapshot_status")
     if not settings.gtfs_schedule_enabled:
         hidden.update({"istanbul_next_departures", "istanbul_gtfs_snapshot_status"})
+    structured_names = STRUCTURED_TOOL_NAMES | STRUCTURED_LEGACY_TOOL_NAMES
     for name in names:
         handler = getattr(handlers, name)
-        structured = name in STRUCTURED_TOOL_NAMES | STRUCTURED_LEGACY_TOOL_NAMES or name in {
-            "istanbul_next_departures", "istanbul_gtfs_snapshot_status", "istanbul_market_schedule",
-        }
+        structured = name in structured_names
         if structured:
             handler = with_envelope_output(handler)
-        server.add_tool(handler, title=TOOL_TITLES[name], annotations=READ_ONLY,
-                        structured_output=True if structured else None)
+        meta = {"ui": {"resourceUri": TOOL_APP_URIS[name], "visibility": ["model"]}} if name in TOOL_APP_URIS else None
+        server.add_tool(
+            handler,
+            title=TOOL_TITLES[name],
+            annotations=READ_ONLY,
+            meta=meta,
+            structured_output=True if structured else None,
+        )
     handlers.register_ferry_schedule_tool(server, True)
     server.telemetry = ToolTelemetry(server.callable_tool_names())
     server.hidden_tools = frozenset(hidden)
     register_resources(server, settings)
     register_prompts(server, events_enabled=settings.events_enabled)
+    register_completions(server)
     return server

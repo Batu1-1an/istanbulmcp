@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from app.mcp.events import istanbul_events_search, istanbul_event_detail, istanbul_events_plan
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from mcp.server import MCPServer
+from pydantic import Field
 
 from app.mcp.registry import READ_ONLY, TOOL_TITLES, create_mcp_server
 from app.core.envelope import Freshness, Source, success_envelope
@@ -55,9 +56,9 @@ def istanbul_health() -> dict:
 
 
 async def istanbul_search_datasets(
-    query: str,
-    formats: list[str] | None = None,
-    limit: int | None = None,
+    query: Annotated[str, Field(description="Search keywords for IBB Open Data Portal datasets.")],
+    formats: Annotated[list[str] | None, Field(description="Optional resource format filter, e.g. ['CSV', 'GEOJSON'].")] = None,
+    limit: Annotated[int | None, Field(description="Max datasets to return (default 20, max 100).")] = None,
 ) -> dict:
     """Search the IBB open data catalog."""
     return await CatalogService(settings=get_settings()).search_datasets(
@@ -67,20 +68,24 @@ async def istanbul_search_datasets(
     )
 
 
-async def istanbul_get_dataset(dataset_id: str) -> dict:
+async def istanbul_get_dataset(
+    dataset_id: Annotated[str, Field(description="CKAN dataset ID or slug from istanbul_search_datasets.")],
+) -> dict:
     """Return metadata and resources for one IBB dataset."""
     return await CatalogService(settings=get_settings()).get_dataset(dataset_id)
 
 
-async def istanbul_get_resource_schema(resource_id: str) -> dict:
+async def istanbul_get_resource_schema(
+    resource_id: Annotated[str, Field(description="CKAN DataStore resource UUID from istanbul_get_dataset.")],
+) -> dict:
     """Return DataStore field schema for a resource."""
     return await CatalogService(settings=get_settings()).get_resource_schema(resource_id)
 
 
 async def istanbul_query_resource(
-    resource_id: str,
-    filters: dict | None = None,
-    limit: int | None = None,
+    resource_id: Annotated[str, Field(description="CKAN DataStore resource UUID from istanbul_get_dataset.")],
+    filters: Annotated[dict | None, Field(description="Exact-match column filters using field names from istanbul_get_resource_schema.")] = None,
+    limit: Annotated[int | None, Field(description="Max rows to return (default 20, max 100).")] = None,
 ) -> dict:
     """Query IBB CKAN DataStore records with guarded filters and limits.
 
@@ -95,15 +100,16 @@ async def istanbul_query_resource(
 
 
 async def istanbul_nearby(
-    lat: float | None = None,
-    lon: float | None = None,
-    types: list[str] | None = None,
-    radius_m: int | None = None,
-    limit: int | None = None,
-    kind: Literal["city_feature", "parking", "pharmacy", "istanbulkart",
-                  "social_facility", "metro_station", "air_quality", "water_fault"] = "city_feature",
-    district: str | None = None,
-    bbox: list[float] | None = None,
+    lat: Annotated[float | None, Field(description="WGS84 latitude (paired with lon; mutually exclusive with district/bbox).")] = None,
+    lon: Annotated[float | None, Field(description="WGS84 longitude (paired with lat; mutually exclusive with district/bbox).")] = None,
+    types: Annotated[list[str] | None, Field(description="For kind='city_feature' only: subset of parking, metro_station, air_quality_station, public_transport_stop, wifi, ev_charging, taxi_stand, market.")] = None,
+    radius_m: Annotated[int | None, Field(description="Search radius in meters (max 5000; default 1000, or 2000 for istanbulkart/social_facility, 5000 for air_quality).")] = None,
+    limit: Annotated[int | None, Field(description="Max results to return (default 20, max 100).")] = None,
+    kind: Annotated[Literal["city_feature", "parking", "pharmacy", "istanbulkart",
+                  "social_facility", "metro_station", "air_quality", "water_fault"],
+                  Field(description="Domain to search (default 'city_feature').")] = "city_feature",
+    district: Annotated[str | None, Field(description="Istanbul district name (supported for kind='parking' or 'pharmacy' only, without coordinates).")] = None,
+    bbox: Annotated[list[float] | None, Field(description="Bounding box [min_lon, min_lat, max_lon, max_lat] for kind='city_feature' only.")] = None,
 ) -> dict:
     """Find city services by kind and coordinates, or parking/pharmacy by district.
 
@@ -182,9 +188,9 @@ async def istanbul_bbox_search(
 
 
 async def istanbul_market_schedule(
-    district: str | None = None,
-    day: str | None = None,
-    limit: int | None = None,
+    district: Annotated[str | None, Field(description="Optional Istanbul district name filter.")] = None,
+    day: Annotated[str | None, Field(description="Optional Turkish/English weekday, today/yesterday/tomorrow, or ISO date (YYYY-MM-DD).")] = None,
+    limit: Annotated[int | None, Field(description="Max markets to return (default 20, max 100).")] = None,
 ) -> dict:
     """Return the published weekly İBB market schedule, optionally by district/day.
 
@@ -369,12 +375,12 @@ async def istanbul_iski_dam_occupancy(
 
 
 async def istanbul_mobility_nearby(
-    place: str | None = None,
-    lat: float | None = None,
-    lon: float | None = None,
-    radius_m: int = 1500,
-    limit: int | None = None,
-    district: str | None = None,
+    place: Annotated[str | None, Field(description="Known Istanbul place anchor or district name (e.g. 'Taksim', 'Kadıköy Rıhtım', 'Acıbadem, Kadıköy').")] = None,
+    lat: Annotated[float | None, Field(description="WGS84 latitude (paired with lon).")] = None,
+    lon: Annotated[float | None, Field(description="WGS84 longitude (paired with lat).")] = None,
+    radius_m: Annotated[int, Field(description="Search radius in meters for point mode (default 1500, max 5000).")] = 1500,
+    limit: Annotated[int | None, Field(description="Max items per section (default 20, max 100).")] = None,
+    district: Annotated[str | None, Field(description="One of Istanbul's 39 districts (parking only, no distances; exclusive with place/lat/lon).")] = None,
 ) -> dict:
     """Summarize mobility near a static place reference or coordinates.
 
@@ -393,12 +399,12 @@ async def istanbul_mobility_nearby(
 
 
 async def istanbul_city_services_nearby(
-    place: str | None = None,
-    lat: float | None = None,
-    lon: float | None = None,
-    radius_m: int = 1500,
-    limit: int | None = None,
-    district: str | None = None,
+    place: Annotated[str | None, Field(description="Known Istanbul place anchor or district name (not full street geocoding).")] = None,
+    lat: Annotated[float | None, Field(description="WGS84 latitude (paired with lon).")] = None,
+    lon: Annotated[float | None, Field(description="WGS84 longitude (paired with lat).")] = None,
+    radius_m: Annotated[int, Field(description="Search radius in meters for WiFi in point mode (default 1500, max 5000).")] = 1500,
+    limit: Annotated[int | None, Field(description="Max items per section (default 20, max 100).")] = None,
+    district: Annotated[str | None, Field(description="One of Istanbul's 39 districts (libraries/culture only, no WiFi/distances).")] = None,
 ) -> dict:
     """Summarize WiFi near a static reference point and district-level libraries/culture.
 
@@ -418,9 +424,9 @@ async def istanbul_city_services_nearby(
 
 
 async def istanbul_neighborhood_profile(
-    district: str,
-    neighborhood: str | None = None,
-    limit: int | None = None,
+    district: Annotated[str, Field(description="Istanbul district name (required).")],
+    neighborhood: Annotated[str | None, Field(description="Optional neighborhood (mahalle) name within the district.")] = None,
+    limit: Annotated[int | None, Field(description="Max neighborhood profiles to return (default 20, max 100).")] = None,
 ) -> dict:
     """Return a joined neighborhood profile from social, building, and earthquake scenario records."""
     return await NeighborhoodService(settings=get_settings()).profile(
@@ -446,10 +452,10 @@ async def istanbul_transit_disruptions(line_code: str | None = None, limit: int 
 
 
 async def istanbul_transport_disruptions(
-    mode: str | None = None,
-    operator: str | None = None,
-    line: str | None = None,
-    limit: int | None = None,
+    mode: Annotated[str | None, Field(description="Optional transport mode filter, e.g. bus, metro, tram, ferry, rail.")] = None,
+    operator: Annotated[str | None, Field(description="Optional operator filter: iett, metro_istanbul, sehir_hatlari, marmaray.")] = None,
+    line: Annotated[str | None, Field(description="Optional line code filter, e.g. 500T, M2, T1.")] = None,
+    limit: Annotated[int | None, Field(description="Max notices to return (default 20, max 100).")] = None,
 ) -> dict:
     """Return current official disruptions and service announcements across supported transport operators."""
     return await TransportDisruptionService(settings=get_settings()).disruptions(
@@ -476,30 +482,21 @@ def register_ferry_schedule_tool(server: MCPServer, enabled: bool) -> None:
 
 
 async def istanbul_next_departures(
-    stop_id: str | None = None,
-    lat: float | None = None,
-    lon: float | None = None,
-    line: str | None = None,
-    at: str | None = None,
-    radius_m: int = 500,
-    limit: int | None = None,
-    stop_query: str | None = None,
+    stop_id: Annotated[str | None, Field(description="GTFS stop_id from stop_query search (mutually exclusive with lat/lon/stop_query).")] = None,
+    lat: Annotated[float | None, Field(description="WGS84 latitude for nearby stop departures (paired with lon).")] = None,
+    lon: Annotated[float | None, Field(description="WGS84 longitude for nearby stop departures (paired with lat).")] = None,
+    line: Annotated[str | None, Field(description="Optional published route short name filter, e.g. 500T.")] = None,
+    at: Annotated[str | None, Field(description="ISO datetime with UTC offset (default now in Europe/Istanbul).")] = None,
+    radius_m: Annotated[int, Field(description="Search radius in meters for coordinate mode (default 500, max 5000).")] = 500,
+    limit: Annotated[int | None, Field(description="Max stop candidates or departures to return (default 20, max 100).")] = None,
+    stop_query: Annotated[str | None, Field(description="Stop name search text (Turkish/ASCII); returns stop_id candidates only, NOT departures.")] = None,
 ) -> dict:
-    """Search GTFS stop names or return published departures for selected stops.
+    """Search GTFS stop names or return scheduled departures for selected stops.
 
-    Use stop_query with limit only to discover stop_id candidates by name,
-    including Turkish/ASCII spellings (Kadıköy/kadikoy). This mode returns stops,
-    NOT departures. Same-name stops remain separate; never choose the first
-    automatically. Approximate spelling suggestions are labeled, not matches.
-    Ask the user to select a candidate using name/map, then call with stop_id.
-    stop_code identifies the published stop sign when present. stop_desc and
-    platform_direction_text preserve source text; they are not inferred route directions.
-    Missing metadata stays null; districts are not inferred.
-
-    at is an ISO datetime with a UTC offset; omitted means now in Europe/Istanbul.
-    The search covers 24 hours. stop_id and coordinates are mutually exclusive.
-    line matches the published route short name. Times are scheduled, never live
-    ETA, delays or proof of service. Outside-calendar queries are unavailable.
+    stop_query with limit discovers stop_id candidates by name (NOT departures);
+    same-name stops stay separate so ask the user to select before querying stop_id.
+    Departure times cover 24 hours from published GTFS timetables, never live ETA
+    or delays. Outside-calendar dates are unavailable. See istanbul://guides/transit.
     """
     return await GtfsScheduleService(get_settings()).next_departures(
         stop_id=stop_id, lat=lat, lon=lon, line=line, at=at,
@@ -523,10 +520,10 @@ async def istanbul_planned_departures(line_code: str, limit: int | None = None) 
 
 
 async def istanbul_metro_accessibility_status(
-    line: str | None = None,
-    station: str | None = None,
-    equipment_type: str | None = None,
-    limit: int | None = None,
+    line: Annotated[str | None, Field(description="Optional Metro Istanbul line filter, e.g. M2, M4, T1.")] = None,
+    station: Annotated[str | None, Field(description="Optional station name filter.")] = None,
+    equipment_type: Annotated[str | None, Field(description="Optional equipment category, e.g. elevator, escalator.")] = None,
+    limit: Annotated[int | None, Field(description="Max fault rows to return (default 20, max 100).")] = None,
 ) -> dict:
     """Return official Metro İstanbul equipment/total counts and current equipment fault details, optionally filtered by line, station, or equipment type. This is not an end-to-end accessibility guarantee."""
     return await MetroAccessibilityService(settings=get_settings()).status(
@@ -538,12 +535,12 @@ async def istanbul_metro_accessibility_status(
 
 
 async def istanbul_water_status(
-    kind: Literal["faults", "dams"] = "faults",
-    district: str | None = None,
-    fault_number: str | None = None,
-    dam_name: str | None = None,
-    min_occupancy: float | None = None,
-    limit: int | None = None,
+    kind: Annotated[Literal["faults", "dams"], Field(description="'faults' for active ISKI water outages or 'dams' for dam occupancy.")] = "faults",
+    district: Annotated[str | None, Field(description="Optional Istanbul district filter (kind='faults' only).")] = None,
+    fault_number: Annotated[str | None, Field(description="Specific ISKI fault number (kind='faults' only, exclusive with district/limit).")] = None,
+    dam_name: Annotated[str | None, Field(description="Optional dam name filter (kind='dams' only).")] = None,
+    min_occupancy: Annotated[float | None, Field(description="Minimum occupancy percentage 0-100 (kind='dams' only).")] = None,
+    limit: Annotated[int | None, Field(description="Max records to return (default 20, max 100).")] = None,
 ) -> dict:
     """Get ISKI active faults (district or fault_number) or dam occupancy.
 
@@ -572,9 +569,9 @@ async def istanbul_water_status(
 
 
 async def istanbul_transit_line(
-    line_code: str,
-    action: Literal["info", "stops", "departures"] = "info",
-    limit: int | None = None,
+    line_code: Annotated[str, Field(description="IETT bus line code, e.g. '500T', '34A', '15F'.")],
+    action: Annotated[Literal["info", "stops", "departures"], Field(description="'info' for line metadata, 'stops' for ordered stops, 'departures' for planned terminal times.")] = "info",
+    limit: Annotated[int | None, Field(description="Max departure rows (action='departures' only, default 20, max 100).")] = None,
 ) -> dict:
     """Get IETT line info, ordered stops or planned main-terminal departures.
 
@@ -596,7 +593,9 @@ async def istanbul_transit_line(
 
 
 async def istanbul_datastore_query(
-    resource_id: str, sql: str, limit: int | None = None,
+    resource_id: Annotated[str, Field(description="Allowlisted CKAN DataStore resource UUID.")],
+    sql: Annotated[str, Field(description="Single read-only SQLite SELECT statement over table `records` (no joins, subqueries, CTEs or writes).")],
+    limit: Annotated[int | None, Field(description="Outer row limit enforced by server (default 20, max 100).")] = None,
 ) -> dict:
     """Run a bounded SELECT over records from one allowlisted CKAN resource.
 

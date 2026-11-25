@@ -3,34 +3,39 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from pathlib import Path
 
 import uvicorn
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
-from starlette.responses import JSONResponse, RedirectResponse
+from starlette.responses import JSONResponse, RedirectResponse, Response
 from starlette.routing import Mount, Route
 
-from app.core.abuse_guard import ClientRateLimiter, ConcurrencyLimiter, McpAbuseGuardMiddleware
-from app.core.http_logging import JsonRequestLogMiddleware
-from app.core.cors import McpCorsApplication, cors_transport_security, validate_cors_settings
-from app.core.api_auth import ApiKeyAuthMiddleware, ApiKeyQuotaMiddleware, validate_auth_settings
-from app.storage.quota import DailyQuota
-from app.services.datastore_sql import validate_sql_settings
+from app.connectors.city_open_data import validate_open_data_settings
 from app.connectors.gtfs import validate_gtfs_settings
 from app.connectors.gtfs_schedule import validate_schedule_settings
-from app.connectors.city_open_data import validate_open_data_settings
-from app.connectors.ibb_relay import validate_ibb_relay_settings
+from app.connectors.ibb_relay import shared_http_pool, validate_ibb_relay_settings
+from app.core.abuse_guard import ClientRateLimiter, ConcurrencyLimiter, McpAbuseGuardMiddleware
+from app.core.api_auth import ApiKeyAuthMiddleware, ApiKeyQuotaMiddleware, validate_auth_settings
+from app.core.cors import McpCorsApplication, cors_transport_security, validate_cors_settings
+from app.core.http_logging import JsonRequestLogMiddleware
 from app.core.loop_watchdog import EventLoopWatchdog, validate_watchdog_settings
 from app.core.mcp_transport import McpJsonRpcGuard
+from app.core.otel import configure_otel
+from app.core.server_card import build_server_card
 from app.core.settings import get_settings
 from app.core.status import build_status
 from app.mcp.registry import create_mcp_server
-from app.services.gtfs_schedule import begin_warmup, keep_snapshot_fresh
+from app.services.datastore_sql import validate_sql_settings
 from app.services.events import keep_events_fresh, validate_events_settings
+from app.services.gtfs_schedule import begin_warmup, keep_snapshot_fresh
 from app.storage.db import public_readiness, readiness
-
+from app.storage.quota import DailyQuota
 
 logger = logging.getLogger("istanbul_mcp.runtime")
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+_ICON_PNG = (STATIC_DIR / "icon.png").read_bytes()
+_FAVICON_ICO = (STATIC_DIR / "favicon.ico").read_bytes()
 
 
 async def healthz(_request):
@@ -39,7 +44,8 @@ async def healthz(_request):
 
 async def readyz(request):
     settings = request.app.state.settings
-    return JSONResponse(public_readiness(readiness(settings.database_path)))
+    db_status = await asyncio.to_thread(readiness, settings.database_path)
+    return JSONResponse(public_readiness(db_status))
 
 
 async def status(request):
@@ -52,8 +58,30 @@ async def status(request):
         abuse_guard["listen_streams"] = request.app.state.mcp_listen_limiter.snapshot()
     tools = await request.app.state.mcp_server.list_tools()
     telemetry = request.app.state.mcp_server.telemetry
-    return JSONResponse(build_status(request.app.state.settings, abuse_guard=abuse_guard, tools=tools,
-                                     tool_metrics=telemetry.snapshot() if telemetry is not None else None))
+    payload = await asyncio.to_thread(
+        build_status,
+        request.app.state.settings,
+        abuse_guard=abuse_guard,
+        tools=tools,
+        tool_metrics=telemetry.snapshot() if telemetry is not None else None,
+    )
+    return JSONResponse(payload)
+
+
+async def icon_png(_request):
+    return Response(_ICON_PNG, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+
+async def favicon_ico(_request):
+    return Response(_FAVICON_ICO, media_type="image/x-icon", headers={"Cache-Control": "public, max-age=86400"})
+
+
+async def server_card(request):
+    return JSONResponse(
+        build_server_card(request.app.state.settings),
+        media_type="application/json",
+        headers={"Cache-Control": "public, max-age=300"},
+    )
 
 
 async def mcp_redirect(_request):
@@ -88,17 +116,21 @@ def create_app() -> Starlette:
 
     @contextlib.asynccontextmanager
     async def lifespan(_app: Starlette):
+        configure_otel(settings)
         watchdog = None
         if settings.event_loop_watchdog_seconds:
             watchdog = EventLoopWatchdog(asyncio.get_running_loop(), timeout_seconds=settings.event_loop_watchdog_seconds)
             watchdog.start()
         warmup_task = None
-        events_task = asyncio.create_task(keep_events_fresh(settings)) if settings.events_enabled else None
-        if settings.gtfs_schedule_enabled and begin_warmup():
-            warmup_task = asyncio.create_task(keep_snapshot_fresh(settings))
+        events_task = None
         try:
-            async with mcp.session_manager.run():
-                yield
+            async with shared_http_pool(settings):
+                if settings.events_enabled:
+                    events_task = asyncio.create_task(keep_events_fresh(settings))
+                if settings.gtfs_schedule_enabled and begin_warmup():
+                    warmup_task = asyncio.create_task(keep_snapshot_fresh(settings))
+                async with mcp.session_manager.run():
+                    yield
         finally:
             if events_task is not None:
                 events_task.cancel()
@@ -116,6 +148,10 @@ def create_app() -> Starlette:
             Route("/healthz", healthz, methods=["GET"]),
             Route("/readyz", readyz, methods=["GET"]),
             Route("/status", status, methods=["GET"]),
+            Route("/icon.png", icon_png, methods=["GET", "HEAD"]),
+            Route("/favicon.ico", favicon_ico, methods=["GET", "HEAD"]),
+            Route("/server-card", server_card, methods=["GET"]),
+            Route("/.well-known/mcp/server-card.json", server_card, methods=["GET"]),
             Route("/mcp", mcp_redirect, methods=["GET", "POST", "HEAD", "OPTIONS"]),
             Mount("/mcp", app=mcp.streamable_http_app(
                 host=settings.host, streamable_http_path="/",

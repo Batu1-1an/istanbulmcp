@@ -65,10 +65,11 @@ def test_question_keeps_dispatch_and_envelope(case, state, surface, monkeypatch)
 
     assert response.status_code == 200
     result = response.json()["result"]
-    assert not result.get("isError", False), result
     actual = result.get("structuredContent")
     if actual is None:
         actual = json.loads(result["content"][0]["text"])
+    expected_is_error = (state == "broken") and (result.get("structuredContent") is not None)
+    assert bool(result.get("isError", False)) is expected_is_error, result
     ResponseEnvelope.model_validate(actual)
     assert actual == payload
     method.assert_awaited_once_with(*case["service_args"], **case["service_kwargs"])
@@ -88,8 +89,8 @@ async def test_footprint_separates_output_schema_cost_and_discovery_primitives()
 
     result = await footprint(create_mcp_server(Settings()))
     assert result["tool_count"] == len(result["tool_names"]) == 16
-    assert result["structured_tool_count"] == 6
-    assert result["resource_count"] == 3
+    assert result["structured_tool_count"] == 16
+    assert result["resource_count"] == 6
     assert result["prompt_count"] == 4
     assert result["instructions_utf8_bytes"] > 0
     assert result["output_schema_overhead_utf8_bytes"] > 0

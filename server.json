@@ -3,12 +3,21 @@
   "name": "io.github.Batu1-1an/istanbul-mcp",
   "title": "Istanbul MCP",
   "description": "Read-only Istanbul city data: transport, nearby services, datasets and event discovery/planning.",
-  "version": "0.9.4",
+  "version": "0.10.0",
   "repository": {
     "url": "https://github.com/Batu1-1an/istanbulmcp",
     "source": "github"
   },
   "websiteUrl": "https://github.com/Batu1-1an/istanbulmcp#readme",
+  "icons": [
+    {
+      "src": "https://istanbulmcp-production.up.railway.app/icon.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "512x512"
+      ]
+    }
+  ],
   "remotes": [
     {
       "type": "streamable-http",

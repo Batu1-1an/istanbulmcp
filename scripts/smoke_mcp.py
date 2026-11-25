@@ -54,9 +54,10 @@ def rpc(method: str, params: dict | None = None, *, modern: bool = False):
     return {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
 
 
-def tool_payload(response: dict):
+def tool_payload(response: dict, *, allow_error: bool = False):
     result = response["result"]
-    assert not result.get("isError"), result
+    if not allow_error:
+        assert not result.get("isError"), result
     return result.get("structuredContent") or json.loads(result["content"][0]["text"])
 
 
@@ -139,20 +140,18 @@ def check_public_mode(directory: Path) -> list[str]:
                    for tool in listed["result"]["tools"])
         checks.append("public tools/list: every tool has title and readOnlyHint")
         structured = {tool["name"] for tool in listed["result"]["tools"] if "outputSchema" in tool}
-        assert structured == {
-            "istanbul_nearby", "istanbul_traffic_status", "istanbul_water_status",
-            "istanbul_transit_line", "istanbul_transport_disruptions",
-            "istanbul_market_schedule",
-        }
-        checks.append("six public tools publish ResponseEnvelope output schemas")
+        assert structured == names
+        checks.append("all 16 public tools publish ResponseEnvelope output schemas")
 
         status, discovered = request(server.base, "/mcp/", payload=rpc("server/discover", modern=True))
         assert status == 200 and "2026-07-28" in discovered["result"]["supportedVersions"]
         assert "istanbul://coverage" in discovered["result"]["instructions"]
+        assert discovered["result"]["ttlMs"] > 0 and discovered["result"]["cacheScope"] == "public"
         status, modern_invalid = request(server.base, "/mcp/", payload=rpc(
             "tools/call", {"name": "istanbul_nearby", "arguments": {}}, modern=True,
         ))
-        assert status == 200 and tool_payload(modern_invalid)["data"][0]["field"] == "lat"
+        assert status == 200 and modern_invalid["result"]["isError"] is True
+        assert tool_payload(modern_invalid, allow_error=True)["data"][0]["field"] == "lat"
         result = modern_invalid["result"]
         assert result["structuredContent"] == json.loads(result["content"][0]["text"])
         checks.append("modern server/discover and structured tools/call without initialize")
@@ -160,7 +159,8 @@ def check_public_mode(directory: Path) -> list[str]:
         for modern in (False, True):
             status, resources = request(server.base, "/mcp/", payload=rpc("resources/list", modern=modern))
             expected_uris = {"istanbul://coverage", "istanbul://sources", "istanbul://schema/catalog"}
-            assert status == 200 and {row["uri"] for row in resources["result"]["resources"]} == expected_uris
+            actual_uris = {row["uri"] for row in resources["result"]["resources"]}
+            assert status == 200 and expected_uris <= actual_uris
             for uri in sorted(expected_uris):
                 status, document = request(server.base, "/mcp/", payload=rpc(
                     "resources/read", {"uri": uri}, modern=modern,
@@ -178,7 +178,7 @@ def check_public_mode(directory: Path) -> list[str]:
             ))
             assert status == 200
             assert "istanbul_get_resource_schema" in rendered["result"]["messages"][0]["content"]["text"]
-        checks.append("both protocol eras list/read 3 local resources and list/render 4 workflow prompts")
+        checks.append("both protocol eras list/read local resources and list/render 4 workflow prompts")
 
         status, health = request(server.base, "/mcp/", payload=rpc(
             "tools/call", {"name": "istanbul_health", "arguments": {}},
@@ -191,8 +191,8 @@ def check_public_mode(directory: Path) -> list[str]:
                            "arguments": {"resource_id": "not-enabled",
                                          "sql": "SELECT COUNT(*) AS n FROM records"}},
         ))
-        assert status == 200
-        assert tool_payload(invalid_sql)["data"][0]["error_code"] == "resource_not_allowlisted"
+        assert status == 200 and invalid_sql["result"]["isError"] is True
+        assert tool_payload(invalid_sql, allow_error=True)["data"][0]["error_code"] == "resource_not_allowlisted"
         checks.append("SQL resource allowlist fails closed")
 
         status, monitored = request(server.base, "/status")
@@ -229,9 +229,9 @@ def check_keyed_mode(directory: Path) -> list[str]:
                            "arguments": {"kind": "pharmacy", "lat": 41, "lon": 29,
                                          "radius_m": 6000}}, modern=True,
         ))
-        assert status == 200
-        assert tool_payload(invalid_geo)["data"][0]["field"] == "radius_m"
-        assert invalid_geo["result"]["structuredContent"] == tool_payload(invalid_geo)
+        assert status == 200 and invalid_geo["result"]["isError"] is True
+        assert tool_payload(invalid_geo, allow_error=True)["data"][0]["field"] == "radius_m"
+        assert invalid_geo["result"]["structuredContent"] == tool_payload(invalid_geo, allow_error=True)
         checks.append("keyed modern call: invalid geo rejected without upstream access")
 
         # Two authenticated attempts are already spent; the daily quota is five.

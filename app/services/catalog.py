@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 
@@ -54,7 +55,7 @@ class CatalogService:
             return self._source_error("CKAN package search is unavailable.", exc)
         datasets = result.get("results", [])
         for dataset in datasets:
-            self.repository.upsert_dataset(dataset)
+            await asyncio.to_thread(self.repository.upsert_dataset, dataset)
         data = sorted(
             [self._dataset_summary(dataset, query=safe_query) for dataset in datasets],
             key=lambda item: item["relevance"]["score"],
@@ -89,7 +90,7 @@ class CatalogService:
             return self._rate_limited("CKAN package_show", exc)
         except Exception as exc:
             return self._source_error(f"CKAN dataset metadata is unavailable for {safe_dataset_id}.", exc)
-        self.repository.upsert_dataset(dataset)
+        await asyncio.to_thread(self.repository.upsert_dataset, dataset)
         return success_envelope(
             summary=f"Dataset '{dataset.get('title') or safe_dataset_id}' metadata retrieved.",
             data=[self._dataset_detail(dataset)],

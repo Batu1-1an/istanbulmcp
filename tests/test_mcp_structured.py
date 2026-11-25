@@ -34,9 +34,10 @@ CASES = [
 async def test_only_selected_tools_publish_the_canonical_envelope_schema(legacy):
     server = create_mcp_server(Settings(mcp_legacy_tools_enabled=legacy))
     tools = await server.list_tools()
-    expected = (STRUCTURED_TOOL_NAMES - set(EVENT_TOOL_NAMES)) | (STRUCTURED_LEGACY_TOOL_NAMES if legacy else set())
+    gated = set(EVENT_TOOL_NAMES) | {"istanbul_next_departures", "istanbul_gtfs_snapshot_status"}
+    expected = (STRUCTURED_TOOL_NAMES - gated) | (STRUCTURED_LEGACY_TOOL_NAMES if legacy else set())
     structured = {tool.name for tool in tools if tool.output_schema is not None}
-    assert len(STRUCTURED_TOOL_NAMES) == 9
+    assert len(STRUCTURED_TOOL_NAMES) == 21
     assert structured == expected
     for tool in tools:
         if tool.name in expected:
@@ -50,16 +51,19 @@ def test_adapter_preserves_input_schema_docstring_and_bare_dict_handler(name):
     adapted = with_envelope_output(handler)
     original = inspect.signature(handler, eval_str=True)
     signature = inspect.signature(adapted)
-    assert signature.parameters == original.parameters
+    assert list(signature.parameters) == list(original.parameters)
+    for param_name, orig_param in original.parameters.items():
+        assert signature.parameters[param_name].default == orig_param.default
+        assert signature.parameters[param_name].kind == orig_param.kind
     assert original.return_annotation is dict
     assert signature.return_annotation is ResponseEnvelope
     assert adapted.__name__ == handler.__name__
     assert adapted.__doc__ == handler.__doc__
-    assert inspect.iscoroutinefunction(adapted)
+    assert inspect.iscoroutinefunction(adapted) == inspect.iscoroutinefunction(handler)
 
     reference = MCPServer("unadapted")
     reference.add_tool(handler, structured_output=False)
-    configured = create_mcp_server(Settings(mcp_legacy_tools_enabled=True, events_enabled=True))
+    configured = create_mcp_server(Settings(mcp_legacy_tools_enabled=True, events_enabled=True, gtfs_schedule_enabled=True))
     original_tool = asyncio.run(reference.list_tools())[0]
     actual_tool = next(tool for tool in asyncio.run(configured.list_tools()) if tool.name == name)
     assert actual_tool.input_schema == original_tool.input_schema
@@ -95,7 +99,7 @@ async def test_structured_and_text_outputs_preserve_success_stale_and_failure_en
     server = create_mcp_server(Settings(mcp_legacy_tools_enabled=True))
     async with Client(server, mode=mode) as client:
         result = await client.call_tool(name, arguments)
-        assert not result.is_error
+        assert result.is_error is (state == "broken")
         assert result.structured_content == payload
         assert len(result.content) == 1
         assert json.loads(result.content[0].text) == payload
@@ -111,10 +115,10 @@ async def test_structured_and_text_outputs_preserve_success_stale_and_failure_en
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mode", ["legacy", "2026-07-28"])
-async def test_expected_validation_failure_is_structured_not_an_mcp_execution_error(mode):
+async def test_expected_validation_failure_is_structured_with_is_error_true(mode):
     async with Client(create_mcp_server(Settings()), mode=mode) as client:
         result = await client.call_tool("istanbul_nearby", {})
-    assert result.is_error is False
+    assert result.is_error is True
     assert result.structured_content["ok"] is False
     assert result.structured_content["data"][0]["error_code"] == "validation_error"
     assert json.loads(result.content[0].text) == result.structured_content
@@ -141,7 +145,7 @@ async def test_adapter_retains_standard_source_error_envelope(monkeypatch):
     monkeypatch.setattr(handlers, "CityService", lambda **_kw: SimpleNamespace(traffic_status=method))
     async with Client(create_mcp_server(Settings())) as client:
         result = await client.call_tool("istanbul_traffic_status", {})
-    assert result.is_error is False
+    assert result.is_error is True
     assert result.structured_content == payload
     assert result.structured_content["freshness"]["status"] == "broken"
 

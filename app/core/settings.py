@@ -153,6 +153,8 @@ class Settings:
     events_max_rows: int = 10000
     events_biletinial_max_pages: int = 40
     events_detail_ttl_seconds: int = 900
+    mcp_public_base_url: str = "https://istanbulmcp-production.up.railway.app"
+    otel_exporter_otlp_endpoint: str | None = None
 
 
 def _int_env(name: str, default: int) -> int:
@@ -391,4 +393,6 @@ def get_settings() -> Settings:
         events_max_rows=_int_env("EVENTS_MAX_ROWS", 10000),
         events_biletinial_max_pages=_int_env("EVENTS_BILETINIAL_MAX_PAGES", 40),
         events_detail_ttl_seconds=_int_env("EVENTS_DETAIL_TTL_SECONDS", 900),
+        mcp_public_base_url=os.getenv("MCP_PUBLIC_BASE_URL", "https://istanbulmcp-production.up.railway.app").rstrip("/"),
+        otel_exporter_otlp_endpoint=_str_env("OTEL_EXPORTER_OTLP_ENDPOINT"),
     )

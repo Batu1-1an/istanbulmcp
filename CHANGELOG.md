@@ -55,6 +55,67 @@ göstermez. Registry yayın bilgisi için [yayın rehberine](docs/registry.md) b
 - Canlı `istanbul_transport_disruptions` hat testi yanlış parametre adı (`line_code`)
   yerine aracın gerçek parametresi `line` ile çağrılır.
 
+## [0.10.0] - 2026-11-25
+
+### Added
+- `2026-07-28` SEP-2549 `CacheHint` desteği: `server/discover`, `tools/list`,
+  `resources/list`, `resources/templates/list`, `prompts/list` (300 sn) ve
+  `resources/read` (60 sn) yanıtları public modda `cacheScope="public"`, anahtarlı
+  modda `cacheScope="private"` ile döner.
+- MCP Apps (`io.modelcontextprotocol/ui`) desteği: `istanbul_nearby`
+  (`ui://istanbul/nearby-map`), `istanbul_water_status`
+  (`ui://istanbul/water-dashboard`) ve `istanbul_events_plan`
+  (`ui://istanbul/events-plan`) için katı boş CSP'li, sıfır dış ağ çağrılı
+  sandboxed etkileşimli HTML görünümleri eklendi.
+- Yerel resource şablonları (`istanbul://guides/{topic}` ve
+  `istanbul://districts/{district}`) ile Türkçe/ASCII duyarlı `completion/complete`
+  otomatik tamamlama desteği (39 ilçe, etkinlik kategorileri, rehber konuları,
+  bilinen yerler ve örnek İETT hatları) eklendi.
+- Marka ikonları (`GET /icon.png` 512×512 PNG < 10 KB, `GET /favicon.ico`),
+  `MCPServer` `description`/`websiteUrl`/`icons` metadata'sı, `server.json`
+  `icons` alanı ve salt okunur Server Card uçları (`/server-card`,
+  `/.well-known/mcp/server-card.json`) eklendi.
+- OpenTelemetry izleme desteği: HTTP ve tool JSON loglarına aktif
+  `trace_id`/`span_id`, dış HTTP isteklerine W3C `traceparent` aktarımı ve
+  opsiyonel `OTEL_EXPORTER_OTLP_ENDPOINT` başlatıcısı eklendi.
+
+### Changed
+- Yayınlanan 21 aracın tamamı artık tutarlı biçimde sıkıştırılmış `ResponseEnvelope`
+  `outputSchema` (6.026 → 3.618 byte, -%40) ve `structuredContent` yayımlar.
+- Validasyon, kaynak ve domain hataları (`ok=false`) MCP protokolüne uygun olarak
+  `isError: true` bayrağıyla ve tam yapılandırılmış `ResponseEnvelope` içeriğiyle
+  döner; `ToolTelemetry` bunları yine `domain_error` ve gerçek `error.code` ile
+  sınıflandırır.
+- Tüm 21 aracın parametrelerine JSON Schema `Field(description=...)` açıklamaları
+  eklendi; uzun etkinlik docstring'leri ve sunucu talimatları (-%45) sadeleştirilip
+  ayrıntılı kurallar isteğe bağlı okunan `istanbul://guides/{topic}` kaynağına
+  taşındı.
+- Stateless sunucuda `subscriptions=False` ayarlandı; `server/discover` artık
+  gerçekçi olarak `listChanged: false` ve `subscribe: false` ilan eder.
+- `/status` içindeki `TOOL_SOURCES` eşlemesine etkinlik araçları eklendi.
+
+### Performance
+- Uygulama lifespan'inde paylaşımlı `httpx.AsyncClient` bağlantı havuzu
+  (`shared_http_pool`) eklendi; tüm 14 konektör sıcak TCP/TLS bağlantılarını
+  yeniden kullanır.
+- `CityService`, `TransitService`, `CatalogService`, `/readyz` ve `/status`
+  içindeki senkron SQLite çağrıları `asyncio.to_thread` ile event loop dışına
+  alındı; `init_database` inode bazlı önbelleklendi.
+
+### Removed
+- Kullanılmayan `zeep` bağımlılığı `pyproject.toml` dosyasından kaldırıldı.
+
+## [0.9.5] - 2026-11-24
+
+### Fixed
+- Tamamen geçmişte kalan bir tarih aralığı için `istanbul_events_search` yalnızca
+  `no_indexed_sessions` ve "eşleşme yok" diyordu. Tarihin geçmişte olduğu
+  söylenmediği için, "bugün" bilgisi eski olan istemciler şehirde etkinlik
+  olmadığı sonucuna varabiliyordu. Artık ilk boş sonuç nedeni
+  `requested_dates_before_today` olarak döner. Uyarı, İstanbul'daki bugünün
+  tarihini verir ve aramanın o tarihten başlatılmasını önerir. `istanbul_events_plan`
+  aynı nedeni `fulfillment.reason_codes` içinde taşır.
+
 ## [0.9.4] - 2026-11-09
 
 ### Fixed

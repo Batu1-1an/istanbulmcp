@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 
+from app.core.otel import inject_trace_headers
 from app.core.rate_limit import RateLimiter
 
 
@@ -61,6 +62,12 @@ async def request_with_retries(
             request=httpx.Request(method, url),
         )
     kwargs["timeout"] = _connect_capped(kwargs.get("timeout", client.timeout))
+    if "headers" in kwargs and isinstance(kwargs["headers"], dict):
+        kwargs["headers"] = inject_trace_headers(kwargs["headers"])
+    elif "headers" not in kwargs:
+        injected = inject_trace_headers({})
+        if injected:
+            kwargs["headers"] = injected
 
     for attempt in range(1, attempts + 1):
         try:

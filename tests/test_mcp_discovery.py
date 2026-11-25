@@ -79,8 +79,14 @@ def test_discovery_adds_no_tools_and_lists_three_json_resources(rpc_client):
     tools = call("tools/list")["result"]["tools"]
     assert {tool["name"] for tool in tools} == set(DEFAULT_TOOL_NAMES)
     resources = call("resources/list")["result"]["resources"]
-    assert {resource["uri"] for resource in resources} == RESOURCE_URIS
-    assert all(resource["mimeType"] == "application/json" for resource in resources)
+    json_resources = [r for r in resources if r["uri"].startswith("istanbul://")]
+    ui_resources = [r for r in resources if r["uri"].startswith("ui://")]
+    assert {resource["uri"] for resource in json_resources} == RESOURCE_URIS
+    assert all(resource["mimeType"] == "application/json" for resource in json_resources)
+    assert {resource["uri"] for resource in ui_resources} == {
+        "ui://istanbul/nearby-map", "ui://istanbul/water-dashboard", "ui://istanbul/events-plan",
+    }
+    assert all(resource["mimeType"] == "text/html;profile=mcp-app" for resource in ui_resources)
 
 
 @pytest.mark.parametrize("uri", sorted(RESOURCE_URIS))

@@ -5,7 +5,7 @@ import math
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 FreshnessStatus = Literal["fresh", "stale", "unknown", "broken"]
 
@@ -38,14 +38,47 @@ def public_page_url(url: str | None) -> str | None:
     return url
 
 
-class Freshness(BaseModel):
+def _compact_envelope_schema(schema: dict[str, Any]) -> None:
+    """Strip redundant Pydantic field titles/null defaults to keep tools/list compact."""
+    def walk(node: Any) -> Any:
+        if isinstance(node, list):
+            return [walk(item) for item in node]
+        if not isinstance(node, dict):
+            return node
+        compacted = {key: walk(value) for key, value in node.items() if key != "title"}
+        any_of = compacted.get("anyOf")
+        if isinstance(any_of, list) and len(any_of) == 2 and {"type": "null"} in any_of:
+            other = next((item for item in any_of if item != {"type": "null"}), None)
+            if isinstance(other, dict) and isinstance(other.get("type"), str) and "$ref" not in other:
+                compacted.pop("anyOf")
+                for key, value in other.items():
+                    if key == "type":
+                        compacted["type"] = [value, "null"]
+                    elif key == "enum":
+                        compacted["enum"] = [*value, None]
+                    else:
+                        compacted[key] = value
+        if "default" in compacted and compacted["default"] is None:
+            compacted.pop("default")
+        return compacted
+
+    updated = walk(schema)
+    schema.clear()
+    schema.update(updated)
+
+
+class _EnvelopeModel(BaseModel):
+    model_config = ConfigDict(json_schema_extra=_compact_envelope_schema)
+
+
+class Freshness(_EnvelopeModel):
     status: FreshnessStatus
     retrieved_at: str = Field(default_factory=utc_now_iso)
     source_updated_at: str | None = None
     ttl_seconds: int | None = None
 
 
-class Source(BaseModel):
+class Source(_EnvelopeModel):
     name: str
     publisher: str = "Istanbul Metropolitan Municipality"
     operator: str | None = None
@@ -77,19 +110,19 @@ class Source(BaseModel):
         return public_page_url(url)
 
 
-class Pagination(BaseModel):
+class Pagination(_EnvelopeModel):
     limit: int
     offset: int = 0
     total_estimate: int | None = None
 
 
-class Repair(BaseModel):
+class Repair(_EnvelopeModel):
     next_step: str
     tool: str | None = None
     arguments: dict[str, Any] | None = None
 
 
-class ErrorInfo(BaseModel):
+class ErrorInfo(_EnvelopeModel):
     code: str
     temporary: bool = False
     retry_after_ms: int | None = Field(default=None, ge=0)
@@ -97,7 +130,7 @@ class ErrorInfo(BaseModel):
     repair: Repair | None = None
 
 
-class ResultInfo(BaseModel):
+class ResultInfo(_EnvelopeModel):
     empty_reasons: list[str] | None = Field(default=None, max_length=30)
     coverage: dict[str, Any] | None = Field(default=None, max_length=20)
     filter_counts: dict[str, int] | None = None
@@ -121,7 +154,8 @@ def result_info(*, returned: int, matched: int | None = None,
     return ResultInfo(returned=returned, matched=matched, truncated=truncated, scope=scope, next_step=note)
 
 
-class ResponseEnvelope(BaseModel):
+class ResponseEnvelope(_EnvelopeModel):
+
     ok: bool = True
     summary: str
     data: list[dict[str, Any]] = Field(default_factory=list)

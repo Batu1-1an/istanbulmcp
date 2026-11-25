@@ -478,7 +478,7 @@ async def test_real_mcp_registry_preserves_gtfs_success_and_source_failure(harne
         expire_gtfs(beyond_stale=True)
         harness.offline = True
         failure = await client.call_tool("istanbul_nearby", STOP_ARGS)
-        assert not failure.is_error
+        assert failure.is_error is True
         assert failure.structured_content["ok"] is False
         assert failure.structured_content["freshness"]["status"] == "broken"
         assert gtfs_source(failure.structured_content)["coverage_status"] == "unavailable"

@@ -16,6 +16,8 @@ from typing import Any, Iterator
 from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
 from pydantic import ValidationError
 
+from app.core.otel import with_trace_context
+
 logger = logging.getLogger("istanbul_mcp.tools")
 SLOW_THRESHOLD_MS = 1000
 CACHE_EVENTS = ("hit", "miss", "load", "wait", "stale", "error")
@@ -61,10 +63,7 @@ class CallObservation:
             return
 
     def _classify_result(self, result: Any) -> None:
-        if getattr(result, "is_error", False):
-            self.outcome = "tool_error"
-            self.error_code = "tool_execution_error"
-            return
+        is_error = bool(getattr(result, "is_error", False))
         payload = getattr(result, "structured_content", None)
         if not isinstance(payload, dict):
             content = getattr(result, "content", [])
@@ -78,6 +77,9 @@ class CallObservation:
                     except (ValueError, RecursionError):
                         pass
         if not isinstance(payload, dict):
+            if is_error:
+                self.outcome = "tool_error"
+                self.error_code = "tool_execution_error"
             return
         data = payload.get("data")
         self.returned = len(data) if isinstance(data, list) else None
@@ -96,6 +98,9 @@ class CallObservation:
             if code is None and isinstance(data, list):
                 code = next((row.get("error_code") for row in data if isinstance(row, dict) and row.get("error_code")), None)
             self.error_code = code if isinstance(code, str) and code in ERROR_CODES else "other_error"
+        elif is_error:
+            self.outcome = "tool_error"
+            self.error_code = "tool_execution_error"
 
 
 _current: ContextVar[CallObservation | None] = ContextVar("istanbul_tool_observation", default=None)
@@ -149,12 +154,12 @@ class ToolTelemetry:
             row["partial_responses"] += int(observation.partial)
             row.update(last_outcome=observation.outcome, last_duration_ms=round(duration_ms, 3), last_completed_at=_now())
         try:
-            logger.info(json.dumps({
+            logger.info(json.dumps(with_trace_context({
                 "event": "mcp_tool_call", "tool": label, "outcome": observation.outcome,
                 "error_code": observation.error_code, "duration_ms": round(duration_ms, 3),
                 "slow": slow, "returned": observation.returned, "freshness": observation.freshness,
                 "partial": observation.partial, "cache": cache,
-            }, separators=(",", ":")))
+            }), separators=(",", ":")))
         except Exception:
             # A broken log handler must not replace a result or the original
             # exception. Never log the logging error (it may contain payloads).

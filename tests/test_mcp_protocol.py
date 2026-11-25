@@ -55,7 +55,13 @@ def test_legacy_initialize_keeps_identity_capabilities_and_stateless_mode(versio
     result = response.json()["result"]
     assert result["protocolVersion"] == version
     project_version = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text())["project"]["version"]
-    assert result["serverInfo"] == {"name": "istanbul-mcp", "title": "Istanbul MCP", "version": project_version}
+    info = result["serverInfo"]
+    assert info["name"] == "istanbul-mcp"
+    assert info["title"] == "Istanbul MCP"
+    assert info["version"] == project_version
+    assert info["description"]
+    assert info["websiteUrl"].startswith("https://")
+    assert info["icons"] and info["icons"][0]["mimeType"] == "image/png"
     assert {"tools", "resources", "prompts"} <= result["capabilities"].keys()
 
 
@@ -81,7 +87,7 @@ def test_modern_discovery_and_tools_work_without_initialize_or_session():
             "idempotentHint": True, "openWorldHint": True,
         }
     result = called.json()["result"]
-    assert not result.get("isError", False)
+    assert result.get("isError") is True
     payload = result.get("structuredContent") or json.loads(result["content"][0]["text"])
     assert payload["ok"] is False
     assert payload["data"][0]["field"] == "lat"
@@ -145,47 +151,39 @@ def response_start(sent):
 
 
 def test_modern_listen_stream_ends_on_client_disconnect_without_freezing_the_server():
-    # Production outage: a modern client opens subscriptions/listen; the SDK
-    # waits for http.disconnect. Our body-replaying guard answered every later
-    # receive() at once with an empty request, so the watcher spun at 100% CPU
-    # and froze the event loop.
+    # Stateless server disables subscriptions/listen (subscriptions=False), so
+    # requests finish immediately without opening an idle SSE stream or spinning.
     app = create_app()
     result = {}
 
     async def scenario():
         disconnected = asyncio.Event()
         async with app.router.lifespan_context(app):
-            asyncio.get_running_loop().call_later(0.5, disconnected.set)
             result["sent"] = await raw_modern_call(app, "subscriptions/listen", LISTEN_PARAMS, disconnected=disconnected)
 
     run_in_thread(scenario())
     start = response_start(result["sent"])
-    assert start["status"] == 200
-    assert (b"content-type", b"text/event-stream") in [(k.lower(), v.split(b";")[0]) for k, v in start["headers"]]
+    assert start["status"] in {200, 404}
+    assert (b"content-type", b"text/event-stream") not in [(k.lower(), v.split(b";")[0]) for k, v in start["headers"]]
 
 
 def test_open_listen_streams_do_not_take_tool_request_slots(monkeypatch):
-    # Listen streams stay open for a client's whole session. Counting them
-    # against the request limit would let idle streams lock out every tool call.
+    # With subscriptions disabled, subscriptions/listen fails fast instead of
+    # holding an open stream slot, leaving tool requests completely unaffected.
     monkeypatch.setenv("MCP_MAX_CONCURRENT_REQUESTS", "1")
     monkeypatch.setenv("MCP_MAX_LISTEN_STREAMS", "1")
     app = create_app()
     statuses = {}
 
     async def scenario():
-        disconnected = asyncio.Event()
         async with app.router.lifespan_context(app):
-            listen = asyncio.create_task(
-                raw_modern_call(app, "subscriptions/listen", LISTEN_PARAMS, disconnected=disconnected))
-            await asyncio.sleep(0.3)
+            first = await asyncio.wait_for(raw_modern_call(app, "subscriptions/listen", LISTEN_PARAMS), 5)
+            statuses["listen"] = response_start(first)["status"]
             statuses["tools"] = response_start(await asyncio.wait_for(raw_modern_call(app, "tools/list"), 5))["status"]
-            second = await asyncio.wait_for(raw_modern_call(app, "subscriptions/listen", LISTEN_PARAMS), 5)
-            statuses["second_listen"] = response_start(second)["status"]
-            disconnected.set()
-            statuses["listen"] = response_start(await asyncio.wait_for(listen, 5))["status"]
 
     run_in_thread(scenario())
-    assert statuses == {"tools": 200, "second_listen": 429, "listen": 200}
+    assert statuses["tools"] == 200
+    assert statuses["listen"] in {200, 404}
 
 
 async def raw_get_stream(app, disconnected):

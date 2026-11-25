@@ -46,6 +46,9 @@ TOOL_SOURCES = {
     "istanbul_planned_departures": "iett",
     "istanbul_ferry_schedules": "sehir_hatlari",
     "istanbul_metro_accessibility_status": "metro_istanbul",
+    "istanbul_events_search": "events",
+    "istanbul_event_detail": "events",
+    "istanbul_events_plan": "events",
 }
 
 

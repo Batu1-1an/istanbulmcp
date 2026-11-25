@@ -7,6 +7,8 @@ from collections.abc import Awaitable, Callable
 
 from starlette.types import Message, Receive, Scope, Send
 
+from app.core.otel import with_trace_context
+
 ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
 
 logger = logging.getLogger("istanbul_mcp.http")
@@ -36,13 +38,13 @@ class JsonRequestLogMiddleware:
             duration_ms = round((time.perf_counter() - started) * 1000, 2)
             logger.info(
                 json.dumps(
-                    {
+                    with_trace_context({
                         "event": "http_request",
                         "method": scope.get("method"),
                         "path": scope.get("path"),
                         "status": status_code,
                         "duration_ms": duration_ms,
-                    },
+                    }),
                     separators=(",", ":"),
                 )
             )

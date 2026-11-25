@@ -136,5 +136,5 @@ async def test_mcp_accepts_district_and_keeps_ambiguity_structured_in_text(mode,
         assert payload["data"][0]["query"]["scope"] == "district"
 
         ambiguous = await client.call_tool(name, {"place": "Acıbadem"})
-        assert ambiguous.is_error is False
+        assert ambiguous.is_error is True
         assert json.loads(ambiguous.content[0].text)["data"][0]["error_code"] == "ambiguous_place"
