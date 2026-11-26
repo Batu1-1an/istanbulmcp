@@ -26,7 +26,16 @@ def offer_terms(offer: EventOffer) -> dict:
         count = 2
     elif re.search(r'\btek kisilik\b|\bkisi basi\b|\bper person\b',text):
         count = 1
-    if profile or re.fullmatch(r'(?:tam|genel|normal|genel giris)(?: bilet(?:i)?)?',text) or text in {'standart bilet','standard ticket'}:
+    if (
+        profile
+        or re.fullmatch(r'(?:tam|genel|normal|genel giris|ucretsiz)(?: bilet(?:i)?| giris(?:i)?)?', text)
+        or text in {'standart bilet', 'standard ticket'}
+        or (
+            not ambiguous_profile
+            and not re.search(r'indirim|kampanya|uye|promosyon|grup|aile|kacmaz|loca|masa|vip|kombin|kombine|paket|cift|iki|uc|dort', text)
+            and re.search(r'\b(?:tam|genel giris|ucretsiz)\b', text)
+        )
+    ):
         count = count or 1
         profile = profile or 'general'
     elif count and not ambiguous_profile and not re.search(r'indirim|kampanya|uye|promosyon|grup|aile',text):

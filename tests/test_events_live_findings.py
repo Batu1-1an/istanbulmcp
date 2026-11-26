@@ -81,9 +81,62 @@ def test_event_about_strips_punctuation_variant_titles_and_leading_genre_labels(
 
     assert event_about(obs("Clarte", "Clarte Konseri 2024 yılında İstanbul'da kurulmuştur."))["text"].startswith("2024 yılında")
     assert event_about(obs("Küçük Kara Balık", "Tiyatro Oyunu Samed Behrengi'nin eseri."))["text"].startswith("Samed Behrengi")
+    assert event_about(obs("Hedypatheia", "Etkinliği Hedypatheia: tarihin ilk gastronomi eseri."))["text"].startswith("Hedypatheia:")
     assert event_about(
         obs("ARANIZDA EN CESUR KİM? - Canlı Karaoke", "ARANIZDA EN CESUR KİM? Canlı Karaoke Ofiste mikrofonu bırakmayanlar için.")
     )["text"].startswith("Ofiste mikrofonu")
+
+
+def test_pricing_accepts_explicit_tam_and_ucretsiz_while_keeping_bare_or_discounted_categories_unknown():
+    from app.services.event_pricing import offer_terms
+
+    for label in ("1. Kategori Tam", "Salon Tam", "Balkon Tam", "Ücretsiz", "Ücretsiz Giriş", "Genel Giriş - Ayakta"):
+        terms = offer_terms(EventOffer(name=label, price=100.0, currency="TRY"))
+        assert terms["profile"] == "general" and terms["admissions_per_ticket"] == 1, label
+
+    for label in ("Standard", "1. Kategori", "1. Kategori İndirimli", "Kaçmaz Cuma - Genel Giriş Bileti", "VIP Masa Tam"):
+        terms = offer_terms(EventOffer(name=label, price=100.0, currency="TRY"))
+        assert terms["profile"] == "unknown", label
+
+
+def test_known_venue_directory_fills_missing_district_without_overriding_explicit_district():
+    from app.services.event_locations import enrich_verified_venues
+
+    now = datetime.now(timezone.utc)
+    start = datetime(2030, 11, 26, 20, 0, tzinfo=ISTANBUL)
+    baris = EventObservation(
+        source="ticketmaster", source_id="tm-1", series_key="k1", title="Oyun",
+        start_at=start, venue=venue_from("Barış Manço Kültür Merkezi", ""), observed_at=now,
+    )
+    baksm = EventObservation(
+        source="ticketmaster", source_id="tm-2", series_key="k2", title="Oyun 2",
+        start_at=start, venue=venue_from("Beylikdüzü Atatürk Kültür ve Sanat Merkezi (BAKSM)", ""), observed_at=now,
+    )
+    enriched, filled = enrich_verified_venues([baris, baksm])
+    assert enriched[0].venue.district == "Kadıköy"
+    assert enriched[0].venue.side == "asia"
+    assert enriched[0].venue.field_evidence["district"]["basis"] == "verified_venue_directory"
+    assert enriched[1].venue.district == "Beylikdüzü"
+    assert filled >= 2
+
+
+def test_pending_details_prioritizes_unverified_series_before_stale_refresh(tmp_path):
+    repo = EventRepository(tmp_path / "pending.sqlite3")
+    soon = datetime.now(ISTANBUL).replace(minute=0, second=0, microsecond=0) + timedelta(hours=3)
+    later = soon + timedelta(days=2)
+    stale_verified = EventObservation(
+        source="biletinial", source_id="s-stale", series_key="stale-series", title="Stale",
+        start_at=soon, venue=venue_from("Sahne", "Kadıköy"),
+        detail_checked=True, observed_at=datetime.now(timezone.utc) - timedelta(hours=2),
+    )
+    never_checked = EventObservation(
+        source="biletinial", source_id="s-new", series_key="new-series", title="New",
+        start_at=later, venue=venue_from("Unknown venue"),
+        detail_checked=False, observed_at=datetime.now(timezone.utc),
+    )
+    repo.publish("biletinial", [stale_verified, never_checked], {"complete": True})
+    order = repo.pending_details(limit=10, ttl_seconds=900)
+    assert order == [never_checked.event_id, stale_verified.event_id]
 
 
 @pytest.mark.asyncio

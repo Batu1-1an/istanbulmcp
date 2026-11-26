@@ -152,7 +152,8 @@ def event_about(row: EventObservation) -> dict:
         for _ in range(3):
             text = re.sub(rf"^{flexible_title}(?=$|[\s:–—|-])[\s:–—|-]*", "", text, count=1, flags=re.I)
     leading_genre = re.sub(
-        r"^(?:tiyatro oyunu|çocuk oyunu|cocuk oyunu|stand[\s-]*up gösterisi|stand[\s-]*up gosterisi|konseri|sergisi)\b[\s:–—-]*",
+        r"^(?:tiyatro oyunu|çocuk oyunu|cocuk oyunu|stand[\s-]*up gösterisi|stand[\s-]*up gosterisi|"
+        r"konseri|sergisi|etkinliği|etkinligi|gösterisi|gosterisi|atölyesi|atolyesi|müzikali|muzikali)\b[\s:–—-]*",
         "",
         text,
         count=1,
@@ -754,11 +755,18 @@ async def keep_events_fresh(settings: Settings):
             try:
                 await service.refresh_source(source)
                 if source == "biletinial":
-                    pending = await asyncio.to_thread(service.repository.pending_details, limit=10,
+                    pending = await asyncio.to_thread(service.repository.pending_details, limit=24,
                                                       ttl_seconds=settings.events_detail_ttl_seconds)
-                    for identifier in pending:
-                        await service.detail(identifier)
-                        await asyncio.sleep(1)
+                    if pending:
+                        sem = asyncio.Semaphore(3)
+                        async def _warm(identifier: str) -> None:
+                            async with sem:
+                                try:
+                                    await service.detail(identifier)
+                                except Exception:
+                                    pass
+                                await asyncio.sleep(0.25)
+                        await asyncio.gather(*(_warm(identifier) for identifier in pending))
                     enriched = bool(pending)
             except Exception as exc:
                 logger.warning("Event source refresh failed source=%s error_type=%s", source, type(exc).__name__)

@@ -225,7 +225,7 @@ class EventRepository:
               AND julianday(start_at)>=julianday('now') AND julianday(start_at)<julianday('now','+31 days')
               AND (c.next_check_at IS NULL OR julianday(c.next_check_at)<=julianday('now'))
               GROUP BY o.event_id HAVING verified=0 OR observed<julianday(?)
-              ORDER BY MIN(julianday(start_at)),observed,o.event_id LIMIT ?""", (cutoff, limit)).fetchall()
+              ORDER BY verified,MIN(julianday(start_at)),observed,o.event_id LIMIT ?""", (cutoff, limit)).fetchall()
         return [row["event_id"] for row in rows]
 
     def detail_checked(self, event_id: str, *, succeeded: bool, retry_seconds: int, error_type=None):
