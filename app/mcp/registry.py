@@ -17,6 +17,7 @@ from app.mcp.events import EVENT_TOOL_NAMES
 from app.mcp.instructions import SERVER_INSTRUCTIONS
 from app.mcp.prompts import register_prompts
 from app.mcp.resources import register_resources
+from app.mcp.skills import create_istanbul_skills
 from app.mcp.structured import STRUCTURED_LEGACY_TOOL_NAMES, STRUCTURED_TOOL_NAMES, with_envelope_output
 
 READ_ONLY = ToolAnnotations(
@@ -153,7 +154,7 @@ def create_mcp_server(settings: Settings) -> MCPServer:
         instructions=SERVER_INSTRUCTIONS,
         subscriptions=False,
         cache_hints=_cache_hints(settings),
-        extensions=[create_istanbul_apps()],
+        extensions=[create_istanbul_apps(), create_istanbul_skills(settings)],
     )
     names = DEFAULT_TOOL_NAMES + LEGACY_TOOL_NAMES
     names += EVENT_TOOL_NAMES

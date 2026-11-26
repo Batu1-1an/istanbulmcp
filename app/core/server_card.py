@@ -60,7 +60,10 @@ def build_server_card(settings: Settings) -> dict[str, Any]:
             "resourceTemplates": True,
             "prompts": True,
             "completions": True,
-            "extensions": ["io.modelcontextprotocol/ui"],
+            "extensions": [
+                "io.modelcontextprotocol/ui",
+                "io.modelcontextprotocol/skills",
+            ],
         },
     }
 

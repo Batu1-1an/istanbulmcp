@@ -4,6 +4,9 @@ SERVER_INSTRUCTIONS = """Istanbul MCP is a read-only Istanbul open city-data ser
 Read istanbul://coverage for configured capabilities, istanbul://sources for
 provenance, istanbul://schema/catalog for CKAN discovery, and
 istanbul://guides/{topic} (events, catalog, transit, nearby) for detailed rules.
+Clients supporting Skills over MCP (`io.modelcontextprotocol/skills`) can also
+load workflow skills under `skill://` (istanbul-events-planner when enabled,
+istanbul-transit-guide, istanbul-open-data-explorer, istanbul-city-briefing).
 
 General rules:
 - Use only tools listed by this server; optional GTFS/ferry/event tools may be gated.

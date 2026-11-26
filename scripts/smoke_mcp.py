@@ -1,6 +1,7 @@
 """Run the real local server in public and keyed modes; never contact data APIs."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -28,7 +29,7 @@ def request(base: str, path: str, *, key: str | None = None, payload: dict | Non
         if version:
             headers["mcp-protocol-version"] = version
             headers["mcp-method"] = payload["method"]
-            if "name" in params or "uri" in params:
+            if payload["method"] in {"tools/call", "prompts/get", "resources/read"} and ("name" in params or "uri" in params):
                 headers["mcp-name"] = params.get("name", params.get("uri"))
     message = urllib.request.Request(
         base + path, headers=headers,
@@ -147,6 +148,22 @@ def check_public_mode(directory: Path) -> list[str]:
         assert status == 200 and "2026-07-28" in discovered["result"]["supportedVersions"]
         assert "istanbul://coverage" in discovered["result"]["instructions"]
         assert discovered["result"]["ttlMs"] > 0 and discovered["result"]["cacheScope"] == "public"
+        assert "io.modelcontextprotocol/skills" in discovered["result"]["capabilities"]["extensions"]
+
+        status, skills_list = request(server.base, "/mcp/", payload=rpc("skills/list", modern=True))
+        assert status == 200 and skills_list["result"]["resultType"] == "complete"
+        assert len(skills_list["result"]["skills"]) >= 3
+        first_skill = skills_list["result"]["skills"][0]
+        status, skill_get = request(server.base, "/mcp/", payload=rpc("skills/get", {"uri": first_skill["uri"]}, modern=True))
+        assert status == 200 and skill_get["result"]["skill"] == first_skill
+        status, skill_doc = request(server.base, "/mcp/", payload=rpc("resources/read", {"uri": first_skill["uri"]}, modern=True))
+        assert status == 200
+        raw_skill = skill_doc["result"]["contents"][0]["text"].encode("utf-8")
+        skill_manifest = next(r for r in first_skill["resources"] if r["uri"] == first_skill["uri"])
+        assert len(raw_skill) == skill_manifest["size"]
+        assert skill_manifest["digest"] == f"sha256:{hashlib.sha256(raw_skill).hexdigest()}"
+        checks.append("modern Skills over MCP (skills/list, skills/get, resources/read sha256 verified)")
+
         status, modern_invalid = request(server.base, "/mcp/", payload=rpc(
             "tools/call", {"name": "istanbul_nearby", "arguments": {}}, modern=True,
         ))
