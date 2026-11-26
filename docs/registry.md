@@ -5,18 +5,19 @@ Paket kurmaz; Streamable HTTP URL'ini tanımlar. Dosyanın mevcut olması regist
 kaydı, directory kabulü veya remote sunucunun bu commit'i çalıştırdığı anlamına
 gelmez. Gerçek yayın sonucu aşağıda ayrıca kaydedilmiştir.
 
-## Doğrulanmış yayın — 2026-10-25
+## Doğrulanmış yayın — 2026-11-25
 
-En son yayımlanan sürüm **0.2.6**'dır; kayıt `active` ve `isLatest:true` durumundadır.
-0.2.4 ve 0.2.5 kayıtları da `active` kalır.
+En son yayımlanan sürüm **0.10.0**'dır; kayıt `active` ve `isLatest:true` durumundadır.
+Önceki `0.2.4`, `0.2.5` ve `0.2.6` kayıtları da `active` kalır.
 
 - Ad: `io.github.Batu1-1an/istanbul-mcp`
-- Sürüm: **0.2.6** (`server.json` ile aynı)
+- Sürüm: **0.10.0** (`server.json` ve canlı production ile aynı)
 - Durum: **active**, `isLatest:true`
-- Registry yayın zamanı: `2026-10-25T18:43:36.251008Z`
+- Registry yayın zamanı: `2026-11-25T21:36:47.201239Z`
 - Transport: `streamable-http`
 - Remote URL: `https://istanbulmcp-production.up.railway.app/mcp/`
-- [Sürüme özgü resmî kayıt](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.Batu1-1an%2Fistanbul-mcp/versions/0.2.6)
+- İkon: `https://istanbulmcp-production.up.railway.app/icon.png` (`image/png`, `512×512`)
+- [Sürüme özgü resmî kayıt](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.Batu1-1an%2Fistanbul-mcp/versions/0.10.0)
 - [Sürüm listesi](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.Batu1-1an%2Fistanbul-mcp/versions)
 - [En son yayımlanmış sürümü sorgula](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.Batu1-1an%2Fistanbul-mcp&version=latest)
 
@@ -93,10 +94,10 @@ ve `readOnlyHint` sağlanır; tool açıklamaları yeteneği tarif eder. Eczane 
 rehberi server instructions içinde korunur; kullanıcıya güvenlik/güncellik
 uyarılarının gizlenmesi istenmez.
 
-Başvuru için README'deki kurulum/örnekler, [veri işleme notu](privacy.md) ve destek
-kanalı kullanılabilir. **İkon ve işletmeci gizlilik/saklama onayı henüz başvuru
-engelleridir.** Bunları ve deploy'daki tüm tool'ların geçerli parametrelerle
-çalıştığını doğrulamadan directory'ye hazır olunduğu iddia edilmemelidir.
+Başvuru için README'deki kurulum/örnekler, [veri işleme notu](privacy.md),
+`/icon.png` / `/favicon.ico` ikonları ve destek kanalı hazırdır. **İşletmeci
+gizlilik/saklama onayı ve canlı dizin inceleme doğrulaması başvuru öncesi
+kontrol edilmelidir.** Bunları doğrulamadan directory'ye hazır olunduğu iddia edilmemelidir.
 
 Kontrol edilen kriterler (2026-10-23):
 https://claude.com/docs/connectors/building/review-criteria

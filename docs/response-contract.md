@@ -34,6 +34,7 @@ Başarıda `error:null`; standart hata zarfında:
   Örneğin bilinmeyen kaynak kolonu için `istanbul_get_resource_schema(resource_id=...)`.
   Aksi halde yalnız `next_step` metni bulunur. Gizli exception metni eklenmez.
 - SDK'nin şema dışı argüman/protokol hataları MCP hatasıdır; bu domain zarfı değildir.
+- `0.10.0` ile validasyon, kaynak ve domain hataları (`ok:false`) MCP protokolüne uygun olarak `isError: true` bayrağıyla dönerken `structuredContent` ve `content[0].text` içinde tam `ResponseEnvelope` zarfını korur.
 
 ## Sonuçların kesilmesi
 

@@ -38,7 +38,7 @@ class ApiKeyAuthMiddleware:
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         path = scope.get("path", "")
-        protected = path == "/status" or path == "/mcp" or path.startswith("/mcp/")
+        protected = path == "/status" or path == "/mcp" or (path.startswith("/mcp/") and path != "/mcp/server-card")
         if scope["type"] != "http" or not protected or not self.key_hashes:
             await self.app(scope, receive, send)
             return

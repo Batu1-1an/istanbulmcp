@@ -22,7 +22,12 @@ from app.core.http_logging import JsonRequestLogMiddleware
 from app.core.loop_watchdog import EventLoopWatchdog, validate_watchdog_settings
 from app.core.mcp_transport import McpJsonRpcGuard
 from app.core.otel import configure_otel
-from app.core.server_card import build_server_card
+from app.core.server_card import (
+    AI_CATALOG_MEDIA_TYPE,
+    SERVER_CARD_MEDIA_TYPE,
+    build_ai_catalog,
+    build_server_card,
+)
 from app.core.settings import get_settings
 from app.core.status import build_status
 from app.mcp.registry import create_mcp_server
@@ -79,7 +84,15 @@ async def favicon_ico(_request):
 async def server_card(request):
     return JSONResponse(
         build_server_card(request.app.state.settings),
-        media_type="application/json",
+        media_type=SERVER_CARD_MEDIA_TYPE,
+        headers={"Cache-Control": "public, max-age=300"},
+    )
+
+
+async def ai_catalog(request):
+    return JSONResponse(
+        build_ai_catalog(request.app.state.settings),
+        media_type=AI_CATALOG_MEDIA_TYPE,
         headers={"Cache-Control": "public, max-age=300"},
     )
 
@@ -150,6 +163,8 @@ def create_app() -> Starlette:
             Route("/status", status, methods=["GET"]),
             Route("/icon.png", icon_png, methods=["GET", "HEAD"]),
             Route("/favicon.ico", favicon_ico, methods=["GET", "HEAD"]),
+            Route("/.well-known/ai-catalog.json", ai_catalog, methods=["GET"]),
+            Route("/mcp/server-card", server_card, methods=["GET"]),
             Route("/server-card", server_card, methods=["GET"]),
             Route("/.well-known/mcp/server-card.json", server_card, methods=["GET"]),
             Route("/mcp", mcp_redirect, methods=["GET", "POST", "HEAD", "OPTIONS"]),

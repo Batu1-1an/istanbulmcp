@@ -43,7 +43,9 @@ Tüm değişkenler ve örnek değerler [.env.example](../.env.example) dosyasın
 - `MCP_RATE_LIMIT_REFILL_PER_SECOND`
 - `MCP_RATE_LIMIT_MAX_CLIENTS`
 - `MCP_MAX_CONCURRENT_REQUESTS`
-- `MCP_MAX_LISTEN_STREAMS` — istemcilerin oturum boyunca açık tuttuğu bildirim akışları (yeni protokolde `subscriptions/listen`, eski protokolde `GET /mcp/`) için ayrı üst sınır; varsayılan `200`. Bu akışlar araç isteklerinin eşzamanlılık kotasını kullanmaz.
+- `MCP_MAX_LISTEN_STREAMS` — eski protokoldeki `GET /mcp/` akışları için ayrı üst sınır; varsayılan `200`. (`0.10.0` ile `subscriptions=False` olduğundan modern `subscriptions/listen` akışı açılmaz.)
+- `MCP_PUBLIC_BASE_URL` — ikonlar (`/icon.png`), AI Catalog (`/.well-known/ai-catalog.json`) ve Server Card (`/mcp/server-card`) metadata bağlantılarında kullanılan taban URL; varsayılan `https://istanbulmcp-production.up.railway.app`.
+- `OTEL_EXPORTER_OTLP_ENDPOINT` — opsiyonel OpenTelemetry OTLP/HTTP trace exporter ucu; ayarlı değilse izleme no-op kalır. Aktif span varsa JSON loglara `trace_id`/`span_id`, dış HTTP isteklerine W3C `traceparent` eklenir.
 - `EVENT_LOOP_WATCHDOG_SECONDS` — event loop bu kadar saniye yanıt vermezse tüm thread stack'leri stderr'e yazılır ve süreç `70` koduyla çıkar; Railway `ON_FAILURE` politikası servisi yeniden başlatır. Varsayılan `60`, `0` kapatır.
 
 ## İSKİ kaynak erişimi ve fallback değişkenleri

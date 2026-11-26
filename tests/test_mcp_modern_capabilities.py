@@ -60,9 +60,18 @@ def test_brand_icons_and_server_card_endpoints_are_served():
         assert favicon.headers["content-type"] == "image/x-icon"
         assert len(favicon.content) > 22
 
-        for path in ("/server-card", "/.well-known/mcp/server-card.json"):
+        catalog = client.get("/.well-known/ai-catalog.json")
+        assert catalog.status_code == 200
+        assert catalog.headers["content-type"].startswith("application/ai-catalog+json")
+        entries = catalog.json()["entries"]
+        assert len(entries) == 1
+        assert entries[0]["type"] == "application/mcp-server-card+json"
+        assert entries[0]["url"].endswith("/mcp/server-card")
+
+        for path in ("/mcp/server-card", "/server-card", "/.well-known/mcp/server-card.json"):
             card = client.get(path)
             assert card.status_code == 200
+            assert card.headers["content-type"].startswith("application/mcp-server-card+json")
             body = card.json()
             assert body["name"] == "io.github.Batu1-1an/istanbul-mcp"
             assert "2026-07-28" in body["protocolVersions"]
@@ -75,10 +84,11 @@ def test_server_card_reflects_auth_mode_without_leaking_keys(monkeypatch):
     secret = "fixture-key-that-must-never-leak-1234567890"
     monkeypatch.setenv("MCP_API_KEYS", secret)
     with TestClient(create_app(), base_url="http://localhost") as client:
-        response = client.get("/.well-known/mcp/server-card.json")
-        assert response.status_code == 200
-        assert secret not in response.text
-        assert response.json()["authentication"] == {"required": True, "schemes": ["bearer"]}
+        for path in ("/mcp/server-card", "/.well-known/mcp/server-card.json"):
+            response = client.get(path)
+            assert response.status_code == 200
+            assert secret not in response.text
+            assert response.json()["authentication"] == {"required": True, "schemes": ["bearer"]}
 
 
 def test_modern_protocol_exposes_cache_hints_honest_capabilities_and_apps_extension():
@@ -144,7 +154,16 @@ async def test_mcp_apps_resources_and_tool_bindings(mode):
             content = result.contents[0]
             assert content.mime_type == "text/html;profile=mcp-app"
             assert "<!doctype html>" in content.text.lower()
-            assert "ui/notifications/initialized" in content.text
+            for token in (
+                "ui/initialize",
+                "ui/notifications/initialized",
+                "ui/notifications/tool-result",
+                "ui/notifications/size-changed",
+                "ui/notifications/host-context-changed",
+                "ui/open-link",
+                "ui/resource-teardown",
+            ):
+                assert token in content.text
 
 
 @pytest.mark.asyncio

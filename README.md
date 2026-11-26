@@ -244,7 +244,7 @@ Production yüzeyi **21 salt okunur araçtır**: temel 16 araç, GTFS tarifesine
 | `istanbul_next_departures` | Durak adı arama veya seçilen durağın planlı GTFS kalkışları; canlı ETA değildir. |
 | `istanbul_gtfs_snapshot_status` | Yerel tarife verisinin yaşı ve takvim geçerliliği. |
 
-Sunucu hem eski (`initialize`) hem yeni (`2026-07-28`, `server/discover`) MCP protokolüyle çalışır. Ayrıca üç bilgi kaynağı (`istanbul://coverage`, `istanbul://sources`, `istanbul://schema/catalog`) ve dört Türkçe prompt (`gunun_ozeti`, `mahalle_ozeti`, `veri_kesfi`, `yolculuk_plani`) sunar.
+Sunucu hem eski (`initialize`) hem yeni (`2026-07-28`, `server/discover`, SEP-2549 `CacheHint`) MCP protokolüyle çalışır. Yayınlanan 21 aracın tamamı sıkıştırılmış `ResponseEnvelope` `outputSchema`/`structuredContent` yayımlar ve domain/validasyon hatalarında `isError: true` döner. Ayrıca üç keşif kaynağı (`istanbul://coverage`, `istanbul://sources`, `istanbul://schema/catalog`), iki resource şablonu (`istanbul://guides/{topic}`, `istanbul://districts/{district}`), üç etkileşimli MCP Apps arayüzü (`ui://istanbul/nearby-map`, `ui://istanbul/water-dashboard`, `ui://istanbul/events-plan`), Türkçe/ASCII `completion/complete` tamamlamaları ve dört–beş Türkçe prompt (`gunun_ozeti`, `mahalle_ozeti`, `veri_kesfi`, `yolculuk_plani`, etkinlik açıksa `etkinlik_plani`) sunar.
 
 Parametreler ve davranışlar: [araç referansı](docs/tool-reference.md) · Protokol, prompt ve output schema ayrıntıları: [MCP arayüzü](docs/mcp-interface.md) · Durak ve tarife: [GTFS durakları](docs/gtfs-stops.md), [GTFS planlı kalkışlar](docs/gtfs-schedule.md) · [Yer ve ilçe çözümleme](docs/place-resolution.md) · [Statik şehir katmanları](docs/city-static-layers.md) · [Yanıt sözleşmesi](docs/response-contract.md)
 
@@ -273,7 +273,7 @@ python -m app.main
 docker build -t istanbul-mcp:local .
 ```
 
-Yerel sunucu `GET /healthz`, `GET /readyz`, `GET /status` ve `POST /mcp/` uçlarını sunar. Odaklı test komutları, conformance ve opt-in canlı testler için [geliştirme rehberine](docs/development.md); ortam değişkenleri için [.env.example](.env.example) dosyasına ve [konfigürasyon](docs/configuration.md) sayfasına bakın.
+Yerel sunucu `GET /healthz`, `GET /readyz`, `GET /status`, `GET /icon.png`, `GET /favicon.ico`, `GET /.well-known/ai-catalog.json`, `GET /mcp/server-card` ve `POST /mcp/` uçlarını sunar. Odaklı test komutları, conformance ve opt-in canlı testler için [geliştirme rehberine](docs/development.md); ortam değişkenleri için [.env.example](.env.example) dosyasına ve [konfigürasyon](docs/configuration.md) sayfasına bakın.
 
 ## Dağıtım ve İzleme
 

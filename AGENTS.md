@@ -11,8 +11,7 @@
 
 - Python 3.11+
 - FastMCP / Python MCP SDK with Streamable HTTP
-- `httpx` for REST/JSON/XML sources
-- `zeep` for IETT SOAP services only
+- `httpx` for REST/JSON/XML/SOAP sources (lifespan-pooled via `app/connectors/ibb_relay.py`)
 - SQLite WAL with FTS5 and RTree for the MVP
 - `pydantic` for validation/models
 - `pytest` for tests

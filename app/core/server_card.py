@@ -3,9 +3,12 @@ from __future__ import annotations
 
 from importlib import metadata
 from typing import Any
+from urllib.parse import urlsplit
 
 from app.core.settings import Settings
 
+SERVER_CARD_MEDIA_TYPE = "application/mcp-server-card+json"
+AI_CATALOG_MEDIA_TYPE = "application/ai-catalog+json"
 SERVER_NAME = "io.github.Batu1-1an/istanbul-mcp"
 SERVER_TITLE = "Istanbul MCP"
 SERVER_DESCRIPTION = (
@@ -59,4 +62,20 @@ def build_server_card(settings: Settings) -> dict[str, Any]:
             "completions": True,
             "extensions": ["io.modelcontextprotocol/ui"],
         },
+    }
+
+
+def build_ai_catalog(settings: Settings) -> dict[str, Any]:
+    """Build domain-level /.well-known/ai-catalog.json pointing to /mcp/server-card."""
+    base = settings.mcp_public_base_url.rstrip("/")
+    host = (urlsplit(base).hostname or "istanbulmcp-production.up.railway.app").lower()
+    return {
+        "specVersion": "1.0",
+        "entries": [
+            {
+                "identifier": f"urn:air:{host}:mcp:istanbul-mcp",
+                "type": SERVER_CARD_MEDIA_TYPE,
+                "url": f"{base}/mcp/server-card",
+            }
+        ],
     }

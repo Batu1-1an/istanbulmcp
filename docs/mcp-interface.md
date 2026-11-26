@@ -240,3 +240,31 @@ sorguları, PyPI release metadata'sı ve **2.3.0 wheel kaynak kodu** karşılaş
 
 Genel mimari/araç sözleşmesi için [tool reference](tool-reference.md), erişim için
 [API access](api-access.md), eski tool adları için [migration tablosu](tool-migration.md).
+
+## 8. 0.10.0 modernizasyonu (2026-11-25)
+
+- **SEP-2549 `CacheHint` & `subscriptions=False`:** `server/discover`, `tools/list`,
+  `resources/list`, `resources/templates/list`, `prompts/list` (300 sn) ve
+  `resources/read` (60 sn) cache ipuçları döndürür (`public` / anahtarlı modda
+  `private`). Stateless sunucuda `subscriptions=False` olduğundan `listChanged` ve
+  `resources.subscribe` dürüstçe `false` ilan edilir.
+- **21/21 sıkıştırılmış `outputSchema` ve `isError: true`:** Yayınlanan tüm 21 araç
+  sıkıştırılmış `ResponseEnvelope` (3.618 byte) yayımlar ve her parametrede JSON
+  Schema `description` taşır. `ok: false` domain/validasyon/kaynak hataları
+  `isError: true` + tam `structuredContent` ile döner.
+- **MCP Apps (`io.modelcontextprotocol/ui`, SEP-1865 2026-01-26):** `istanbul_nearby`
+  (`ui://istanbul/nearby-map`), `istanbul_water_status` (`ui://istanbul/water-dashboard`)
+  ve `istanbul_events_plan` (`ui://istanbul/events-plan`) için katı boş CSP'li,
+  tam `ui/initialize` → `ui/notifications/initialized` el sıkışmalı, `ui/open-link`,
+  `ui/notifications/size-changed`, tema ve `ui/resource-teardown` destekli etkileşimli
+  HTML arayüzleri sunulur.
+- **Resource Templates & Completions:** `istanbul://guides/{topic}` ve
+  `istanbul://districts/{district}` şablonları ile Türkçe/ASCII duyarlı
+  `completion/complete` otomatik tamamlama eklendi.
+- **AI Catalog & Server Card (SEP-2127 taslak):** `GET /.well-known/ai-catalog.json`
+  (`application/ai-catalog+json`) ve `GET /mcp/server-card`
+  (`application/mcp-server-card+json`; `/server-card` ve
+  `/.well-known/mcp/server-card.json` alias'larıyla birlikte) sunulur.
+- **İkonlar & OpenTelemetry:** `GET /icon.png` (512×512 PNG < 10 KB), `GET /favicon.ico`,
+  JSON loglarda aktif `trace_id`/`span_id`, dış HTTP isteklerinde W3C `traceparent`
+  aktarımı ve opsiyonel `OTEL_EXPORTER_OTLP_ENDPOINT` desteği eklendi.
