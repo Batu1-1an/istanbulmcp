@@ -10,6 +10,7 @@ import re
 import httpx
 
 from app.connectors.biletinial import BiletinialClient, plain_text
+from app.connectors.ibb_relay import ibb_http_client
 from app.connectors.ticketmaster import TicketmasterClient
 from app.core.envelope import Freshness, Source, Repair, error_envelope, result_info, success_envelope
 from app.core.error_responses import validation_error_envelope
@@ -145,9 +146,20 @@ def event_about(row: EventObservation) -> dict:
     ):
         text = re.sub(pattern, "", text, flags=re.I).strip()
     text = re.sub(r"^HAKKINDA\b[\s:–—-]*", "", text, flags=re.I)
-    title = re.escape(" ".join(row.title.split()))
-    for _ in range(3):
-        text = re.sub(rf"^{title}(?=$|[\s:–—-])[\s:–—-]*", "", text, count=1, flags=re.I)
+    title_words = [re.escape(part) for part in re.findall(r"[^\s:–—|-]+", row.title)]
+    if title_words:
+        flexible_title = r"[\s:–—|-]+".join(title_words)
+        for _ in range(3):
+            text = re.sub(rf"^{flexible_title}(?=$|[\s:–—|-])[\s:–—|-]*", "", text, count=1, flags=re.I)
+    leading_genre = re.sub(
+        r"^(?:tiyatro oyunu|çocuk oyunu|cocuk oyunu|stand[\s-]*up gösterisi|stand[\s-]*up gosterisi|konseri|sergisi)\b[\s:–—-]*",
+        "",
+        text,
+        count=1,
+        flags=re.I,
+    )
+    if leading_genre and leading_genre != text:
+        text = leading_genre
     if normalize_place(text) in {"konser", "konseri", "tiyatro oyunu", "stand up", "stand up gosterisi",
                                  "gosteri", "gosterisi", "etkinlik", "etkinligi", "cocuk oyunu",
                                  "bilet", "biletleri", "sergi", "sergisi"}:
@@ -299,7 +311,7 @@ class EventService:
                 and (now - event_time(snapshots[source]["refreshed_at"])).total_seconds()
                 <= self.settings.events_cache_ttl_seconds + self.settings.events_stale_if_error_seconds}
 
-    def _envelope(self, summary, data, snapshots, *, matched=None, warnings=(), limits=()):
+    def _envelope(self, summary, data, snapshots, *, matched=None, warnings=(), limits=(), next_queries=()):
         usable = self._usable(snapshots)
         ages = [(datetime.now(timezone.utc) - event_time(snapshots[s]["refreshed_at"])).total_seconds() for s in usable]
         overdue = any(age > self.settings.events_cache_ttl_seconds for age in ages)
@@ -321,7 +333,8 @@ class EventService:
                                 freshness=Freshness(status="stale" if stale else "fresh" if usable else "unknown",
                                                     **({"retrieved_at": oldest} if oldest else {}), ttl_seconds=self.settings.events_cache_ttl_seconds),
                                 result=result_info(returned=len(data), matched=matched),
-                                limits=[*EVENT_LIMITS, *limits], warnings=list(dict.fromkeys(notes)))
+                                limits=[*EVENT_LIMITS, *limits], warnings=list(dict.fromkeys(notes)),
+                                next_queries=list(dict.fromkeys(next_queries)))
 
     async def search(self, *, query=None, category=None, date_from=None, date_to=None,
                      time_from=None, time_to=None, district=None, venue=None,
@@ -433,26 +446,34 @@ class EventService:
                     known=row.venue.district or district_from_text(hint)
                     return known!=district
                 return False
-            possible.sort(key=lambda row: (location_priority(row),row.category != category if category else False,
+            possible.sort(key=lambda row: (location_priority(row),
+                                            (row.age_limit is not None) if child_age is not None else False,
+                                            row.category != category if category else False,
                                             category_for(row.title) != category if category else False, price_priority(row),
                                             row.venue.name == "Unknown venue", row.start_at, row.event_id))
+            target_ids = []
             seen_series = set()
-            deadline = asyncio.get_running_loop().time() + 12
             for row in possible:
                 if row.event_id in seen_series:
                     continue
                 seen_series.add(row.event_id)
-                detail_checks += 1
+                target_ids.append(row.event_id)
+                if len(target_ids) == 3:
+                    break
+            if target_ids:
+                detail_checks = len(target_ids)
+                async def _check_one(event_id: str) -> bool:
+                    try:
+                        checked = await self.detail(event_id)
+                        return bool(checked["ok"])
+                    except Exception:
+                        return False  # Snapshot facts remain usable; missing prices stay unknown.
                 try:
-                    async with asyncio.timeout(max(0.01, deadline - asyncio.get_running_loop().time())):
-                        checked = await self.detail(row.event_id)
-                        successful_detail_checks += bool(checked["ok"])
+                    async with asyncio.timeout(12):
+                        outcomes = await asyncio.gather(*(_check_one(eid) for eid in target_ids))
+                        successful_detail_checks = sum(outcomes)
                 except TimeoutError:
-                    break
-                except Exception:
-                    pass  # Snapshot facts remain usable; missing prices stay unknown.
-                if detail_checks == 3:
-                    break
+                    pass
             if detail_checks:
                 try:
                     rows = await asyncio.to_thread(self.repository.search,
@@ -520,7 +541,7 @@ class EventService:
                 counts['excluded_location'] += 1
                 continue
             if query and query_scope=='all':
-                actual=search_text(row.title+' '+row.venue.name).split()
+                actual=search_text(" ".join(filter(None, (row.title, row.venue.name, row.organizer)))).split()
                 tokens=search_text(query).split()
                 matched=all(any(word.startswith(t) for word in actual) for t in tokens) if match_mode=='prefix' else all(t in actual for t in tokens)
                 if not matched:
@@ -609,8 +630,17 @@ class EventService:
             notes.append(f"Requested dates {first}–{last} are before today in Istanbul ({today}); started sessions are excluded and the catalogue is not an archive. Search from {today} or later.")
         if not selected:
             notes.append("No matches in the usable indexed sources; this does not mean there are no Istanbul events.")
+        next_queries: list[str] = []
+        if query and query_scope == "title" and not selected:
+            next_queries.append("Try query_scope='all' to also search venue and organizer names.")
+        if query:
+            folded_q = normalize_place(query)
+            if "caz" in folded_q.split() and "jazz" not in folded_q.split():
+                next_queries.append("Also try query='jazz' for English-titled jazz events.")
+            elif "jazz" in folded_q.split() and "caz" not in folded_q.split():
+                next_queries.append("Also try query='caz' for Turkish-titled jazz events.")
         result = self._envelope(f"{min(len(selected), safe_limit)} indexed event session(s) found.", selected[:safe_limit], snapshots,
-                              matched=len(selected), warnings=notes,
+                              matched=len(selected), warnings=notes, next_queries=next_queries,
                               limits=[f"limit={safe_limit}", f"date_from={first}", f"date_to={last}", f"query_scope={query_scope}",
                                       f"match_mode={match_mode}", f"include_past={str(include_past).lower()}", f"exclude_child_only={str(exclude_child_only).lower()}",
                                       *([f"category_coverage={'observed' if category_observed else 'not_observed'}; scope=indexed date/query; classification is partial"] if category else []),
@@ -676,7 +706,7 @@ class EventService:
                 if self.client is not None:
                     verified, metadata = await fetch(self.client)
                 else:
-                    async with httpx.AsyncClient(timeout=httpx.Timeout(15, connect=5)) as client:
+                    async with ibb_http_client(timeout=httpx.Timeout(15, connect=5)) as client:
                         verified, metadata = await fetch(client)
                 await asyncio.to_thread(self.repository.publish, "biletinial", verified, metadata, series_key=rows[0].series_key)
                 await asyncio.to_thread(self.repository.detail_checked, rows[0].event_id, succeeded=True,

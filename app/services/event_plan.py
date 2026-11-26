@@ -383,6 +383,8 @@ class EventPlanService:
                                               min_gap_minutes=min_gap_minutes, max_price_try=max_price_try,
                                               limit=safe_limit, interests=interests or (), diagnostics=diagnostics,
                                               min_events=min_events,required_categories=required_categories or (),partial_output=partials)
+        if options:
+            partials = []
         envelope["data"] = [{"date": day.isoformat(), "window": {"start": start_time, "end": end_time},
                              "discovery_diagnostics":discovery_diagnostics,"combination_diagnostics":diagnostics,
                              "options": options, "unverified_budget": unverified, "partial_options":partials,"rejected": rejected,

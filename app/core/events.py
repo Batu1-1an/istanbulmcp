@@ -194,17 +194,24 @@ class EventObservation(BaseModel):
 
 
 def venue_from(name: str, address: str = "", lat=None, lon=None) -> EventVenue:
-    district = district_from_text(address)
+    clean_name = name.strip()[:300] or "Unknown venue"
+    district = district_from_text(address) or (district_from_text(clean_name) if clean_name != "Unknown venue" else None)
     asia = {"adalar", "atasehir", "beykoz", "cekmekoy", "kadikoy", "kartal", "maltepe", "pendik", "sancaktepe", "sultanbeyli", "sile", "tuzla", "umraniye", "uskudar"}
+    side: Literal["europe", "asia"] | None = ("asia" if normalize_place(district) in asia else "europe") if district else None
+    if side is None and address:
+        folded_address = normalize_place(address)
+        if "istanbul anadolu" in folded_address:
+            side = "asia"
+        elif "istanbul avrupa" in folded_address:
+            side = "europe"
     try:
         latitude, longitude = float(lat), float(lon)
         if not (40.7 <= latitude <= 41.7 and 27.9 <= longitude <= 30.0):
             latitude = longitude = None
     except (ValueError, TypeError):
         latitude = longitude = None
-    return EventVenue(name=name.strip()[:300] or "Unknown venue", address=address[:600] or None,
-                      district=district, lat=latitude, lon=longitude,
-                      side=("asia" if normalize_place(district) in asia else "europe") if district else None)
+    return EventVenue(name=clean_name, address=address[:600] or None,
+                      district=district, lat=latitude, lon=longitude, side=side)
 
 
 def search_text(value: str) -> str:

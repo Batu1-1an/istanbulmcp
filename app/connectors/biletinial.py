@@ -183,17 +183,40 @@ def _json_events(html: str) -> list[dict]:
     return events
 
 
+def _sv2_meta(fragment: str) -> dict[str, str]:
+    opening = fragment[: fragment.find(">") + 1]
+    attrs = {}
+    for key in ("data-start", "data-city-name", "data-lat", "data-lng", "data-status"):
+        found = re.search(rf'{key}=["\']([^"\']*)["\']', opening, re.I)
+        if found:
+            attrs[key] = unescape(found[1]).strip()
+    org = re.search(r'class=["\']td["\'][^>]*>\s*Organizasyon\s*:\s*(.*?)</div>', fragment, re.S | re.I)
+    if org:
+        cleaned = plain_text(org[1], 200)
+        if cleaned:
+            attrs["organizer"] = cleaned
+    return attrs
+
+
 def _session_header(fragment: str) -> tuple[int, int, str | None, str] | None:
     clock = re.search(r'class=["\']tm["\'][^>]*>(.*?)<', fragment, re.S)
     day = re.search(r'class=["\']d["\'][^>]*>(.*?)<', fragment, re.S)
     venue = re.search(r'href=["\']/tr-tr/mekan/[^"\']+["\'][^>]*>(.*?)</a>', fragment, re.S)
-    if not (day and venue):
+    if not venue:
         return None
-    parts = normalize_place(plain_text(day[1])).split()
-    try:
-        return int(parts[0]), MONTHS[parts[1]], plain_text(clock[1]) if clock else None, plain_text(venue[1], 300)
-    except (ValueError, KeyError, IndexError):
-        return None
+    venue_name = plain_text(venue[1], 300)
+    clock_text = plain_text(clock[1]) if clock else None
+    if day:
+        parts = normalize_place(plain_text(day[1])).split()
+        try:
+            return int(parts[0]), MONTHS[parts[1]], clock_text, venue_name
+        except (ValueError, KeyError, IndexError):
+            pass
+    sv2 = _sv2_meta(fragment)
+    parsed_start = event_time(sv2.get("data-start"))
+    if parsed_start is not None:
+        return parsed_start.day, parsed_start.month, clock_text or parsed_start.strftime("%H:%M"), venue_name
+    return None
 
 
 def _flexible_entry(value: str) -> bool:
@@ -271,6 +294,10 @@ def parse_biletinial_detail(html: str, url: str, known_starts=()) -> tuple[list[
     json_starts, time_conflicts = _json_session_starts(json_events, [header for header in headers if header])
     starts = [value for value in known_starts if isinstance(value, datetime)]
     starts += list(json_starts.values())
+    for _, fragment in sessions:
+        sv2_start = event_time(_sv2_meta(fragment).get("data-start"))
+        if sv2_start is not None:
+            starts.append(sv2_start)
     result = []
     matched_json = set()
     observed = datetime.now(timezone.utc)
@@ -320,13 +347,36 @@ def parse_biletinial_detail(html: str, url: str, known_starts=()) -> tuple[list[
         linked = next((item for item in matching if id(item) not in time_conflicts), matching[0] if matching else None)
         matched_json.update(id(item) for item in matching)
         conflicting = any(id(item) in time_conflicts for item in matching)
+        sv2 = _sv2_meta(fragment)
         observation = _detail_observation(linked or (json_events[0] if json_events else {}), category, slug,
                                           session_id, start, venue_name, url, observed, linked is not None,
                                           start_time_basis="html_date" if flexible else "html_session", source_time_conflict=conflicting,
                                           timing_kind="flexible_entry" if flexible else "scheduled", admission_window=window)
+        if sv2.get("organizer") and not observation.organizer:
+            observation.organizer = sv2["organizer"]
+        if (observation.venue.lat is None or observation.venue.lon is None) and sv2.get("data-lat") and sv2.get("data-lng"):
+            enriched_venue = venue_from(observation.venue.name, observation.venue.address or sv2.get("data-city-name") or "",
+                                        sv2["data-lat"], sv2["data-lng"])
+            observation.venue = observation.venue.model_copy(update={
+                "lat": observation.venue.lat if observation.venue.lat is not None else enriched_venue.lat,
+                "lon": observation.venue.lon if observation.venue.lon is not None else enriched_venue.lon,
+                "district": observation.venue.district or enriched_venue.district,
+                "side": observation.venue.side or enriched_venue.side,
+                "address": observation.venue.address or enriched_venue.address,
+            })
+        elif observation.venue.side is None and sv2.get("data-city-name"):
+            enriched_venue = venue_from(observation.venue.name, sv2["data-city-name"])
+            if enriched_venue.side:
+                observation.venue = observation.venue.model_copy(update={"side": enriched_venue.side})
         observation.excluded_weekdays = sorted(set(excluded_weekdays + _excluded_weekdays(fragment)))
         text = normalize_place(plain_text(fragment))
-        availability = "sold_out" if "tukendi" in text else "limited" if re.search(r"son \d+ bilet", text) else "unknown"
+        sv2_status = normalize_place(sv2.get("data-status") or "")
+        availability = (
+            "sold_out" if "tukendi" in text or sv2_status in {"soldout", "sold out"}
+            else "limited" if re.search(r"son \d+ bilet", text)
+            else "in_stock" if sv2_status == "onsale"
+            else "unknown"
+        )
         prices = re.findall(r'class=["\']price-item["\'][^>]*>\s*<span[^>]*>(.*?)</span>\s*<strong[^>]*>(.*?)</strong>', fragment, re.S)
         if prices:
             offers = []
@@ -344,8 +394,11 @@ def parse_biletinial_detail(html: str, url: str, known_starts=()) -> tuple[list[
         if observation.venue.address and "istanbul" not in normalize_place(observation.venue.address):
             continue
         # HTML city panels can contain nationwide sessions. With no matching JSON-LD,
-        # require an explicit Istanbul label in this session's venue line.
-        if not linked and "istanbul" not in normalize_place(fragment[:fragment.find('</div>', fragment.find('class="vl"')) + 6]):
+        # require an explicit Istanbul label in this session's venue line or data-city-name.
+        city_hint = sv2.get("data-city-name") or ""
+        vl_pos = fragment.find('class="vl"')
+        vl_snippet = fragment[:fragment.find('</div>', vl_pos) + 6] if vl_pos != -1 else ""
+        if not linked and "istanbul" not in normalize_place(city_hint + " " + vl_snippet):
             missing += 1
             continue
         html_days.add((start.date(), normalize_place(venue_name)))
@@ -401,7 +454,12 @@ def parse_biletinial_detail(html: str, url: str, known_starts=()) -> tuple[list[
             observation.description = page_description[:8000]
         if observation.excluded_weekdays:
             observation.warnings.append("Explicit source weekday restrictions apply; excluded_weekdays uses Monday=0 through Sunday=6. A listed date is not proof of admission.")
-        observation.age_limit = facts.get("yas siniri") or None
+        age_limit = facts.get("yas siniri") or None
+        if age_limit is None and page_description:
+            age_match = re.search(r"\b(\d{1,2})\s*[-–]\s*(\d{1,2})\s*yaş\b", page_description, re.I)
+            if age_match and int(age_match[1]) <= int(age_match[2]):
+                age_limit = f"{age_match[1]}-{age_match[2]}"
+        observation.age_limit = age_limit
         if "cocuk oyunu" in folded_genre or "cocuk tiyatro" in folded_genre or "cocuk konser" in folded_genre:
             observation.category = "family"
             observation.category_source = "provider"
