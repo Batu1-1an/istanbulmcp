@@ -169,6 +169,8 @@ async def test_mcp_apps_resources_and_tool_bindings(mode):
                 "ui/resource-teardown",
             ):
                 assert token in content.text
+        plan_ui = (await client.read_resource(EVENTS_PLAN_URI)).contents[0].text
+        assert "opt.performances" in plan_ui
 
 
 @pytest.mark.asyncio

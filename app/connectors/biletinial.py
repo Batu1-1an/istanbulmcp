@@ -391,6 +391,10 @@ def parse_biletinial_detail(html: str, url: str, known_starts=()) -> tuple[list[
                 offer.availability = availability
             if not observation.offers:
                 observation.offers = [EventOffer(availability=availability, url=url)]
+        if not prices and "ucretsiz" in text:
+            for offer in observation.offers:
+                if offer.name == "Standard" and offer.price == 0 and offer.currency == "TRY":
+                    offer.name = "Ücretsiz"
         if observation.venue.address and "istanbul" not in normalize_place(observation.venue.address):
             continue
         # HTML city panels can contain nationwide sessions. With no matching JSON-LD,

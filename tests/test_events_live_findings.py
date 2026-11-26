@@ -223,3 +223,39 @@ async def test_complete_plan_omits_redundant_partial_options(tmp_path):
     assert len(plan["options"]) == 1
     assert plan["partial_options"] == []
     assert plan["fulfillment"]["partial_option_count"] == 0
+
+
+def test_biletinial_free_session_labels_zero_offer_as_ucretsiz_for_party_quote():
+    free_html = """<!doctype html><html><head>
+    <script type="application/ld+json">
+    {"@context":"https://schema.org","@type":"Event","name":"Ücretsiz Oyun","startDate":"2030-11-26T20:00:00+03:00",
+    "location":{"@type":"Place","name":"İBB Kültür Merkezi","address":{"addressLocality":"İstanbul Avrupa"}},
+    "offers":{"@type":"Offer","price":0,"priceCurrency":"TRY","availability":"https://schema.org/InStock"}}
+    </script></head><body>
+    <div class="row sv2-row" id="seans-999" data-start="2030-11-26T20:00:00+03:00"
+         data-city-name="İstanbul Avrupa" data-status="onsale">
+      <div class="dl"><span class="d">Perşembe</span><span class="tm">20:00</span></div>
+      <div class="vl"><a href="/tr-tr/mekan/ibb-km">İBB Kültür Merkezi</a></div>
+      <div class="price"><b>Ücretsiz</b></div>
+    </div></body></html>"""
+    obs, _ = parse_biletinial_detail(free_html, "https://biletinial.com/tr-tr/tiyatro/ucretsiz-oyun")
+    assert obs[0].offers[0].name == "Ücretsiz"
+    quote = party_quote(obs[0].offers, {"general": 2})
+    assert quote["status"] == "observed_subtotal" and quote["observed_ticket_subtotal_try"] == 0.0
+
+
+def test_deduplicate_merges_cross_provider_apostrophe_title_variants():
+    from app.services.events import deduplicate
+
+    now = datetime.now(timezone.utc)
+    start = datetime(2030, 11, 28, 20, 0, tzinfo=ISTANBUL)
+    a = EventObservation(
+        source="biletinial", source_id="b1", series_key="olun", title="Ölün Bizi Ayırana Dek",
+        start_at=start, venue=venue_from("Sefaköy Kültür Sanat Merkezi", "Küçükçekmece"), observed_at=now,
+    )
+    b = EventObservation(
+        source="ticketmaster", source_id="t1", series_key="olun-tm", title="Ölü'n Bizi Ayırana Dek",
+        start_at=start, venue=venue_from("Sefaköy Kültür Sanat Merkezi", "Küçükçekmece"), observed_at=now,
+    )
+    groups = deduplicate([a, b])
+    assert len(groups) == 1 and len(groups[0][1]) == 2

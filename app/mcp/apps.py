@@ -198,13 +198,14 @@ function render(env){
   const options=Array.isArray(root.options)?root.options:[];
   const flex=Array.isArray(root.flexible_entries)?root.flexible_entries:[];
   const optHtml=options.map((opt,idx)=>{
-    const stops=(opt.events||[]).map(ev=>{
+    const stops=(opt.performances||opt.events||[]).map(ev=>{
       const url=safeHref(ev.ticket_url||(Array.isArray(ev.ticket_links)&&ev.ticket_links[0]&&ev.ticket_links[0].url));
       const about=ev.about&&ev.about.text?`<div class="meta">${esc(ev.about.text)}</div>`:"";
       return `<div class="card"><div class="card-title">${esc(ev.start_at||ev.event_date||"")} · ${esc(ev.title||"Etkinlik")}</div>`
         +`<div class="meta">${esc((ev.venue&&ev.venue.name)||"")}${url?` · <a href="${esc(url)}" data-external-url="${esc(url)}" target="_blank" rel="noopener noreferrer">Bilet ↗</a>`:""}</div>${about}</div>`;
     }).join("");
-    return `<div class="card"><div class="card-title">Seçenek ${idx+1}</div><div class="grid">${stops}</div></div>`;
+    const tot=opt.known_minimum_total_try!=null?` · <span class="badge">${esc(opt.known_minimum_total_try)} ₺</span>`:"";
+    return `<div class="card"><div class="card-title">Seçenek ${idx+1}${tot}</div><div class="grid">${stops}</div></div>`;
   }).join("");
   const flexHtml=flex.length?`<div class="card"><div class="card-title">Esnek Giriş Biletleri (saatli plana dahil değil)</div><div class="meta">${flex.map(f=>esc(f.title||"")).join(" · ")}</div></div>`:"";
   document.getElementById("app").innerHTML=`<h1><span>${esc(env.summary||"Etkinlik Planı")}</span><span class="badge">${options.length} seçenek</span></h1>${renderMeta(env)}<div class="grid">${optHtml||"<div class='empty'>Tam plan seçeneği bulunamadı.</div>"}${flexHtml}</div>`;

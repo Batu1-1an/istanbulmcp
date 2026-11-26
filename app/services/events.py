@@ -112,7 +112,8 @@ def deduplicate(rows: list[EventObservation]) -> list[tuple[EventObservation, li
     groups: list[tuple[EventObservation, list[EventObservation]]] = []
     buckets: dict[tuple, list[int]] = {}
     for row in sorted(rows, key=lambda r: (r.source != "biletinial", r.performance_id)):
-        key = (search_text(row.title), row.start_at.isoformat(), search_text(row.venue.name), row.timing_kind)
+        canonical_title = search_text(re.sub(r"['’‘`]", "", row.title))
+        key = (canonical_title, row.start_at.isoformat(), search_text(row.venue.name), row.timing_kind)
         candidates = buckets.setdefault(key, [])
         def compatible(other):
             if other.source == row.source:
@@ -470,7 +471,7 @@ class EventService:
                     except Exception:
                         return False  # Snapshot facts remain usable; missing prices stay unknown.
                 try:
-                    async with asyncio.timeout(12):
+                    async with asyncio.timeout(4.0):
                         outcomes = await asyncio.gather(*(_check_one(eid) for eid in target_ids))
                         successful_detail_checks = sum(outcomes)
                 except TimeoutError:
