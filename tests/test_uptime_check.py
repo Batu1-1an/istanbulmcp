@@ -80,3 +80,37 @@ def test_empty_workflow_input_falls_back_to_production(monkeypatch):
     monkeypatch.setattr(uptime_check, "probe", lambda url, timeout: seen.append(url))
     assert uptime_check.main(["--attempts", "1"]) == 0
     assert seen == [uptime_check.DEFAULT_URL]
+
+
+def test_probe_sources_detects_degraded_relay(monkeypatch):
+    replies = iter([
+        (200, {"result": {"structuredContent": {"ok": False, "error": {"code": "source_unavailable"}}}}),
+        (200, {"result": {"structuredContent": {"ok": False, "error": {"code": "source_unavailable"}}}}),
+        (200, {"ibb_relay": {"enabled": True, "status": "degraded", "last_error_kind": "relay_suspended_or_misconfigured", "last_error_status": 403}}),
+    ])
+    monkeypatch.setattr(uptime_check, "_request", lambda *args, **kwargs: next(replies))
+    reason = uptime_check.probe_sources("https://example.invalid")
+    assert reason == "IBB relay degraded: relay_suspended_or_misconfigured (HTTP 403)"
+
+
+def test_probe_sources_reports_healthy_when_sources_succeed(monkeypatch):
+    replies = iter([
+        (200, {"result": {"structuredContent": {"ok": True}}}),
+        (200, {"result": {"structuredContent": {"ok": True}}}),
+        (200, {"ibb_relay": {"enabled": True, "status": "healthy"}}),
+    ])
+    monkeypatch.setattr(uptime_check, "_request", lambda *args, **kwargs: next(replies))
+    assert uptime_check.probe_sources("https://example.invalid") is None
+
+
+def test_main_with_check_sources_writes_degraded_output(monkeypatch, tmp_path):
+    monkeypatch.setattr(uptime_check, "probe", lambda url, timeout: None)
+    monkeypatch.setattr(uptime_check, "probe_sources", lambda url, timeout: "IBB relay degraded: relay_suspended_or_misconfigured (HTTP 403)")
+    output = tmp_path / "github_output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+
+    assert uptime_check.main(["--url", "https://example.invalid", "--attempts", "1", "--check-sources"]) == 0
+    lines = output.read_text().splitlines()
+    assert "healthy=true" in lines
+    assert "degraded=true" in lines
+    assert "degraded_reason=IBB relay degraded: relay_suspended_or_misconfigured (HTTP 403)" in lines

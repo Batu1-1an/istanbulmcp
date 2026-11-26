@@ -34,21 +34,25 @@ jobs:
         continue-on-error: true
         env:
           UPTIME_URL: ${{ inputs.url }}
-        run: python3 -m scripts.uptime_check
+        run: python3 -m scripts.uptime_check --check-sources
 
       - name: Open or close the incident issue
         env:
           GH_TOKEN: ${{ github.token }}
           HEALTHY: ${{ steps.probe.outputs.healthy }}
           REASON: ${{ steps.probe.outputs.reason }}
+          DEGRADED: ${{ steps.probe.outputs.degraded }}
+          DEGRADED_REASON: ${{ steps.probe.outputs.degraded_reason }}
           TARGET: ${{ steps.probe.outputs.url }}
           OWNER: ${{ github.repository_owner }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
           label=uptime-incident
+          degraded_label=source-degraded
           now=$(TZ=Europe/Istanbul date '+%Y-%m-%d %H:%M (TR)')
           open_issue=$(gh issue list --label "$label" --state open --json number --jq '.[0].number // empty' 2>/dev/null || true)
+          open_degraded=$(gh issue list --label "$degraded_label" --state open --json number --jq '.[0].number // empty' 2>/dev/null || true)
 
           if [ "$HEALTHY" = "true" ]; then
             if [ -n "$open_issue" ]; then
@@ -56,6 +60,32 @@ jobs:
               minutes=$(( ($(date +%s) - $(date -d "$created" +%s)) / 60 ))
               gh issue comment "$open_issue" --body "Servis tekrar yanıt veriyor: $now. Issue açıldıktan yaklaşık $minutes dakika sonra düzeldi. [Kontrol]($RUN_URL)"
               gh issue close "$open_issue" --reason completed
+            fi
+            if [ "$DEGRADED" = "true" ]; then
+              if [ -n "$open_degraded" ]; then
+                echo "Still degraded; issue #$open_degraded is already open. Reason: $DEGRADED_REASON" | tee -a "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+              gh label create "$degraded_label" --color D93F0B --description "Otomatik izleme: yukarı akış kaynak veya relay bozuk" --force
+              dbody=$(printf '%s\n' \
+                "@$OWNER canlı MCP sunucusu çalışıyor ancak yukarı akış veri kaynakları/relay yanıt vermiyor." \
+                "" \
+                "- Hedef: $TARGET" \
+                "- Tespit: $now" \
+                "- Sebep: \`$DEGRADED_REASON\`" \
+                "- Kontrol: $RUN_URL" \
+                "" \
+                "Kontrol 10 dakikada bir tekrarlanır; kaynaklar düzelince bu issue otomatik kapanır." \
+                "İlk bakılacak yerler: \`/status\` (\`ibb_relay\`), \`railway logs\` ve IBB relay durumu.")
+              gh issue create --label "$degraded_label" --title "Canlı MCP veri kaynakları/relay erişilemiyor: $TARGET" --body "$dbody"
+              echo "Degraded incident opened: $DEGRADED_REASON" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            if [ -n "$open_degraded" ]; then
+              created=$(gh issue view "$open_degraded" --json createdAt --jq .createdAt)
+              minutes=$(( ($(date +%s) - $(date -d "$created" +%s)) / 60 ))
+              gh issue comment "$open_degraded" --body "Yukarı akış kaynaklar/relay tekrar sağlıklı: $now (~$minutes dakika sonra düzeldi). [Kontrol]($RUN_URL)"
+              gh issue close "$open_degraded" --reason completed
             fi
             echo "Healthy: $TARGET" >> "$GITHUB_STEP_SUMMARY"
             exit 0

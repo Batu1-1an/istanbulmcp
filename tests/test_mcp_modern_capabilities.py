@@ -63,6 +63,7 @@ def test_brand_icons_and_server_card_endpoints_are_served():
         catalog = client.get("/.well-known/ai-catalog.json")
         assert catalog.status_code == 200
         assert catalog.headers["content-type"].startswith("application/ai-catalog+json")
+        assert catalog.headers["access-control-allow-origin"] == "*"
         entries = catalog.json()["entries"]
         assert len(entries) == 1
         assert entries[0]["type"] == "application/mcp-server-card+json"
@@ -72,6 +73,10 @@ def test_brand_icons_and_server_card_endpoints_are_served():
             card = client.get(path)
             assert card.status_code == 200
             assert card.headers["content-type"].startswith("application/mcp-server-card+json")
+            assert card.headers["access-control-allow-origin"] == "*"
+            preflight = client.options(path)
+            assert preflight.status_code == 204
+            assert preflight.headers["access-control-allow-origin"] == "*"
             body = card.json()
             assert body["name"] == "io.github.Batu1-1an/istanbul-mcp"
             assert "2026-07-28" in body["protocolVersions"]

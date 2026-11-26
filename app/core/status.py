@@ -4,6 +4,7 @@ from importlib import metadata
 import inspect
 from typing import Any
 
+from app.connectors.ibb_relay import relay_health_snapshot
 from app.core.settings import Settings
 from app.core.source_cache import source_cache_snapshot
 import app.mcp.server as handlers
@@ -218,6 +219,7 @@ def build_status(settings: Settings, *, abuse_guard: dict[str, Any] | None = Non
             },
         },
         "abuse_guard": abuse_guard or {},
+        "ibb_relay": relay_health_snapshot(enabled=bool(settings.ibb_relay_base_url and settings.ibb_relay_token)),
         "database": public_readiness(readiness(settings.database_path)),
         "source_cache": source_cache_snapshot(),
         "tool_count": len(inventory),

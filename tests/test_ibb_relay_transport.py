@@ -4,7 +4,16 @@ import httpx
 import pytest
 
 from app.connectors.http_retry import request_with_retries
-from app.connectors.ibb_relay import RELAY_HOSTS, IbbRelayTransport, ibb_http_client, validate_ibb_relay_settings
+from app.connectors.ibb_relay import (
+    DIRECT_FALLBACK_HOSTS,
+    RELAY_HOSTS,
+    IbbRelayError,
+    IbbRelayTransport,
+    ibb_http_client,
+    relay_health_snapshot,
+    reset_relay_health,
+    validate_ibb_relay_settings,
+)
 from app.core.settings import Settings, get_settings
 from app.core.status import build_status
 from relays.ibb_relay.server import ALLOWED_HOSTS
@@ -123,7 +132,82 @@ def test_relay_host_allowlists_match() -> None:
 
 
 def test_status_reports_ibb_relay_without_exposing_token() -> None:
+    reset_relay_health()
     body = build_status(Settings(ibb_relay_base_url="https://relay.example", ibb_relay_token=TOKEN))
 
     assert body["limits"]["ibb_relay_enabled"] is True
+    assert body["ibb_relay"]["enabled"] is True
+    assert body["ibb_relay"]["status"] == "unknown"
     assert TOKEN not in json.dumps(body)
+
+
+@pytest.mark.asyncio
+async def test_relay_detects_bunnycdn_403_suspension_and_surfaces_degraded_status() -> None:
+    reset_relay_health()
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            403,
+            headers={"server": "BunnyCDN-FR1-1217", "content-type": "text/html"},
+            text="<html>Domain suspended or not configured</html>",
+        )
+
+    async with relay_client(handler) as client:
+        with pytest.raises(IbbRelayError, match="relay_suspended_or_misconfigured"):
+            await client.get("https://api.ibb.gov.tr/ispark/Park")
+
+    snap = relay_health_snapshot(enabled=True)
+    assert snap["status"] == "degraded"
+    assert snap["last_error_kind"] == "relay_suspended_or_misconfigured"
+    assert snap["last_error_status"] == 403
+    assert snap["consecutive_failures"] == 1
+
+
+@pytest.mark.asyncio
+async def test_relay_falls_back_directly_for_direct_fallback_hosts_when_relay_is_down() -> None:
+    reset_relay_health()
+    seen: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        if request.url.host == "relay.example":
+            return httpx.Response(403, headers={"server": "BunnyCDN-FR1-1217"})
+        return httpx.Response(200, text="direct ok")
+
+    assert "www.tcddtasimacilik.gov.tr" in DIRECT_FALLBACK_HOSTS
+    async with relay_client(handler) as client:
+        response = await client.get("https://www.tcddtasimacilik.gov.tr/marmaray/tr/son_dakika")
+
+    assert response.status_code == 200 and response.text == "direct ok"
+    assert seen == [
+        "https://relay.example/base/www.tcddtasimacilik.gov.tr/marmaray/tr/son_dakika",
+        "https://www.tcddtasimacilik.gov.tr/marmaray/tr/son_dakika",
+    ]
+    snap = relay_health_snapshot(enabled=True)
+    assert snap["status"] == "degraded"
+    assert snap["fallback_direct_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_relay_detects_unauthorized_and_recovers_on_success() -> None:
+    reset_relay_health()
+    fail = True
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        if fail:
+            return httpx.Response(401, headers={"server": "istanbul-mcp-relay"}, json={"error": "unauthorized"})
+        return httpx.Response(200, json={"ok": True})
+
+    async with relay_client(handler) as client:
+        with pytest.raises(IbbRelayError, match="relay_unauthorized"):
+            await client.get("https://api.ibb.gov.tr/ispark/Park")
+        assert relay_health_snapshot(enabled=True)["last_error_kind"] == "relay_unauthorized"
+
+        fail = False
+        ok = await client.get("https://api.ibb.gov.tr/ispark/Park")
+        assert ok.status_code == 200
+
+    snap = relay_health_snapshot(enabled=True)
+    assert snap["status"] == "healthy"
+    assert snap["consecutive_failures"] == 0
+    assert snap["last_ok_at"] is not None

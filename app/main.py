@@ -73,27 +73,42 @@ async def status(request):
     return JSONResponse(payload)
 
 
-async def icon_png(_request):
-    return Response(_ICON_PNG, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+PUBLIC_DISCOVERY_CORS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+    "Access-Control-Allow-Headers": "Accept",
+}
 
 
-async def favicon_ico(_request):
-    return Response(_FAVICON_ICO, media_type="image/x-icon", headers={"Cache-Control": "public, max-age=86400"})
+async def icon_png(request):
+    if request.method == "OPTIONS":
+        return Response(status_code=204, headers=PUBLIC_DISCOVERY_CORS)
+    return Response(_ICON_PNG, media_type="image/png", headers={"Cache-Control": "public, max-age=86400", **PUBLIC_DISCOVERY_CORS})
+
+
+async def favicon_ico(request):
+    if request.method == "OPTIONS":
+        return Response(status_code=204, headers=PUBLIC_DISCOVERY_CORS)
+    return Response(_FAVICON_ICO, media_type="image/x-icon", headers={"Cache-Control": "public, max-age=86400", **PUBLIC_DISCOVERY_CORS})
 
 
 async def server_card(request):
+    if request.method == "OPTIONS":
+        return Response(status_code=204, headers=PUBLIC_DISCOVERY_CORS)
     return JSONResponse(
         build_server_card(request.app.state.settings),
         media_type=SERVER_CARD_MEDIA_TYPE,
-        headers={"Cache-Control": "public, max-age=300"},
+        headers={"Cache-Control": "public, max-age=300", **PUBLIC_DISCOVERY_CORS},
     )
 
 
 async def ai_catalog(request):
+    if request.method == "OPTIONS":
+        return Response(status_code=204, headers=PUBLIC_DISCOVERY_CORS)
     return JSONResponse(
         build_ai_catalog(request.app.state.settings),
         media_type=AI_CATALOG_MEDIA_TYPE,
-        headers={"Cache-Control": "public, max-age=300"},
+        headers={"Cache-Control": "public, max-age=300", **PUBLIC_DISCOVERY_CORS},
     )
 
 
@@ -161,12 +176,12 @@ def create_app() -> Starlette:
             Route("/healthz", healthz, methods=["GET"]),
             Route("/readyz", readyz, methods=["GET"]),
             Route("/status", status, methods=["GET"]),
-            Route("/icon.png", icon_png, methods=["GET", "HEAD"]),
-            Route("/favicon.ico", favicon_ico, methods=["GET", "HEAD"]),
-            Route("/.well-known/ai-catalog.json", ai_catalog, methods=["GET"]),
-            Route("/mcp/server-card", server_card, methods=["GET"]),
-            Route("/server-card", server_card, methods=["GET"]),
-            Route("/.well-known/mcp/server-card.json", server_card, methods=["GET"]),
+            Route("/icon.png", icon_png, methods=["GET", "HEAD", "OPTIONS"]),
+            Route("/favicon.ico", favicon_ico, methods=["GET", "HEAD", "OPTIONS"]),
+            Route("/.well-known/ai-catalog.json", ai_catalog, methods=["GET", "HEAD", "OPTIONS"]),
+            Route("/mcp/server-card", server_card, methods=["GET", "HEAD", "OPTIONS"]),
+            Route("/server-card", server_card, methods=["GET", "HEAD", "OPTIONS"]),
+            Route("/.well-known/mcp/server-card.json", server_card, methods=["GET", "HEAD", "OPTIONS"]),
             Route("/mcp", mcp_redirect, methods=["GET", "POST", "HEAD", "OPTIONS"]),
             Mount("/mcp", app=mcp.streamable_http_app(
                 host=settings.host, streamable_http_path="/",

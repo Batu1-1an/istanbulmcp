@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import contextlib
 from collections.abc import AsyncIterator
+from datetime import datetime, timezone
+import json
+import logging
+import threading
 from typing import Any
 
 import httpx
 
 from app.core.settings import Settings, get_settings
+
+logger = logging.getLogger("istanbul_mcp.relay")
 
 RELAY_HOSTS = frozenset({
     "api.ibb.gov.tr",
@@ -22,6 +28,11 @@ RELAY_HOSTS = frozenset({
     "www.tcddtasimacilik.gov.tr",
     "marmarayapi.tcddtasimacilik.gov.tr",
 })
+# Hosts verified reachable without a Turkey relay; used only when the relay itself fails.
+DIRECT_FALLBACK_HOSTS = frozenset({
+    "www.tcddtasimacilik.gov.tr",
+    "marmarayapi.tcddtasimacilik.gov.tr",
+})
 TOKEN_HEADER = "X-Relay-Token"
 ERROR_HEADER = "X-Relay-Error"
 MIN_TOKEN_LENGTH = 32
@@ -33,6 +44,90 @@ RELAY_ERRORS: dict[str, type[httpx.TransportError]] = {
 POOL_LIMITS = httpx.Limits(max_connections=40, max_keepalive_connections=20, keepalive_expiry=30.0)
 
 _shared_pool: tuple[tuple[str | None, str | None], httpx.AsyncClient] | None = None
+_health_lock = threading.Lock()
+_health_state: dict[str, Any] = {
+    "status": "unknown",
+    "last_ok_at": None,
+    "last_error_at": None,
+    "last_error_kind": None,
+    "last_error_status": None,
+    "consecutive_failures": 0,
+    "fallback_direct_count": 0,
+}
+
+
+class IbbRelayError(httpx.ConnectError):
+    """Raised when the IBB relay itself is suspended, unauthorized, or unreachable."""
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _record_relay_ok() -> None:
+    with _health_lock:
+        _health_state["status"] = "healthy"
+        _health_state["last_ok_at"] = _now_iso()
+        _health_state["consecutive_failures"] = 0
+
+
+def _record_relay_failure(kind: str, *, status_code: int | None, target_host: str, fallback: bool = False) -> None:
+    with _health_lock:
+        _health_state["status"] = "degraded"
+        _health_state["last_error_at"] = _now_iso()
+        _health_state["last_error_kind"] = kind
+        _health_state["last_error_status"] = status_code
+        _health_state["consecutive_failures"] += 1
+        if fallback:
+            _health_state["fallback_direct_count"] += 1
+    logger.warning(
+        json.dumps(
+            {
+                "event": "ibb_relay_error",
+                "kind": kind,
+                "status": status_code,
+                "target_host": target_host,
+                "fallback_direct": fallback,
+            },
+            separators=(",", ":"),
+        )
+    )
+
+
+def relay_health_snapshot(*, enabled: bool) -> dict[str, Any]:
+    with _health_lock:
+        return {
+            "enabled": enabled,
+            "status": _health_state["status"] if enabled else "disabled",
+            "last_ok_at": _health_state["last_ok_at"],
+            "last_error_at": _health_state["last_error_at"],
+            "last_error_kind": _health_state["last_error_kind"],
+            "last_error_status": _health_state["last_error_status"],
+            "consecutive_failures": _health_state["consecutive_failures"],
+            "fallback_direct_count": _health_state["fallback_direct_count"],
+        }
+
+
+def reset_relay_health() -> None:
+    with _health_lock:
+        _health_state.update(
+            status="unknown",
+            last_ok_at=None,
+            last_error_at=None,
+            last_error_kind=None,
+            last_error_status=None,
+            consecutive_failures=0,
+            fallback_direct_count=0,
+        )
+
+
+def _classify_relay_failure(response: httpx.Response) -> str | None:
+    server = response.headers.get("server", "").lower()
+    if server.startswith("bunnycdn") and response.status_code in {403, 502, 503, 504}:
+        return "relay_suspended_or_misconfigured" if response.status_code == 403 else "relay_edge_5xx"
+    if response.status_code == 401 and server.startswith("istanbul-mcp-relay"):
+        return "relay_unauthorized"
+    return None
 
 
 def validate_ibb_relay_settings(settings: Settings) -> bool:
@@ -65,11 +160,32 @@ class IbbRelayTransport(httpx.AsyncBaseTransport):
         headers["Host"] = relay_url.netloc.decode("ascii")
         headers[TOKEN_HEADER] = self.token
         relayed = httpx.Request(request.method, relay_url, headers=headers, stream=request.stream, extensions=request.extensions)
-        response = await self.inner.handle_async_request(relayed)
+        try:
+            response = await self.inner.handle_async_request(relayed)
+        except httpx.TransportError as exc:
+            can_fallback = url.host in DIRECT_FALLBACK_HOSTS
+            _record_relay_failure("relay_transport_error", status_code=None, target_host=url.host, fallback=can_fallback)
+            if can_fallback:
+                return await self.inner.handle_async_request(request)
+            raise IbbRelayError(f"IBB relay transport error for {url.host}", request=request) from exc
+
         error = RELAY_ERRORS.get(response.headers.get(ERROR_HEADER, ""))
         if error is not None:
+            _record_relay_ok()
             await response.aclose()
             raise error(f"{url.host} unreachable through IBB relay", request=request)
+
+        relay_failure = _classify_relay_failure(response)
+        if relay_failure is not None:
+            status_code = response.status_code
+            await response.aclose()
+            can_fallback = url.host in DIRECT_FALLBACK_HOSTS
+            _record_relay_failure(relay_failure, status_code=status_code, target_host=url.host, fallback=can_fallback)
+            if can_fallback:
+                return await self.inner.handle_async_request(request)
+            raise IbbRelayError(f"IBB relay unavailable ({relay_failure}) for {url.host}", request=request)
+
+        _record_relay_ok()
         return response
 
     async def aclose(self) -> None:
