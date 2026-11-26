@@ -181,7 +181,7 @@ def event_about(row: EventObservation) -> dict:
     }
 
 
-def event_card(row: EventObservation, matches=None, *, max_price=None, distance=None, include_sold_out=False) -> dict:
+def event_card(row: EventObservation, matches=None, *, max_price=None, distance=None, include_sold_out=False, conditions_limit: int = 12, compact_unknown_quote: bool = False) -> dict:
     observations = matches or [row]
     availability_values = [availability(item) for item in observations]
     stock = ("in_stock" if "in_stock" in availability_values else "limited" if "limited" in availability_values
@@ -194,6 +194,9 @@ def event_card(row: EventObservation, matches=None, *, max_price=None, distance=
     lowest_offer = next((offer for offer in row.offers if offer.price == price and offer.currency == "TRY"
                          and (offer.availability != "sold_out" or include_sold_out and availability(row)=="sold_out") and price is not None), None)
     restricted = row.start_at.weekday() in row.excluded_weekdays
+    gaq = ticket_quote(row.offers, 1, 'general')
+    if compact_unknown_quote and gaq.get("status") == "unknown":
+        gaq = {"status": "unknown", "reason": gaq.get("reason")}
     return {
         "performance_id": row.performance_id, "event_id": row.event_id,
         "title": row.title, "category": row.category, "category_source": row.category_source,
@@ -211,12 +214,12 @@ def event_card(row: EventObservation, matches=None, *, max_price=None, distance=
         "age_limit": row.age_limit, "duration_minutes": row.duration_minutes,
         "venue": row.venue.model_dump(), "distance_m": round(distance) if distance is not None else None,
         "distance_kind": "straight_line" if distance is not None else None,
-        "participation_conditions": conditions_output(row.conditions, checked=row.conditions_checked,observed_at=row.observed_at.isoformat(),stale=row.conditions_stale,extraction_truncated=row.conditions_truncated),
+        "participation_conditions": conditions_output(row.conditions, checked=row.conditions_checked, limit=conditions_limit, observed_at=row.observed_at.isoformat(), stale=row.conditions_stale, extraction_truncated=row.conditions_truncated),
         "price": {"minimum_observed_try": price, "status": "known" if price is not None else "unknown",
                   "fees_included": lowest_offer.fees_included if lowest_offer else None,
                   "ticket_type": lowest_offer.name if lowest_offer else None,
                   "unit": offer_terms(lowest_offer) if lowest_offer else None,
-                  "general_admission_quote": ticket_quote(row.offers,1,'general'),
+                  "general_admission_quote": gaq,
                   "eligibility_may_apply": offer_terms(lowest_offer)["eligibility_requires_confirmation"] if lowest_offer else None},
         "budget_status": "unknown" if price is None else "over" if max_price is not None and price > max_price else "within" if max_price is not None else "not_requested",
         "availability": stock, "availability_is_live": False,
@@ -411,10 +414,60 @@ class EventService:
         detail_checks = 0
         successful_detail_checks = 0
         # Named/price/category questions need recent evidence. Check a small relevant
-        # subset on demand; unfiltered discovery stays in the local index.
+        # subset on demand when local fresh verified matches are below safe_limit.
         if self.settings.events_biletinial_enabled and (query is not None or max_price_try is not None or free_only or category is not None or exclude_child_only or venue is not None or district is not None or bbox is not None or party is not None):
-            possible = []
-            for row in rows:
+            now_ist = datetime.now(ISTANBUL)
+            now_utc = datetime.now(timezone.utc)
+            fresh_verified = 0
+            if not _planning:
+                for row in rows:
+                    if row.source not in usable or not row.detail_checked:
+                        continue
+                    if (now_utc - row.observed_at).total_seconds() > self.settings.events_detail_ttl_seconds:
+                        continue
+                    if row.start_at.weekday() in row.excluded_weekdays:
+                        continue
+                    if not include_past and (row.start_at.date() < now_ist.date() if row.timing_kind == "flexible_entry" else row.start_at < now_ist):
+                        continue
+                    if row.program_status in {"cancelled", "postponed"}:
+                        continue
+                    if category and row.category != category:
+                        continue
+                    if exclude_child_only and child_only_age_range(row.age_limit):
+                        continue
+                    if child_age is not None and age_suitability(row.age_limit, child_age) != "within":
+                        continue
+                    if row.timing_kind == "flexible_entry" and (clock_from or clock_to):
+                        continue
+                    if row.timing_kind == "scheduled" and (clock_from and row.start_at.time() < clock_from or clock_to and row.start_at.time() > clock_to):
+                        continue
+                    if district and (not row.venue.district or normalize_place(row.venue.district) != normalize_place(district)):
+                        continue
+                    if venue and (row.venue.name == "Unknown venue" or search_text(venue) not in search_text(row.venue.name)):
+                        continue
+                    if bbox and (row.venue.lat is None or row.venue.lon is None or haversine_m(lat, lon, row.venue.lat, row.venue.lon) > radius_m):
+                        continue
+                    if not include_sold_out and availability(row) == "sold_out":
+                        continue
+                    if party is not None:
+                        tmp = {"price": {}}
+                        apply_party_quote(tmp, row.offers, party, budget=max_price_try, includes_fees=budget_includes_fees)
+                        pv = tmp.get("budget_price_try")
+                        if (not include_unknown_prices or free_only) and pv is None:
+                            continue
+                        if free_only and pv != 0 or max_price_try is not None and pv is not None and pv > max_price_try:
+                            continue
+                    else:
+                        pv = event_price(row, include_sold_out=include_sold_out)
+                        if (not include_unknown_prices or free_only) and pv is None:
+                            continue
+                        if free_only and pv != 0 or max_price_try is not None and pv is not None and pv > max_price_try:
+                            continue
+                    fresh_verified += 1
+                    if fresh_verified >= safe_limit:
+                        break
+            possible = [] if fresh_verified >= safe_limit else []
+            for row in ([] if fresh_verified >= safe_limit else rows):
                 if row.source != "biletinial" or row.source not in usable:
                     continue
                 if (row.start_at.date() < datetime.now(ISTANBUL).date() if row.timing_kind == "flexible_entry"
@@ -552,7 +605,8 @@ class EventService:
             if not include_sold_out and all(availability(item) == "sold_out" for item in matches):
                 excluded_sold_out += 1
                 continue
-            card = event_card(row,matches,max_price=max_price_try,distance=distance,include_sold_out=include_sold_out)
+            card = event_card(row, matches, max_price=max_price_try, distance=distance, include_sold_out=include_sold_out,
+                              conditions_limit=4, compact_unknown_quote=True)
             price = event_price(row, include_sold_out=include_sold_out)
             unknown_quote_reason = None
             if party is not None:
@@ -727,11 +781,33 @@ class EventService:
         rows,_ = enrich_verified_venues(rows)
         for row in rows:
             warnings.extend(row.warnings)
-        performances=[{**event_card(r), "offers":[{**offer.model_dump(),"terms":offer_terms(offer)} for offer in r.offers],
-                       "participation_conditions":conditions_output(r.conditions,checked=r.conditions_checked,limit=60,observed_at=r.observed_at.isoformat(),stale=r.conditions_stale,extraction_truncated=r.conditions_truncated)} for r in rows]
+        series_conditions = conditions_output(
+            rows[0].conditions, checked=rows[0].conditions_checked, limit=60,
+            observed_at=rows[0].observed_at.isoformat(), stale=rows[0].conditions_stale,
+            extraction_truncated=rows[0].conditions_truncated,
+        )
+        series_about = event_about(rows[0])
+        performances = []
+        for idx, r in enumerate(rows):
+            card = event_card(r, compact_unknown_quote=True)
+            if idx == 0 or r.conditions != rows[0].conditions or r.conditions_checked != rows[0].conditions_checked or r.conditions_stale != rows[0].conditions_stale:
+                cond_val = conditions_output(r.conditions, checked=r.conditions_checked, limit=60,
+                                             observed_at=r.observed_at.isoformat(), stale=r.conditions_stale,
+                                             extraction_truncated=r.conditions_truncated)
+            else:
+                cond_val = {"same_as_event": True, "status": series_conditions["status"], "statement_count": len(r.conditions)}
+            if idx > 0 and r.description == rows[0].description:
+                card["about"] = {"same_as_event": True, "status": series_about["status"]}
+            performances.append({
+                **card,
+                "offers": [{**offer.model_dump(), "terms": offer_terms(offer)} for offer in r.offers],
+                "participation_conditions": cond_val,
+            })
         if party is not None:
             for performance,row in zip(performances,rows):apply_party_quote(performance,row.offers,party,includes_fees=budget_includes_fees)
         detail = {"event_id": rows[0].event_id, "title": rows[0].title,
+                  "about": series_about,
+                  "participation_conditions": series_conditions,
                   "description": plain_text(re.sub(r"https?://\S+", "", rows[0].description or ""), 1200) or None,
                   "description_is_untrusted_source_text": True, "description_truncated":len(rows[0].description or "")>1200,
                   "organizer": rows[0].organizer,"performances":performances,

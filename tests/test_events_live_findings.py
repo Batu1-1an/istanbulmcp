@@ -259,3 +259,82 @@ def test_deduplicate_merges_cross_provider_apostrophe_title_variants():
     )
     groups = deduplicate([a, b])
     assert len(groups) == 1 and len(groups[0][1]) == 2
+
+
+@pytest.mark.asyncio
+async def test_detail_deduplicates_identical_conditions_and_about_across_sessions(tmp_path):
+    from app.core.events import PublishedEventCondition
+
+    db = tmp_path / "dedup_detail.sqlite3"
+    repo = EventRepository(db)
+    now = datetime.now(timezone.utc)
+    start = datetime.now(ISTANBUL).replace(hour=20, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    conds = [
+        PublishedEventCondition(
+            topic="refund_exchange",
+            statement="Bilet iadesi yapılmaz.",
+            source_url="https://biletinial.com/tr-tr/tiyatro/ornek",
+            source_section="rules",
+        )
+    ]
+    rows = [
+        EventObservation(
+            source="biletinial", source_id=f"s-{i}", series_key="ornek", title="Örnek Oyun",
+            category="theatre", start_at=start + timedelta(days=i),
+            venue=venue_from("Moda Sahnesi", "Kadıköy"), observed_at=now,
+            detail_checked=True, description="İki kardeşin İstanbul'da kesişen hikâyesi.",
+            conditions=conds, conditions_checked=True,
+            offers=[EventOffer(name="Genel Giriş Bileti", price=200.0, currency="TRY", availability="in_stock")],
+        )
+        for i in range(3)
+    ]
+    repo.publish("biletinial", rows, {"complete": True})
+    service = EventService(Settings(database_path=db, events_enabled=True, events_biletinial_enabled=True))
+    # Prevent live HTTP fetch by setting detail_checked TTL as fresh via monkeypatch or using ticketmaster
+    rows_tm = [r.model_copy(update={"source": "ticketmaster", "source_id": f"tm-{i}"}) for i, r in enumerate(rows)]
+    repo.publish("ticketmaster", rows_tm, {"complete": True})
+    service = EventService(Settings(database_path=db, events_enabled=True, ticketmaster_api_key="fixture-key"))
+    det = await service.detail(rows_tm[0].event_id)
+    assert det["ok"], det
+    d0 = det["data"][0]
+    assert d0["participation_conditions"]["statements"]
+    assert d0["about"]["text"]
+    assert d0["performances"][0]["participation_conditions"]["statements"]
+    assert d0["performances"][1]["participation_conditions"] == {"same_as_event": True, "status": "inspected", "statement_count": 1}
+    assert d0["performances"][1]["about"] == {"same_as_event": True, "status": "available"}
+
+
+@pytest.mark.asyncio
+async def test_search_skips_on_demand_detail_checks_when_enough_fresh_verified_matches_exist(tmp_path, monkeypatch):
+    db = tmp_path / "skip_refresh.sqlite3"
+    repo = EventRepository(db)
+    now = datetime.now(timezone.utc)
+    start = datetime.now(ISTANBUL).replace(hour=20, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    verified_rows = [
+        EventObservation(
+            source="biletinial", source_id=f"v-{i}", series_key=f"verified-{i}", title=f"Konser {i}",
+            category="concert", start_at=start + timedelta(minutes=i),
+            venue=venue_from("Moda Sahnesi", "Kadıköy"), observed_at=now,
+            detail_checked=True,
+            offers=[EventOffer(name="Genel Giriş Bileti", price=200.0, currency="TRY", availability="in_stock")],
+        )
+        for i in range(3)
+    ]
+    unchecked = EventObservation(
+        source="biletinial", source_id="u-1", series_key="unchecked-1", title="Konser Unchecked",
+        category="concert", start_at=start + timedelta(hours=1),
+        venue=venue_from("Unknown venue"), observed_at=now,
+        detail_checked=False, ticket_url="https://biletinial.com/tr-tr/muzik/unchecked-1",
+    )
+    repo.publish("biletinial", [*verified_rows, unchecked], {"complete": True})
+    service = EventService(Settings(database_path=db, events_enabled=True, events_biletinial_enabled=True))
+    called = []
+    async def spy_detail(eid, **_kw):
+        called.append(eid)
+        return {"ok": True, "data": [{}]}
+    monkeypatch.setattr(service, "detail", spy_detail)
+
+    res = await service.search(category="concert", limit=3)
+    assert res["ok"] and len(res["data"]) == 3
+    assert res["result_info"]["filter_counts"]["detail_checks_attempted"] == 0
+    assert called == []
