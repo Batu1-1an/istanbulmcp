@@ -220,7 +220,7 @@ async def test_nearby_ev_taxi_and_market_map_valid_points_and_skip_invalid(tmp_p
     assert any(row["properties"].get("operator") == "Test Operatör" for row in result["data"] if row["feature_type"] == "ev_charging")
     assert any(row["properties"].get("day") == "Cumartesi" for row in result["data"] if row["feature_type"] == "market")
     assert all(row["name"] != "Paris outside" for row in result["data"])
-    assert any(source["accepted_total"] == 2 for source in result["sources"] if source.get("resource_id") is None)
+    assert any(source.get("accepted_total") == 2 for source in result["sources"] if source.get("resource_id") is None)
 
 
 @pytest.mark.asyncio
