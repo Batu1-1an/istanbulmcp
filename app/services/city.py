@@ -209,12 +209,20 @@ class CityService:
             }
             if latest.get("AQI") is None:
                 warnings.append(f"{station['name']} has no AQI value in the latest source reading.")
+        read_times = [
+            str(s["latest_reading_quality"]["read_time"])
+            for s in nearby
+            if s.get("latest_reading_quality", {}).get("read_time")
+        ]
+        any_reading = any(s.get("latest_reading_quality", {}).get("has_reading") for s in nearby)
+        any_unavailable = any("unavailable" in w for w in warnings)
+        aq_status: FreshnessStatus = "fresh" if (any_reading and not any_unavailable) else "unknown"
         return success_envelope(
             summary=f"{len(nearby)} air quality station(s) found within {radius_m} meters.",
             data=nearby,
             result=result_info(returned=len(nearby), truncated=len(candidates) > safe_limit, scope="indexed_air_quality_stations"),
             sources=[CITY_SOURCE],
-            freshness=Freshness(status="unknown", ttl_seconds=900),
+            freshness=Freshness(status=aq_status, source_updated_at=max(read_times) if read_times else None, ttl_seconds=900),
             limits=[f"radius_m={radius_m}", f"limit={safe_limit}"],
             warnings=warnings,
         )

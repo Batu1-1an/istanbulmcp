@@ -171,6 +171,10 @@ async def test_mcp_apps_resources_and_tool_bindings(mode):
                 assert token in content.text
         plan_ui = (await client.read_resource(EVENTS_PLAN_URI)).contents[0].text
         assert "opt.performances" in plan_ui
+        water_ui = (await client.read_resource(WATER_DASHBOARD_URI)).contents[0].text
+        assert "occupancy_rate" in water_ui and "display_name" in water_ui
+        nearby_ui = (await client.read_resource(NEARBY_MAP_URI)).contents[0].text
+        assert "r.latitude" in nearby_ui and "r.longitude" in nearby_ui
 
 
 @pytest.mark.asyncio

@@ -113,3 +113,10 @@ def test_source_url_keeps_human_readable_pages(url):
     payload = success_envelope(summary="ok", sources=[Source(name="Page source", url=url)])
 
     assert payload["sources"][0]["url"] == url
+
+
+def test_source_serialization_omits_unset_optional_telemetry_fields():
+    payload = success_envelope(summary="ok", sources=[Source(name="Compact source")])
+    source = payload["sources"][0]
+    assert set(source.keys()) == {"name", "publisher", "license", "url", "coverage_status", "source_updated_at"}
+    assert "reported_total" not in source and "operator" not in source

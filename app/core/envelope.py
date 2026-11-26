@@ -5,7 +5,7 @@ import math
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_serializer
 
 FreshnessStatus = Literal["fresh", "stale", "unknown", "broken"]
 
@@ -108,6 +108,12 @@ class Source(_EnvelopeModel):
     @field_serializer("url")
     def _serialize_url(self, url: str | None) -> str | None:
         return public_page_url(url)
+
+    @model_serializer(mode="wrap")
+    def _serialize_compact(self, handler):
+        data = handler(self)
+        always_keep = {"name", "publisher", "license", "url", "coverage_status", "source_updated_at"}
+        return {key: value for key, value in data.items() if value is not None or key in always_keep}
 
 
 class Pagination(_EnvelopeModel):

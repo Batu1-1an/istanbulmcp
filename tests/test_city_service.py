@@ -531,7 +531,7 @@ async def test_mobility_nearby_aggregates_sections_for_place(tmp_path):
 
     payload = result["data"][0]
     assert result["ok"] is True
-    assert payload["query"]["district"] == "Kadikoy"
+    assert payload["query"]["district"] == "Kadıköy"
     assert payload["parking"][0]["name"] == "Moda Otopark"
     assert payload["parking"][0]["maps_url"].startswith("https://www.google.com/maps/search/")
     assert payload["metro_stations"][0]["name"] == "Kadikoy"

@@ -6,8 +6,9 @@ from difflib import SequenceMatcher
 import time
 from unicodedata import combining, normalize
 
-from app.core.geo import google_maps_url
+from app.core.geo import google_maps_url, haversine_m
 from app.core.validation import InputValidationError, validate_text
+from app.services.places import resolve_place
 
 
 def normalize_stop_name(value: str) -> str:
@@ -39,6 +40,7 @@ def search_stops(conn, query: str, limit: int) -> StopSearchResult:
     deadline = time.monotonic() + 1
     needle = normalize_stop_name(query)
     tokens = needle.split()
+    anchor = resolve_place(query)
     named = []
     matches = []
     for row in conn.execute("SELECT * FROM gtfs_schedule_stops"):
@@ -48,14 +50,21 @@ def search_stops(conn, query: str, limit: int) -> StopSearchResult:
         named.append((name, dict(row)))
         if all(token in name for token in tokens):
             rank = 0 if name == needle else 1 if name.startswith(needle) else 2
-            matches.append((rank, name, row["stop_id"], dict(row)))
+            # Coarse 5 km band keeps local stop_id order intact while ranking
+            # central city stops ahead of distant homonym villages (e.g. Şile).
+            band = (
+                int(haversine_m(anchor.lat, anchor.lon, row["lat"], row["lon"]) // 5000)
+                if anchor is not None and row["lat"] is not None and row["lon"] is not None
+                else 0
+            )
+            matches.append((rank, name, band, row["stop_id"], dict(row)))
     if matches:
-        matches.sort(key=lambda item: item[:3])
+        matches.sort(key=lambda item: item[:4])
         if time.monotonic() > deadline:
             raise TimeoutError("GTFS stop search exceeded its budget")
         kinds = ("exact", "prefix", "contains")
         return StopSearchResult(
-            [_candidate(row, kinds[rank]) for rank, _, _, row in matches[:limit]], len(matches),
+            [_candidate(row, kinds[rank]) for rank, _, _, _, row in matches[:limit]], len(matches),
         )
 
     # Do not fuzzy-match short fragments: they produce misleading candidates.

@@ -385,9 +385,32 @@ class EventPlanService:
                                               min_events=min_events,required_categories=required_categories or (),partial_output=partials)
         if options:
             partials = []
+        def _compact_perf(card: dict) -> dict:
+            out = dict(card)
+            cond = out.get("participation_conditions")
+            if isinstance(cond, dict) and isinstance(cond.get("statements"), list) and len(cond["statements"]) > 3:
+                out["participation_conditions"] = {
+                    **cond,
+                    "statements": cond["statements"][:3],
+                    "truncated": True,
+                    "omitted_statement_count": len(cond["statements"]) - 3,
+                }
+            price_block = out.get("price")
+            if isinstance(price_block, dict):
+                gaq = price_block.get("general_admission_quote")
+                if isinstance(gaq, dict) and gaq.get("status") == "unknown":
+                    out["price"] = {**price_block, "general_admission_quote": {"status": "unknown", "reason": gaq.get("reason")}}
+            return out
+        for group in (options, unverified, partials):
+            for option in group:
+                if isinstance(option.get("performances"), list):
+                    option["performances"] = [_compact_perf(card) for card in option["performances"]]
+        rejected_total = len(rejected)
+        rejected_truncated = rejected_total > 25
         envelope["data"] = [{"date": day.isoformat(), "window": {"start": start_time, "end": end_time},
                              "discovery_diagnostics":discovery_diagnostics,"combination_diagnostics":diagnostics,
-                             "options": options, "unverified_budget": unverified, "partial_options":partials,"rejected": rejected,
+                             "options": options, "unverified_budget": unverified, "partial_options":partials,
+                             "rejected": rejected[:25], "rejected_total": rejected_total, "rejected_truncated": rejected_truncated,
                              "fulfillment":{"status":"complete" if options else "partial" if partials else "unverified_budget" if unverified else "unmet",
                                             "requested_min_events":min_events,"requested_max_events":max_events,
                                             "required_categories":required_categories or [],"complete_option_count":len(options),

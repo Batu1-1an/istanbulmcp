@@ -10,7 +10,7 @@ def test_resolve_place_accepts_turkish_and_ascii_aliases():
     assert turkish is not None
     assert ascii_name is not None
     assert turkish.lat == ascii_name.lat
-    assert turkish.district == "Kadikoy"
+    assert turkish.district == "Kadıköy"
 
 
 def test_normalize_place_handles_common_turkish_characters():

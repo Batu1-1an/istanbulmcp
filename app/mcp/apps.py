@@ -147,7 +147,7 @@ NEARBY_MAP_HTML = _html_shell(
     """
 function render(env){
   const rows=Array.isArray(env.data)?env.data:[];
-  const pts=rows.filter(r=>typeof r.lat==="number"&&typeof r.lon==="number");
+  const pts=rows.map(r=>({r,lat:typeof r.lat==="number"?r.lat:r.latitude,lon:typeof r.lon==="number"?r.lon:r.longitude})).filter(p=>typeof p.lat==="number"&&typeof p.lon==="number");
   let svg="";
   if(pts.length){
     const lats=pts.map(p=>p.lat),lons=pts.map(p=>p.lon);
@@ -156,7 +156,7 @@ function render(env){
     const w=480,h=220,pad=24;
     const sx=lon=>pad+((lon-minLon)/Math.max(maxLon-minLon,0.0001))*(w-2*pad);
     const sy=lat=>h-pad-((lat-minLat)/Math.max(maxLat-minLat,0.0001))*(h-2*pad);
-    const circles=pts.map((p,i)=>`<g><circle cx="${sx(p.lon).toFixed(1)}" cy="${sy(p.lat).toFixed(1)}" r="7" fill="#0ea5e9" stroke="#f8fafc" stroke-width="1.5"><title>${esc(p.name||p.title||"#"+(i+1))}</title></circle><text x="${(sx(p.lon)+10).toFixed(1)}" y="${(sy(p.lat)+4).toFixed(1)}" fill="currentColor" font-size="11">${esc(String(p.name||"").slice(0,22))}</text></g>`).join("");
+    const circles=pts.map((p,i)=>`<g><circle cx="${sx(p.lon).toFixed(1)}" cy="${sy(p.lat).toFixed(1)}" r="7" fill="#0ea5e9" stroke="#f8fafc" stroke-width="1.5"><title>${esc(p.r.name||p.r.title||"#"+(i+1))}</title></circle><text x="${(sx(p.lon)+10).toFixed(1)}" y="${(sy(p.lat)+4).toFixed(1)}" fill="currentColor" font-size="11">${esc(String(p.r.name||"").slice(0,22))}</text></g>`).join("");
     svg=`<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Konum haritası">${circles}</svg>`;
   }
   const cards=rows.map(r=>{
@@ -178,10 +178,10 @@ WATER_DASHBOARD_HTML = _html_shell(
 function render(env){
   const rows=Array.isArray(env.data)?env.data:[];
   const cards=rows.map(r=>{
-    const pct=typeof r.occupancy_percent==="number"?r.occupancy_percent:(typeof r.doluluk_orani==="number"?r.doluluk_orani:null);
+    const pct=typeof r.occupancy_rate==="number"?r.occupancy_rate:(typeof r.occupancy_percent==="number"?r.occupancy_percent:(typeof r.doluluk_orani==="number"?r.doluluk_orani:null));
     if(pct!=null){
       const clamped=Math.max(0,Math.min(100,pct));
-      return `<div class="card"><div class="card-title">${esc(r.dam_name||r.name||"Baraj")} — %${clamped.toFixed(1)}</div><div class="bar-track"><div class="bar-fill" style="width:${clamped.toFixed(1)}%"></div></div></div>`;
+      return `<div class="card"><div class="card-title">${esc(r.display_name||r.dam_name||r.name||"Baraj")} — %${clamped.toFixed(1)}</div><div class="bar-track"><div class="bar-fill" style="width:${clamped.toFixed(1)}%"></div></div></div>`;
     }
     return `<div class="card"><div class="card-title">${esc(r.district||r.neighborhood||"İSKİ Arıza")}</div><div class="meta">${esc(r.description||r.reason||r.status||"")}</div></div>`;
   }).join("");

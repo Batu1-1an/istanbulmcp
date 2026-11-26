@@ -18,20 +18,20 @@ class ResolvedPlace:
 
 
 _PLACES: tuple[ResolvedPlace, ...] = (
-    ResolvedPlace("kadikoy", "Kadikoy", 40.9909, 29.0303, "Kadikoy"),
-    ResolvedPlace("kadikoy rihtim", "Kadikoy Rihtim", 40.9909, 29.0303, "Kadikoy", "Osmanağa"),
-    ResolvedPlace("moda", "Moda", 40.9870, 29.0250, "Kadikoy", "Caferağa"),
-    ResolvedPlace("taksim", "Taksim", 41.0369, 28.9850, "Beyoglu", "Gümüşsuyu"),
-    ResolvedPlace("besiktas", "Besiktas", 41.0438, 29.0094, "Besiktas"),
-    ResolvedPlace("uskudar", "Uskudar", 41.0255, 29.0153, "Uskudar"),
-    ResolvedPlace("eminonu", "Eminonu", 41.0179, 28.9705, "Fatih"),
+    ResolvedPlace("kadikoy", "Kadıköy", 40.9909, 29.0303, "Kadıköy"),
+    ResolvedPlace("kadikoy rihtim", "Kadıköy Rıhtım", 40.9909, 29.0303, "Kadıköy", "Osmanağa"),
+    ResolvedPlace("moda", "Moda", 40.9870, 29.0250, "Kadıköy", "Caferağa"),
+    ResolvedPlace("taksim", "Taksim", 41.0369, 28.9850, "Beyoğlu", "Gümüşsuyu"),
+    ResolvedPlace("besiktas", "Beşiktaş", 41.0438, 29.0094, "Beşiktaş"),
+    ResolvedPlace("uskudar", "Üsküdar", 41.0255, 29.0153, "Üsküdar"),
+    ResolvedPlace("eminonu", "Eminönü", 41.0179, 28.9705, "Fatih"),
     ResolvedPlace("fatih", "Fatih", 41.0167, 28.9497, "Fatih"),
-    ResolvedPlace("levent", "Levent", 41.0812, 29.0105, "Besiktas"),
-    ResolvedPlace("mecidiyekoy", "Mecidiyekoy", 41.0677, 28.9878, "Sisli"),
-    ResolvedPlace("sisli", "Sisli", 41.0605, 28.9872, "Sisli"),
-    ResolvedPlace("bakirkoy", "Bakirkoy", 40.9780, 28.8724, "Bakirkoy"),
-    ResolvedPlace("atasehir", "Atasehir", 40.9923, 29.1244, "Atasehir"),
-    ResolvedPlace("sariyer", "Sariyer", 41.1663, 29.0500, "Sariyer"),
+    ResolvedPlace("levent", "Levent", 41.0812, 29.0105, "Beşiktaş"),
+    ResolvedPlace("mecidiyekoy", "Mecidiyeköy", 41.0677, 28.9878, "Şişli"),
+    ResolvedPlace("sisli", "Şişli", 41.0605, 28.9872, "Şişli"),
+    ResolvedPlace("bakirkoy", "Bakırköy", 40.9780, 28.8724, "Bakırköy"),
+    ResolvedPlace("atasehir", "Ataşehir", 40.9923, 29.1244, "Ataşehir"),
+    ResolvedPlace("sariyer", "Sarıyer", 41.1663, 29.0500, "Sarıyer"),
     ResolvedPlace("kartal", "Kartal", 40.8998, 29.1936, "Kartal"),
     # CC0 structured statements P625/P131, checked 2026-10-25. These
     # are area reference points, not geocoded addresses or boundary centroids.
