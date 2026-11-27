@@ -60,6 +60,8 @@ claude mcp add --transport http istanbul https://istanbulmcp-production.up.railw
 claude mcp list
 ```
 
+Claude Code v2.1.331+ (ve Skills over MCP destekleyen istemciler) bağlandıktan sonra sunucunun gömülü 4 iş akışı becerisini (`/skills` altında `istanbul:istanbul-events-planner`, `istanbul:istanbul-transit-guide`, `istanbul:istanbul-open-data-explorer`, `istanbul:istanbul-city-briefing`) ek kurulum olmadan otomatik keşfeder.
+
 ### Claude Desktop ve Claude.ai
 
 Claude Desktop ile kullanım için ücretli abonelik gerekir.
@@ -162,12 +164,18 @@ Taksim'e arabayla gideceğim. Yakındaki otoparkların boş yer sayısını, ça
 
 **Ulaşım**
 
-- İETT hat bilgisi, yönlerine göre sıralı duraklar ve ana duraktan planlı kalkış saatleri.
+- İETT hat bilgisi (`500T`, `15KÇ`, `14ŞB` dahil Türkçe harfli hat kodları), yönlerine göre sıralı duraklar ve ana duraktan planlı kalkış saatleri.
 - Durak adıyla arama ve seçilen duraktan geçen hatların tarifeli kalkışları (İETT GTFS).
 - İETT, Metro İstanbul, Şehir Hatları ve Marmaray'ın güncel aksaklık ve duyuruları.
 - Metro İstanbul asansör, yürüyen merdiven ve diğer ekipmanların çalışma ve arıza durumu.
-- Yakındaki metro istasyonları ve toplu taşıma durakları; `Kadıköy Rıhtım`, `Taksim`, `Levent` gibi yerler için ulaşım özeti.
+- Yakındaki metro istasyonları ve toplu taşıma durakları; `Kadıköy Rıhtım`, `Taksim`, `Levent`, `Sultanahmet`, `Galata`, `Ortaköy`, `Bebek`, `Balat`, `Bağdat Caddesi` gibi referans yerler ve 39 ilçe (`Eyüp` / `Eyüpsultan` dahil) için ulaşım özeti.
 - Şehir geneli trafik yoğunluğu indeksi.
+
+**Etkinlik keşfi ve planlama** *(canlıda aktif)*
+
+- Konser, tiyatro, stand-up, opera/bale, sergi, atölye ve çocuk/aile etkinliklerini ilçe, yaka (`side`: Avrupa / Anadolu), tarih/saat, ücretsiz veya grup/aile bütçesine (`party_size`, `party`) göre arama.
+- Tek seri/seans için doğrulanmış fiyat teklifi, `about.text` özeti, bilet bağlantısı ve katılım koşulları inceleme.
+- Çakışmayan çok duraklı günlük etkinlik planı ve ICS takvim çıktısı üretme (esnek giriş biletleri saatli plandan ayrı tutulur).
 
 **Şehir hizmetleri**
 
@@ -205,6 +213,9 @@ Beşiktaş iskelesine en yakın İstanbulkart dolum noktası nerede?
 Kadıköy Caferağa mahalle profili nedir?
 İstanbul trafik yoğunluğu şu an hangi seviyede?
 İBB açık veri kataloğunda müzelerle ilgili hangi veri setleri var?
+Cumartesi Avrupa yakasında 2 kişi 1500 TL'yi geçmeden tiyatro veya konser önerir misin?
+Pazar 6 yaşındaki çocuğumla 18:00'e kadar bitecek 2 duraklı etkinlik planı yap.
+Sultanahmet çevresinde yürüme mesafesi metro ve otopark seçenekleri neler?
 ```
 
 ## Veri Kaynakları
@@ -215,6 +226,7 @@ Kadıköy Caferağa mahalle profili nedir?
 - Metro İstanbul arıza ve duyuru sayfaları
 - İSKİ arıza ve baraj kaynakları
 - Şehir Hatları ve TCDD Taşımacılık (Marmaray) resmî duyuruları
+- Ticketmaster Discovery Feed / Biletix ve Biletinial (etkinlik katmanı açıkken)
 - Wikidata yer referansları (CC0)
 
 Her sonuç standart bir yapıyla döner: `ok`, `summary`, `data`, `freshness`, `sources`, `limits`, `warnings` ve gerektiğinde `next_queries`. Sunucu salt okunurdur: rezervasyon yapmaz, kamu verisini değiştirmez, acil durum yönlendirmesi vermez ve kaynakta olmayan alanları üretmez.
@@ -243,8 +255,15 @@ Production yüzeyi **21 salt okunur araçtır**: temel 16 araç, GTFS tarifesine
 | `istanbul_metro_accessibility_status` | Metro ekipman toplamları ve arıza ayrıntıları; yolculuk erişilebilirliği garantisi değildir. |
 | `istanbul_next_departures` | Durak adı arama veya seçilen durağın planlı GTFS kalkışları; canlı ETA değildir. |
 | `istanbul_gtfs_snapshot_status` | Yerel tarife verisinin yaşı ve takvim geçerliliği. |
+| `istanbul_events_search` | İlçe, yaka (`europe`/`asia`), kategori, saat, çocuk yaşı, ücretsiz veya grup bütçesiyle İstanbul etkinlik araması (`EVENTS_ENABLED=true`). |
+| `istanbul_event_detail` | Seçilen `event_id` veya `performance_id` için doğrulanmış seanslar, grup fiyat teklifi, açıklama ve katılım koşulları (`EVENTS_ENABLED=true`). |
+| `istanbul_events_plan` | Tek gün için 1–3 duraklı çakışmayan etkinlik planı, bütçe toplamı ve ICS takvim çıktısı (`EVENTS_ENABLED=true`). |
 
-Sunucu hem eski (`initialize`) hem yeni (`2026-07-28`, `server/discover`, SEP-2549 `CacheHint`) MCP protokolüyle çalışır. Yayınlanan 21 aracın tamamı sıkıştırılmış `ResponseEnvelope` `outputSchema`/`structuredContent` yayımlar ve domain/validasyon hatalarında `isError: true` döner. Ayrıca üç keşif kaynağı (`istanbul://coverage`, `istanbul://sources`, `istanbul://schema/catalog`), iki resource şablonu (`istanbul://guides/{topic}`, `istanbul://districts/{district}`), üç etkileşimli MCP Apps arayüzü (`ui://istanbul/nearby-map`, `ui://istanbul/water-dashboard`, `ui://istanbul/events-plan`), Türkçe/ASCII `completion/complete` tamamlamaları ve dört–beş Türkçe prompt (`gunun_ozeti`, `mahalle_ozeti`, `veri_kesfi`, `yolculuk_plani`, etkinlik açıksa `etkinlik_plani`) sunar.
+Sunucu hem eski (`2025-03-26`, `2025-11-25` / `initialize`) hem yeni (`2026-07-28`, `server/discover`, SEP-2549 `CacheHint`) MCP protokolüyle çalışır. Yayınlanan 21 aracın tamamı kompakt UTF-8 `ResponseEnvelope` `outputSchema`/`structuredContent` yayımlar ve domain/validasyon hatalarında `isError: true` döner. Ayrıca:
+
+- **Skills over MCP (`io.modelcontextprotocol/skills`, SEP-2640 Beta):** `skills/list`, `skills/get`, `resources/directory/read` ve SHA-256 doğrulamalı 4 iş akışı becerisi (`istanbul-events-planner`, `istanbul-transit-guide`, `istanbul-open-data-explorer`, `istanbul-city-briefing`).
+- **MCP Apps (`io.modelcontextprotocol/ui`, SEP-1865):** 3 sandboxed etkileşimli arayüz (`ui://istanbul/nearby-map`, `ui://istanbul/water-dashboard`, `ui://istanbul/events-plan`).
+- **Keşif kaynakları, şablonlar, tamamlama ve prompt'lar:** 3 keşif kaynağı (`istanbul://coverage`, `istanbul://sources`, `istanbul://schema/catalog`), 2 resource şablonu (`istanbul://guides/{topic}`, `istanbul://districts/{district}`), Türkçe/ASCII `completion/complete` (ilçe, yaka, kategori, rehber konusu, yer, hat kodu) ve 4–5 Türkçe prompt (`gunun_ozeti`, `mahalle_ozeti`, `veri_kesfi`, `yolculuk_plani`, etkinlik açıksa `etkinlik_plani`).
 
 Parametreler ve davranışlar: [araç referansı](docs/tool-reference.md) · Protokol, prompt ve output schema ayrıntıları: [MCP arayüzü](docs/mcp-interface.md) · Durak ve tarife: [GTFS durakları](docs/gtfs-stops.md), [GTFS planlı kalkışlar](docs/gtfs-schedule.md) · [Yer ve ilçe çözümleme](docs/place-resolution.md) · [Statik şehir katmanları](docs/city-static-layers.md) · [Yanıt sözleşmesi](docs/response-contract.md)
 
@@ -301,6 +320,8 @@ Istanbul MCP resmî olmayan, bağımsız bir projedir; İBB, İSKİ, İETT, Metr
 Veriler gecikmeli, eksik veya hatalı olabilir. Nöbetçi eczane, su arızası ve ulaşım gibi kritik bilgileri resmî kaynaktan teyit edin.
 
 ## Etkinlik keşfi ve planlama
+
+0.10.0 ile etkinlik arama ve planlamaya Türkçe/İngilizce yaka filtresi (`side`: `europe`/`avrupa`, `asia`/`anadolu`) ve ilçe-yaka çelişki koruması eklendi; bilinen mekân + ters yaka aramalarında kendini onaran `next_queries` ipucu verilir. Yalnız gündüz `end_time <= 18:00` verildiğinde plan başlangıcı otomatik `09:00` alınır; `children`/`kids`/`dance`/`dans` kategori alias'ları, doğrulanmış İstanbul mekân ilçe dizini, çok seanslı detay sıkıştırması (`same_as_event` + seans sınırı) ve İstanbul dışı koordinat reddi aktiftir.
 
 0.8.0, son giriş saatini başlangıç saymaz; kaynakta açıkça belirtilen geçersiz
 kullanım günlerini eler ve aynı kişinin karşılayamayacağı yaş aralıklarını tek
