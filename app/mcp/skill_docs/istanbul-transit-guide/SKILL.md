@@ -12,7 +12,7 @@ Use this workflow for Istanbul public transportation queries involving buses (IE
 
 - **Specific IETT bus line (`500T`, `34A`, `15F`, `E-10`):** Call `istanbul_transit_line` with `action="info"`, `"stops"`, or `"departures"` (`limit` is supported only with `action="departures"`).
 - **Scheduled stop departures (when enabled):** Call `istanbul_next_departures` (check `istanbul_gtfs_snapshot_status` if GTFS freshness or warm-up state is in question).
-- **Service disruptions and official notices:** Call `istanbul_transport_disruptions` (filter by `operator`: `iett`, `metro`, `marmaray`, `sehir_hatlari`, or by `mode` / `line`).
+- **Service disruptions and official notices:** Call `istanbul_transport_disruptions` (filter by `operator`: `iett`, `metro_istanbul`, `marmaray`, `sehir_hatlari`, or by `mode` / `line`).
 - **Metro elevators and escalators:** Call `istanbul_metro_accessibility_status` (filter by `line`, `station`, or `equipment_type`).
 - **Nearby transit stops and parking:** Call `istanbul_mobility_nearby` with a known reference place, district, or coordinates.
 - **Published ferry timetables (only if listed):** Call `istanbul_ferry_schedules`.

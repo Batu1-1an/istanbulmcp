@@ -237,6 +237,7 @@ def test_skill_docs_match_live_tool_parameter_names(monkeypatch):
         assert 'action="info"' in transit
         assert 'view="info"' not in transit
         assert "equipment_type" in transit
+        assert "`metro_istanbul`" in transit
 
         events = _modern(client, "resources/read", {"uri": "skill://istanbul-events-planner/SKILL.md"}).json()["result"]["contents"][0]["text"]
         assert "`time_from`/`time_to`" in events

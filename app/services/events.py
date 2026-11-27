@@ -607,7 +607,7 @@ class EventService:
                 excluded_sold_out += 1
                 continue
             card = event_card(row, matches, max_price=max_price_try, distance=distance, include_sold_out=include_sold_out,
-                              conditions_limit=4, compact_unknown_quote=True)
+                              conditions_limit=2 if safe_limit > 15 else 4, compact_unknown_quote=True)
             price = event_price(row, include_sold_out=include_sold_out)
             unknown_quote_reason = None
             if party is not None:
