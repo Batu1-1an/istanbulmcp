@@ -24,7 +24,7 @@ from app.core.validation import (
     validate_radius,
     validate_text,
 )
-from app.services.places import normalize_place
+from app.services.places import normalize_place, resolve_district
 
 
 IBB_CACHE_KEY = "ibb_pharmacy.on_duty_pharmacies"
@@ -115,7 +115,9 @@ class PharmacyService:
 
     async def by_district(self, *, district: str, limit: int | None = None) -> dict[str, Any]:
         try:
-            safe_district = validate_text(district, field="district", max_length=80)
+            safe_district = resolve_district(validate_text(district, field="district", max_length=80))
+            if safe_district is None:
+                raise InputValidationError("Use one of Istanbul's 39 districts", field="district")
             safe_limit = self._validate_limit(limit)
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[IBB_SOURCE])

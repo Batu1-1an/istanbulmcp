@@ -271,3 +271,12 @@ async def test_validation_hardening_turkish_lines_market_district_equipment_and_
 
     dis = await TransportDisruptionService(settings=s).disruptions(line="bad line!")
     assert dis["ok"] is False and dis["error"]["field"] == "line"
+
+    from app.services.city import CityService
+    from app.services.pharmacy import PharmacyService
+
+    ph_bad = await PharmacyService(settings=s).by_district(district="İzmir")
+    assert ph_bad["ok"] is False and ph_bad["error"]["field"] == "district"
+
+    pk_bad = await CityService(settings=s).parking_by_district(district="İzmir")
+    assert pk_bad["ok"] is False and pk_bad["error"]["field"] == "district"

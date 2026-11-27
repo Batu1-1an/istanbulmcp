@@ -122,7 +122,10 @@ class CityService:
         try:
             if not district or not district.strip():
                 raise InputValidationError("district is required", field="district")
-            district = validate_text(district, field="district", max_length=80)
+            resolved = resolve_district(validate_text(district, field="district", max_length=80))
+            if resolved is None:
+                raise InputValidationError("Use one of Istanbul's 39 districts", field="district")
+            district = resolved
             safe_limit = resolve_limit(limit, self.settings.default_limit, self.settings.max_limit)
             parks = await self._parks()
         except InputValidationError as exc:
