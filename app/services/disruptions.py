@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+import re
 from typing import Any, Awaitable, Callable
 
 import httpx
@@ -77,6 +78,8 @@ class TransportDisruptionService:
             safe_mode = self._normalize_choice(mode, field="mode", allowed=SUPPORTED_MODES)
             safe_operator = self._normalize_choice(operator, field="operator", allowed=SUPPORTED_OPERATORS)
             safe_line = validate_text(line, field="line", max_length=160) if line is not None else None
+            if safe_line is not None and ("://" in safe_line or not re.fullmatch(r"[0-9A-Za-zÇĞİÖŞÜçğıöşü\s._/\-()]+", safe_line)):
+                raise InputValidationError("line contains unsupported characters", field="line")
             safe_limit = validate_limit(
                 self.settings.default_limit if limit is None else limit,
                 self.settings.max_limit,

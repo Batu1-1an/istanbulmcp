@@ -246,3 +246,28 @@ def test_otel_helpers_are_safe_noop_without_active_span():
     assert current_trace_fields() == {}
     headers = {"Accept": "application/json"}
     assert inject_trace_headers(headers) == headers
+
+
+@pytest.mark.asyncio
+async def test_validation_hardening_turkish_lines_market_district_equipment_and_disruptions(tmp_path):
+    from app.core.validation import InputValidationError, validate_line_code
+    from app.services.disruptions import TransportDisruptionService
+    from app.services.markets import MarketService
+    from app.services.metro_accessibility import validate_query
+
+    assert validate_line_code("15kç") == "15KÇ"
+    assert validate_line_code("14ŞB") == "14ŞB"
+    with pytest.raises(InputValidationError):
+        validate_line_code("bad line!")
+
+    assert validate_query(line="M2", station=None, equipment_type="asansör", limit=5).equipment_type == "asansör"
+    with pytest.raises(InputValidationError) as eq_err:
+        validate_query(line=None, station=None, equipment_type="invalid", limit=5)
+    assert eq_err.value.field == "equipment_type"
+
+    s = Settings(database_path=tmp_path / "val.sqlite3")
+    mkt = await MarketService(s).schedule(district="Ankara", day="today")
+    assert mkt["ok"] is False and mkt["error"]["field"] == "district"
+
+    dis = await TransportDisruptionService(settings=s).disruptions(line="bad line!")
+    assert dis["ok"] is False and dis["error"]["field"] == "line"

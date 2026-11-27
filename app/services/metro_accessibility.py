@@ -101,6 +101,14 @@ def validate_query(
     for value, field in ((safe_line, "line"), (safe_station, "station"), (safe_equipment, "equipment_type")):
         if value and "://" in value:
             raise InputValidationError(f"{field} must not contain a URL", field=field)
+    if safe_equipment is not None:
+        norm_eq = _normalize_token(safe_equipment)
+        if norm_eq not in KNOWN_EQUIPMENT_TYPES and norm_eq not in EQUIPMENT_LABEL_MAP:
+            allowed = ", ".join(sorted(set(KNOWN_EQUIPMENT_TYPES.values())))
+            raise InputValidationError(
+                f"equipment_type must be one of: {allowed} (or Turkish equivalent)",
+                field="equipment_type",
+            )
     return MetroAccessibilityQuery(
         line=safe_line,
         station=safe_station,

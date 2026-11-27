@@ -12,7 +12,7 @@ from app.core.geo import google_maps_url
 from app.core.settings import Settings
 from app.core.source_cache import cached_source_data
 from app.core.validation import InputValidationError, resolve_limit, validate_text
-from app.services.places import normalize_place
+from app.services.places import normalize_place, resolve_district
 
 ISTANBUL = ZoneInfo("Europe/Istanbul")
 DAY_NAMES = {
@@ -70,7 +70,12 @@ class MarketService:
         try:
             max_limit = min(self.settings.max_limit, 100)
             safe_limit = resolve_limit(limit, min(50, max_limit), max_limit)
-            safe_district = validate_text(district, field="district", max_length=80) if district is not None else None
+            safe_district = None
+            if district is not None:
+                raw_district = validate_text(district, field="district", max_length=80)
+                safe_district = resolve_district(raw_district)
+                if safe_district is None:
+                    raise InputValidationError("Use one of Istanbul's 39 districts", field="district")
             day_name, target_date = normalize_day(day)
         except InputValidationError as exc:
             return validation_error_envelope(exc, sources=[self._unavailable_source()])

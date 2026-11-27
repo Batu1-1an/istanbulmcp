@@ -72,7 +72,7 @@ def validate_identifier(value: str, *, field: str, max_length: int = 120) -> str
 
 def validate_line_code(value: str, *, max_length: int = 20) -> str:
     text = validate_text(value, field="line_code", max_length=max_length).upper()
-    if not re.fullmatch(r"[0-9A-Z._-]+", text):
+    if not re.fullmatch(r"[0-9A-ZÇĞİÖŞÜ._-]+", text):
         raise InputValidationError("line_code contains unsupported characters", field="line_code")
     return text
 
