@@ -221,6 +221,7 @@ def event_card(row: EventObservation, matches=None, *, max_price=None, distance=
                   "unit": offer_terms(lowest_offer) if lowest_offer else None,
                   "general_admission_quote": gaq,
                   "eligibility_may_apply": offer_terms(lowest_offer)["eligibility_requires_confirmation"] if lowest_offer else None},
+        "budget_price_try": price,
         "budget_status": "unknown" if price is None else "over" if max_price is not None and price > max_price else "within" if max_price is not None else "not_requested",
         "availability": stock, "availability_is_live": False,
         "program_status": program, "sales_status": sales,
@@ -524,7 +525,7 @@ class EventService:
                     except Exception:
                         return False  # Snapshot facts remain usable; missing prices stay unknown.
                 try:
-                    async with asyncio.timeout(4.0):
+                    async with asyncio.timeout(2.5):
                         outcomes = await asyncio.gather(*(_check_one(eid) for eid in target_ids))
                         successful_detail_checks = sum(outcomes)
                 except TimeoutError:

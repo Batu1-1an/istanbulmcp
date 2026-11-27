@@ -451,3 +451,39 @@ async def test_plan_daytime_end_time_without_start_time_and_compact_flexible_ent
     assert len(root["flexible_entries"]) == 1
     assert root["flexible_entries"][0]["start_at"] is None
     assert "participation_conditions" not in root["flexible_entries"][0]
+
+
+def test_remaining_verified_venues_and_single_person_budget_price_try():
+    from app.core.events import EventVenue
+    from app.services.event_locations import enrich_verified_venues
+    from app.services.events import event_card
+
+    now = datetime.now(ISTANBUL)
+    start = now + timedelta(days=2)
+    rows = [
+        EventObservation(source="biletinial", source_id="m1", series_key="m1", title="T1", category="theatre",
+                         start_at=start, venue=EventVenue(name="Sahne Dragos", side="asia"), observed_at=now,
+                         offers=[EventOffer(name="Tam", price=145.0, currency="TRY")]),
+        EventObservation(source="biletinial", source_id="m2", series_key="m2", title="T2", category="family",
+                         start_at=start, venue=EventVenue(name="Halis Kurtça Çocuk Kültür Merkezi", side="asia"), observed_at=now),
+        EventObservation(source="biletinial", source_id="m3", series_key="m3", title="T3", category="family",
+                         start_at=start, venue=EventVenue(name="İstanbul Dolphinarium", side="europe"), observed_at=now),
+        EventObservation(source="biletinial", source_id="m4", series_key="m4", title="T4", category="theatre",
+                         start_at=start, venue=EventVenue(name="Cafe Theatre Koşuyolu", side="asia"), observed_at=now),
+        EventObservation(source="biletinial", source_id="m5", series_key="m5", title="T5", category="theatre",
+                         start_at=start, venue=EventVenue(name="Vohu Sahne", side="asia"), observed_at=now),
+        EventObservation(source="biletinial", source_id="m6", series_key="m6", title="T6", category="concert",
+                         start_at=start, venue=EventVenue(name="Paribu Art - Ana Sahne", side="asia"), observed_at=now),
+    ]
+    enriched, _ = enrich_verified_venues(rows)
+    assert {r.source_id: r.venue.district for r in enriched} == {
+        "m1": "Maltepe",
+        "m2": "Kadıköy",
+        "m3": "Eyüpsultan",
+        "m4": "Üsküdar",
+        "m5": "Kadıköy",
+        "m6": "Kadıköy",
+    }
+    card = event_card(enriched[0], max_price=250.0)
+    assert card["budget_status"] == "within"
+    assert card["budget_price_try"] == 145.0
