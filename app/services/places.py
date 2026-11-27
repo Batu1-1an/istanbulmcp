@@ -45,6 +45,18 @@ _PLACES: tuple[ResolvedPlace, ...] = (
                   "wikidata_reference", "https://www.wikidata.org/wiki/Q2823844", "2522640416"),
     ResolvedPlace("acibadem uskudar", "Acıbadem, Üsküdar", 41.0073, 29.0533, "Üsküdar", "Acıbadem",
                   "wikidata_reference", "https://www.wikidata.org/wiki/Q2756264", "2522640408"),
+    ResolvedPlace("sultanahmet", "Sultanahmet", 41.00638889, 28.97555556, "Fatih", None,
+                  "wikidata_reference", "https://www.wikidata.org/wiki/Q387548", "2552969478"),
+    ResolvedPlace("galata", "Galata", 41.02563232, 28.97415319, "Beyoğlu", None,
+                  "wikidata_reference", "https://www.wikidata.org/wiki/Q91274", "2574733301"),
+    ResolvedPlace("ortakoy", "Ortaköy", 41.0546272, 29.0281901, "Beşiktaş", "Ortaköy",
+                  "wikidata_reference", "https://www.wikidata.org/wiki/Q2249546", "2543719848"),
+    ResolvedPlace("bebek", "Bebek", 41.080904, 29.043903, "Beşiktaş", "Bebek",
+                  "wikidata_reference", "https://www.wikidata.org/wiki/Q813531", "2575415087"),
+    ResolvedPlace("balat", "Balat", 41.0320032, 28.9482931, "Fatih", "Balat",
+                  "wikidata_reference", "https://www.wikidata.org/wiki/Q48796", "2575408319"),
+    ResolvedPlace("bagdat caddesi", "Bağdat Caddesi", 40.95344, 29.09517, "Kadıköy", None,
+                  "wikidata_reference", "https://www.wikidata.org/wiki/Q2873544", "2550496992"),
 )
 
 _DISTRICT_DISPLAY_NAMES = {

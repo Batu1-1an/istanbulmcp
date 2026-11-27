@@ -48,6 +48,12 @@ def test_district_resolution_does_not_treat_an_address_or_neighborhood_as_a_dist
     ("Nişantaşı", "Şişli", 41.051666666667, 28.991388888889, "Q251601", "2556915721"),
     ("Acıbadem, Kadıköy", "Kadıköy", 41.001667, 29.038611, "Q2823844", "2522640416"),
     ("Acıbadem, Üsküdar", "Üsküdar", 41.0073, 29.0533, "Q2756264", "2522640408"),
+    ("Sultanahmet", "Fatih", 41.00638889, 28.97555556, "Q387548", "2552969478"),
+    ("Galata", "Beyoğlu", 41.02563232, 28.97415319, "Q91274", "2574733301"),
+    ("Ortaköy", "Beşiktaş", 41.0546272, 29.0281901, "Q2249546", "2543719848"),
+    ("Bebek", "Beşiktaş", 41.080904, 29.043903, "Q813531", "2575415087"),
+    ("Balat", "Fatih", 41.0320032, 28.9482931, "Q48796", "2575408319"),
+    ("Bağdat Caddesi", "Kadıköy", 40.95344, 29.09517, "Q2873544", "2550496992"),
 ])
 def test_reference_points_retain_checked_wikidata_coordinates_and_revision(name, district, lat, lon, entity, revision):
     place = resolve_place(name)
