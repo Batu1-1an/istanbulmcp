@@ -137,7 +137,8 @@ class CityService:
         rows = [
             self._district_parking_row(park)
             for park in parks
-            if self._normalize_text(park.get("district")) == normalized_district
+            if resolve_district(str(park.get("district") or "")) == district
+            or self._normalize_text(park.get("district")) == normalized_district
         ]
         rows.sort(key=lambda row: (row["name"] or "", row["source_id"]))
         data = rows[:safe_limit]

@@ -102,6 +102,9 @@ _DISTRICT_DISPLAY_NAMES = {
 }
 
 DISTRICT_PLACE_QUERIES = frozenset(_DISTRICT_DISPLAY_NAMES)
+_DISTRICT_ALIASES = {
+    "eyup": "eyupsultan",
+}
 
 _ALIASES = {
     "kadıkoy": "kadikoy",
@@ -161,6 +164,7 @@ def resolve_district(value: str) -> str | None:
         if key.endswith(suffix):
             key = key[:-len(suffix)]
             break
+    key = _DISTRICT_ALIASES.get(key, key)
     return _DISTRICT_DISPLAY_NAMES.get(key)
 
 
@@ -170,13 +174,17 @@ def known_place_names() -> list[str]:
 
 def district_from_text(value: str) -> str | None:
     normalized = normalize_place(value)
-    if normalized in _DISTRICT_DISPLAY_NAMES:
-        return _DISTRICT_DISPLAY_NAMES[normalized]
+    canonical = _DISTRICT_ALIASES.get(normalized, normalized)
+    if canonical in _DISTRICT_DISPLAY_NAMES:
+        return _DISTRICT_DISPLAY_NAMES[canonical]
 
     words = set(normalized.split())
     for key, display_name in _DISTRICT_DISPLAY_NAMES.items():
         if key in words:
             return display_name
+    for alias, target in _DISTRICT_ALIASES.items():
+        if alias in words:
+            return _DISTRICT_DISPLAY_NAMES[target]
     return None
 
 

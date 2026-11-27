@@ -133,7 +133,8 @@ class PharmacyService:
         data = [
             dict(row)
             for row in cached.value.rows
-            if self._normalize_district(row["district"]) == normalized
+            if resolve_district(str(row["district"] or "")) == safe_district
+            or self._normalize_district(row["district"]) == normalized
         ]
         data.sort(key=lambda row: (normalize_place(row["name"]), row["source_id"]))
         matched = len(data)

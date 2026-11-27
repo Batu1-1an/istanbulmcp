@@ -71,3 +71,11 @@ def test_acibadem_requires_district_and_accepts_qualified_neighborhood_names():
         assert resolve_place(value).district == "Üsküdar"
     assert resolve_place("Bostancı, Üsküdar") is None
     assert resolve_place("Bostancı İstasyon Caddesi 10") is None
+
+
+def test_historical_eyup_name_resolves_to_eyupsultan():
+    assert len(district_names()) == 39
+    assert resolve_district("Eyüp") == "Eyüpsultan"
+    assert resolve_district("EYÜP") == "Eyüpsultan"
+    assert resolve_district("eyup merkez") == "Eyüpsultan"
+    assert district_from_text("Silahtarağa Cd. Eyüp/İstanbul") == "Eyüpsultan"
