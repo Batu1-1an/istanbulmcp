@@ -527,3 +527,13 @@ async def test_event_detail_caps_large_multi_session_series_and_prioritizes_sele
     assert len(dp["performances"]) == 6
     assert dp["selected_performance_ids"] == [target.performance_id]
     assert dp["performances"][0]["performance_id"] == target.performance_id
+
+
+@pytest.mark.asyncio
+async def test_event_search_rejects_outside_istanbul_coordinates_immediately(tmp_path):
+    service = EventService(Settings(database_path=tmp_path / "bounds.sqlite3", events_enabled=True))
+    for lat, lon in ((-90.0, 29.0), (39.93, 32.85)):
+        res = await service.search(lat=lat, lon=lon, radius_m=5000)
+        assert res["ok"] is False
+        assert res["error"]["code"] == "validation_error"
+        assert "Istanbul bounds" in res["summary"]

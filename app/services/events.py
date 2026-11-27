@@ -393,6 +393,8 @@ class EventService:
                 if lat is None or lon is None:
                     raise InputValidationError("Provide both lat and lon", field="lat")
                 validate_lat_lon(lat, lon)
+                if not (40.70 <= lat <= 41.70 and 27.80 <= lon <= 30.20):
+                    raise InputValidationError("Coordinates must be within Istanbul bounds (lat 40.70–41.70, lon 27.80–30.20)", field="lat")
                 radius_m = validate_radius(radius_m if radius_m is not None else 5000, 20000)
                 bbox = radius_bbox(lat, lon, radius_m)
             elif radius_m is not None:
