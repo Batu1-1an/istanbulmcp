@@ -12,7 +12,7 @@ from app.core.source_cache import CachedSourceData, SourceLoadResult, cached_sou
 from app.core.validation import (
     InputValidationError, resolve_limit, validate_lat_lon, validate_radius, validate_text,
 )
-from app.services.places import normalize_place
+from app.services.places import normalize_place, resolve_district
 
 
 ISKI_FAULTS_URL = "https://harita.iski.gov.tr/data/mahallelerKesinti.geojson"
@@ -67,7 +67,11 @@ class IskiService:
     ) -> dict[str, Any]:
         try:
             safe_limit = resolve_limit(limit, self.settings.default_limit, self.settings.max_limit)
-            safe_district = validate_text(district, field="district", max_length=80) if district else None
+            safe_district = None
+            if district:
+                safe_district = resolve_district(validate_text(district, field="district", max_length=80))
+                if safe_district is None:
+                    raise InputValidationError("Use one of Istanbul's 39 districts", field="district")
             source_result = await self._active_fault_geojson()
             rows = [self._fault_row(feature) for feature in source_result.value.get("features", [])]
         except InputValidationError as exc:
@@ -79,7 +83,11 @@ class IskiService:
 
         if safe_district:
             wanted = normalize_place(safe_district)
-            rows = [row for row in rows if normalize_place(row.get("district", "")) == wanted]
+            rows = [
+                row for row in rows
+                if resolve_district(row.get("district", "")) == safe_district
+                or normalize_place(row.get("district", "")) == wanted
+            ]
         rows.sort(key=lambda row: (row.get("started_at") or "", row.get("fault_number") or ""))
         data = rows[:safe_limit]
         suffix = f" in {safe_district}" if safe_district else ""

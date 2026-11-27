@@ -280,3 +280,11 @@ async def test_validation_hardening_turkish_lines_market_district_equipment_and_
 
     pk_bad = await CityService(settings=s).parking_by_district(district="İzmir")
     assert pk_bad["ok"] is False and pk_bad["error"]["field"] == "district"
+
+    from app.services.iski import IskiService
+    from app.services.neighborhood import DISTRICTS_BY_NORMALIZED, normalize_neighborhood_text
+    from app.services.places import resolve_district
+
+    iski_bad = await IskiService(settings=s).active_faults(district="Ankara")
+    assert iski_bad["ok"] is False and iski_bad["error"]["field"] == "district"
+    assert DISTRICTS_BY_NORMALIZED[normalize_neighborhood_text(resolve_district("Eyüp"))] == "EYÜPSULTAN"

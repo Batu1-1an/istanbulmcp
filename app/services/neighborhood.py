@@ -14,6 +14,7 @@ from app.core.source_cache import cached_source_data
 from app.core.validation import (
     InputValidationError, resolve_limit, validate_text,
 )
+from app.services.places import resolve_district
 
 SOCIAL_ASSISTANCE_DATASET_ID = "1f92165c-d8f4-4020-a858-3fd9cf6d00b7"
 SOCIAL_ASSISTANCE_RESOURCE_ID = "af59d08d-7e7d-4404-98be-4adc7d2857f9"
@@ -119,7 +120,8 @@ class NeighborhoodService:
             if neighborhood is not None:
                 neighborhood = validate_text(neighborhood, field="neighborhood", max_length=120)
             safe_limit = resolve_limit(limit, self.settings.default_limit, self.settings.max_limit)
-            district_key = normalize_neighborhood_text(district)
+            canonical_district = resolve_district(district) or district
+            district_key = normalize_neighborhood_text(canonical_district)
             source_district = DISTRICTS_BY_NORMALIZED.get(district_key)
             if source_district is None:
                 raise InputValidationError(
