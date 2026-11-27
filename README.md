@@ -226,7 +226,6 @@ Sultanahmet çevresinde yürüme mesafesi metro ve otopark seçenekleri neler?
 - Metro İstanbul arıza ve duyuru sayfaları
 - İSKİ arıza ve baraj kaynakları
 - Şehir Hatları ve TCDD Taşımacılık (Marmaray) resmî duyuruları
-- Ticketmaster Discovery Feed / Biletix ve Biletinial (etkinlik katmanı açıkken)
 - Wikidata yer referansları (CC0)
 
 Her sonuç standart bir yapıyla döner: `ok`, `summary`, `data`, `freshness`, `sources`, `limits`, `warnings` ve gerektiğinde `next_queries`. Sunucu salt okunurdur: rezervasyon yapmaz, kamu verisini değiştirmez, acil durum yönlendirmesi vermez ve kaynakta olmayan alanları üretmez.
