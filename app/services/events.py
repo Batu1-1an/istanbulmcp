@@ -24,7 +24,7 @@ from app.storage.events import EventRepository
 
 from app.connectors.event_conditions import conditions_output
 from app.services.event_pricing import offer_terms, ticket_quote, resolve_party, apply_party_quote
-from app.services.event_locations import enrich_verified_venues
+from app.services.event_locations import _known_venue_district, enrich_verified_venues
 
 logger = logging.getLogger("istanbul_mcp.events")
 EVENT_LIMITS = ["Istanbul source inventory only; not a complete city calendar.",
@@ -714,6 +714,13 @@ class EventService:
         next_queries: list[str] = []
         if query and query_scope == "title" and not selected:
             next_queries.append("Try query_scope='all' to also search venue and organizer names.")
+        if not selected and side and venue:
+            known_dist = _known_venue_district(venue)
+            if known_dist is not None and district_side(known_dist) != side:
+                actual_side = district_side(known_dist)
+                next_queries.append(
+                    f"{venue} is in {known_dist} ({actual_side} side); retry with side='{actual_side}' or omit side."
+                )
         if query:
             folded_q = normalize_place(query)
             if "caz" in folded_q.split() and "jazz" not in folded_q.split():

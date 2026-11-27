@@ -623,3 +623,25 @@ async def test_events_search_and_plan_side_filter_and_contradiction_guards(tmp_p
 
     plan_contradict = await plan_svc.plan(date=day.isoformat(), district="Beşiktaş", side="anadolu")
     assert plan_contradict["ok"] is False and plan_contradict["error"]["field"] == "side"
+
+    # Known venue on opposite side yields a self-healing next_queries hint
+    venue_mismatch = await service.search(date_from=day.isoformat(), date_to=day.isoformat(), side="europe", venue="Moda Sahnesi")
+    assert venue_mismatch["ok"] is True and not venue_mismatch["data"]
+    assert any("Kadıköy (asia side)" in hint for hint in venue_mismatch["next_queries"])
+
+    # Full verified budgeted plan omits redundant unverified_budget options
+    eu_unpriced = EventObservation(
+        source="ticketmaster", source_id="eu-unp", series_key="eu-unp", title="Avrupa Fiyatsız",
+        category="concert", start_at=datetime(day.year, day.month, day.day, 19, 30, tzinfo=ISTANBUL),
+        end_at=datetime(day.year, day.month, day.day, 20, 30, tzinfo=ISTANBUL),
+        venue=EventVenue(name="Zorlu PSM", district="Beşiktaş", side="europe"), observed_at=now,
+    )
+    repo.publish("ticketmaster", [eu_1, eu_2, eu_unpriced], {"complete": True})
+    plan_budget = await plan_svc.plan(
+        date=day.isoformat(), side="europe", max_price_try=1000, min_events=1, max_events=1, limit=2,
+    )
+    assert plan_budget["ok"] is True
+    broot = plan_budget["data"][0]
+    assert len(broot["options"]) == 2
+    assert broot["unverified_budget"] == []
+    assert broot.get("unverified_budget_omitted", 0) >= 1

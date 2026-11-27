@@ -216,6 +216,12 @@ async def test_resource_templates_and_completions_are_local_and_turkish_aware(mo
         )
         assert "concert" in comp_interest.completion.values
 
+        comp_side = await client.complete(
+            PromptReference(name="etkinlik_plani"),
+            {"name": "side", "value": "avr"},
+        )
+        assert "Avrupa Yakası" in comp_side.completion.values
+
 
 @pytest.mark.asyncio
 async def test_shared_http_pool_reuses_client_and_closes_on_exit(monkeypatch):

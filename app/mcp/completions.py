@@ -10,6 +10,7 @@ from app.services.places import _DISTRICT_DISPLAY_NAMES, _PLACES, normalize_plac
 
 MAX_COMPLETIONS = 20
 COMMON_IETT_LINES = ("500T", "34A", "34AS", "34G", "34Z", "15F", "16D", "19F", "25E", "40T", "129T", "E-10", "E-11")
+ISTANBUL_SIDES = ("europe", "asia", "Avrupa Yakası", "Anadolu Yakası")
 
 
 def _filter_candidates(candidates: list[str], prefix: str) -> Completion:
@@ -45,6 +46,8 @@ def register_completions(server: MCPServer) -> None:
                 return _filter_candidates(districts, value)
             if name == "interests":
                 return _filter_candidates(categories, value)
+            if name == "side":
+                return _filter_candidates(list(ISTANBUL_SIDES), value)
             if name in {"origin", "destination"}:
                 return _filter_candidates(places, value)
             if name == "line_code":

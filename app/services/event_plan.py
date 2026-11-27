@@ -408,6 +408,9 @@ class EventPlanService:
                                               min_events=min_events,required_categories=required_categories or (),partial_output=partials)
         if options:
             partials = []
+        unverified_omitted = max(0, len(unverified) - max(0, safe_limit - len(options)))
+        if options and unverified:
+            unverified = unverified[: max(0, safe_limit - len(options))]
         def _compact_perf(card: dict) -> dict:
             out = dict(card)
             cond = out.get("participation_conditions")
@@ -452,6 +455,7 @@ class EventPlanService:
         envelope["data"] = [{"date": day.isoformat(), "window": {"start": start_time, "end": end_time},
                              "discovery_diagnostics":discovery_diagnostics,"combination_diagnostics":diagnostics,
                              "options": options, "unverified_budget": unverified, "partial_options":partials,
+                             **({"unverified_budget_omitted": unverified_omitted} if unverified_omitted else {}),
                              "rejected": rejected[:25], "rejected_total": rejected_total, "rejected_truncated": rejected_truncated,
                              "fulfillment":{"status":"complete" if options else "partial" if partials else "unverified_budget" if unverified else "unmet",
                                             "requested_min_events":min_events,"requested_max_events":max_events,
