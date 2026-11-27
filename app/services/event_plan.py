@@ -11,11 +11,12 @@ from urllib.parse import urlencode
 
 from app.core.envelope import error_envelope
 from app.core.error_responses import validation_error_envelope
-from app.core.events import CATEGORIES, ISTANBUL, EventOffer, age_suitability, child_only_age_range, event_time, normalize_category, published_age_range
+from app.core.events import CATEGORIES, ISTANBUL, EventOffer, age_suitability, child_only_age_range, district_side, event_time, normalize_category, normalize_side, published_age_range
 from app.core.geo import haversine_m
 from app.core.validation import InputValidationError, resolve_limit, validate_text
 from app.services.events import EventService, event_clock, event_date
 from app.services.event_pricing import resolve_party, apply_party_quote
+from app.services.places import resolve_district
 
 
 def _ics_text(value: str) -> str:
@@ -245,7 +246,7 @@ class EventPlanService:
         self.events = events or EventService(settings)
 
     async def plan(self, *, date=None, start_time=None, end_time="23:59", interests=None,
-                   district=None, event_ids=None, max_price_try=None, min_gap_minutes=30, max_events=3, limit=None,
+                   district=None, side=None, event_ids=None, max_price_try=None, min_gap_minutes=30, max_events=3, limit=None,
                    child_age=None, require_known_end=False, exclude_child_only=False,
                    min_events=1, required_categories=None, party_size=None, ticket_profile=None,
                    party=None, budget_includes_fees=False):
@@ -298,6 +299,19 @@ class EventPlanService:
                 event_ids = [validate_text(identifier, field="event_ids", max_length=64) for identifier in event_ids]
             if event_ids is not None and district is not None:
                 raise InputValidationError("Use selected event_ids or district discovery", field="district")
+            if event_ids is not None and side is not None:
+                raise InputValidationError("Use selected event_ids or side discovery", field="side")
+            if side is not None:
+                side = normalize_side(validate_text(side, field="side", max_length=40))
+                if side is None:
+                    raise InputValidationError("side must be europe/avrupa or asia/anadolu", field="side")
+                if district is not None:
+                    resolved_district = resolve_district(validate_text(district, field="district", max_length=80))
+                    if resolved_district is not None and district_side(resolved_district) != side:
+                        raise InputValidationError(
+                            f"district {resolved_district} is on the {district_side(resolved_district)} side, not {side}",
+                            field="side",
+                        )
             safe_limit = resolve_limit(limit, 3, 5)
         except InputValidationError as exc:
             return validation_error_envelope(exc)
@@ -327,7 +341,7 @@ class EventPlanService:
             cards, truncated, envelope = [], False, None
             for category in interests or [None]:
                 response = await self.events.search(date_from=day.isoformat(), date_to=day.isoformat(), time_from=start_time,
-                                                   time_to=end_time, district=district, category=category, child_age=child_age, exclude_child_only=exclude_child_only,
+                                                   time_to=end_time, district=district, side=side, category=category, child_age=child_age, exclude_child_only=exclude_child_only,
                                                    max_price_try=max_price_try, limit=self.events.settings.events_max_rows, party=party, budget_includes_fees=budget_includes_fees, _planning=True)
                 if not response["ok"]:
                     return response
@@ -463,6 +477,8 @@ class EventPlanService:
             if not reasons:reasons=['no_complete_option_in_evaluated_candidates']
         envelope['data'][0]['fulfillment']['reason_codes']=list(dict.fromkeys(reasons))
         envelope["data"][0]["requested_categories"] = interests
+        if side is not None:
+            envelope["data"][0]["side"] = side
         envelope["data"][0]["child_age"] = child_age
         envelope["data"][0]["require_known_end"] = require_known_end
         envelope["summary"] = f"{len(options)} daily event plan option(s); travel feasibility is unverified."

@@ -20,6 +20,7 @@ async def istanbul_events_search(
     time_from: Annotated[str | None, Field(description="Earliest session start clock (HH:MM). Excludes date-only flexible tickets.")] = None,
     time_to: Annotated[str | None, Field(description="Latest session start clock (HH:MM). Excludes date-only flexible tickets.")] = None,
     district: Annotated[str | None, Field(description="One of Istanbul's 39 districts.")] = None,
+    side: Annotated[str | None, Field(description="Istanbul side: 'europe' (avrupa) or 'asia' (anadolu).")] = None,
     venue: Annotated[str | None, Field(description="Venue name filter.")] = None,
     lat: Annotated[float | None, Field(description="WGS84 latitude (must be paired with lon).")] = None,
     lon: Annotated[float | None, Field(description="WGS84 longitude (must be paired with lat).")] = None,
@@ -49,7 +50,7 @@ async def istanbul_events_search(
     """
     return await EventService(get_settings()).search(
         query=query, category=category, date_from=date_from, date_to=date_to,
-        time_from=time_from, time_to=time_to, district=district, venue=venue,
+        time_from=time_from, time_to=time_to, district=district, side=side, venue=venue,
         lat=lat, lon=lon, radius_m=radius_m, free_only=free_only,
         max_price_try=max_price_try, limit=limit,
         include_unknown_prices=include_unknown_prices, child_age=child_age, query_scope=query_scope,
@@ -87,6 +88,7 @@ async def istanbul_events_plan(
     end_time: Annotated[str, Field(description="Latest plan window clock (HH:MM, default '23:59').")] = "23:59",
     interests: Annotated[list[str] | None, Field(description="Up to 5 allowed event categories.")] = None,
     district: Annotated[str | None, Field(description="District for candidate discovery when event_ids is omitted.")] = None,
+    side: Annotated[str | None, Field(description="Istanbul side for candidate discovery when event_ids is omitted: 'europe' (avrupa) or 'asia' (anadolu).")] = None,
     event_ids: Annotated[list[str] | None, Field(description="1-20 event_id or performance_id values from search/detail.")] = None,
     max_price_try: Annotated[float | None, Field(description="Total observed party budget across all stops in TRY.")] = None,
     min_gap_minutes: Annotated[int, Field(description="Minimum gap between sessions in minutes (0-240, default 30).")] = 30,
@@ -111,7 +113,7 @@ async def istanbul_events_plan(
     """
     return await EventPlanService(get_settings()).plan(
         date=date, start_time=start_time, end_time=end_time, interests=interests,
-        district=district, event_ids=event_ids, max_price_try=max_price_try,
+        district=district, side=side, event_ids=event_ids, max_price_try=max_price_try,
         min_gap_minutes=min_gap_minutes, max_events=max_events, limit=limit,
         child_age=child_age, require_known_end=require_known_end, exclude_child_only=exclude_child_only,
         min_events=min_events, required_categories=required_categories,

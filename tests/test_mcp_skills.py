@@ -241,6 +241,7 @@ def test_skill_docs_match_live_tool_parameter_names(monkeypatch):
 
         events = _modern(client, "resources/read", {"uri": "skill://istanbul-events-planner/SKILL.md"}).json()["result"]["contents"][0]["text"]
         assert "`time_from`/`time_to`" in events
+        assert "`side`" in events
         rules = _modern(client, "resources/read", {"uri": "skill://istanbul-events-planner/references/rules.md"}).json()["result"]["contents"][0]["text"]
         assert "`price_quote`" in rules
         assert "party_quote" not in rules

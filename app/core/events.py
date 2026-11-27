@@ -24,6 +24,25 @@ CATEGORY_ALIASES = {"tiyatro": "theatre", "theater": "theatre", "konser": "conce
                     "sergi": "exhibition", "atolye": "workshop", "spor": "sport", "sports": "sport",
                     "seminer": "seminar", "soylesi": "seminar", "talk": "seminar",
                     "muzikal": "theatre", "musical": "theatre"}
+ASIA_DISTRICTS = frozenset({
+    "adalar", "atasehir", "beykoz", "cekmekoy", "kadikoy", "kartal", "maltepe",
+    "pendik", "sancaktepe", "sultanbeyli", "sile", "tuzla", "umraniye", "uskudar",
+})
+SIDE_ALIASES: dict[str, Literal["europe", "asia"]] = {
+    "europe": "europe", "european": "europe", "europe side": "europe", "european side": "europe",
+    "avrupa": "europe", "avrupa yakasi": "europe", "rumeli": "europe",
+    "asia": "asia", "asian": "asia", "asian side": "asia",
+    "asya": "asia", "asya yakasi": "asia",
+    "anadolu": "asia", "anadolu yakasi": "asia", "anatolia": "asia", "anatolian": "asia", "anatolian side": "asia",
+}
+
+
+def normalize_side(value: str) -> Literal["europe", "asia"] | None:
+    return SIDE_ALIASES.get(normalize_place(value))
+
+
+def district_side(district: str) -> Literal["europe", "asia"]:
+    return "asia" if normalize_place(district) in ASIA_DISTRICTS else "europe"
 
 
 def normalize_category(value: str) -> str:

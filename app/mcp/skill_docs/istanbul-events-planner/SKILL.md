@@ -11,14 +11,14 @@ Use this workflow whenever a user wants to discover, check, or schedule Istanbul
 ## Core Workflow
 
 1. **Search (`istanbul_events_search`)**
-   - Pass explicit filters directly: `date_from`/`date_to`, `district`, `category`, `query`, `time_from`/`time_to`, `free_only`, `max_price_try`, `party_size`/`ticket_profile` or `party`, `child_age`, or `exclude_child_only`.
+   - Pass explicit filters directly: `date_from`/`date_to`, `district`, `side` (`europe`/`avrupa` or `asia`/`anadolu`), `category`, `query`, `time_from`/`time_to`, `free_only`, `max_price_try`, `party_size`/`ticket_profile` or `party`, `child_age`, or `exclude_child_only`.
    - Keep `limit` small (5–10) on the first call.
    - Do not broaden dates, districts, or budgets without telling the user; explain `empty_reasons` honestly when no events match.
 2. **Verify (`istanbul_event_detail`)**
    - Pass the selected `event_id` (or `performance_id`) value in the required `event_id` parameter when full participation conditions, organizer info, or a missing description (`about.status="not_checked"`) are needed.
    - Reuse one detail call per event series instead of repeating calls for sibling sessions.
 3. **Plan (`istanbul_events_plan`)**
-   - Use for multi-stop daily itineraries with `date`, `start_time`, and `end_time` (default evening window is `18:00`–`23:59`, or `09:00`–`end_time` when only a daytime `end_time` is supplied).
+   - Use for multi-stop daily itineraries with `date`, `start_time`, `end_time`, and optional `district` or `side` (`europe`/`asia`) (default evening window is `18:00`–`23:59`, or `09:00`–`end_time` when only a daytime `end_time` is supplied).
    - Preserve exact stop counts with both `min_events` and `max_events`, and enforce mandatory genres with `required_categories`.
    - Pass the whole-group budget across all stops as `max_price_try` alongside `party_size`/`ticket_profile` or `party`.
 

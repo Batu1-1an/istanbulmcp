@@ -14,7 +14,7 @@ from app.connectors.ibb_relay import ibb_http_client
 from app.connectors.ticketmaster import TicketmasterClient
 from app.core.envelope import Freshness, Source, Repair, error_envelope, result_info, success_envelope
 from app.core.error_responses import validation_error_envelope
-from app.core.events import CATEGORIES, ISTANBUL, EventObservation, age_suitability, child_only_age_range, category_for, event_time, normalize_category, search_text
+from app.core.events import CATEGORIES, ISTANBUL, EventObservation, age_suitability, child_only_age_range, category_for, district_side, event_time, normalize_category, normalize_side, search_text
 from app.core.geo import haversine_m, radius_bbox
 from app.core.settings import Settings
 from app.core.source_cache import SourceLoadResult, cached_source_data_with_status
@@ -343,7 +343,7 @@ class EventService:
                                 next_queries=list(dict.fromkeys(next_queries)))
 
     async def search(self, *, query=None, category=None, date_from=None, date_to=None,
-                     time_from=None, time_to=None, district=None, venue=None,
+                     time_from=None, time_to=None, district=None, side=None, venue=None,
                      lat=None, lon=None, radius_m=None, free_only=False, max_price_try=None, limit=None,
                      include_unknown_prices=True, child_age=None, query_scope="title", include_sold_out=False,
                      match_mode="words", include_past=False, exclude_child_only=False,
@@ -384,6 +384,15 @@ class EventService:
                 district = resolve_district(validate_text(district, field="district", max_length=80))
                 if district is None:
                     raise InputValidationError("Use one of Istanbul's 39 districts", field="district")
+            if side is not None:
+                side = normalize_side(validate_text(side, field="side", max_length=40))
+                if side is None:
+                    raise InputValidationError("side must be europe/avrupa or asia/anadolu", field="side")
+                if district is not None and district_side(district) != side:
+                    raise InputValidationError(
+                        f"district {district} is on the {district_side(district)} side, not {side}",
+                        field="side",
+                    )
             if max_price_try is not None and (isinstance(max_price_try, bool) or not math.isfinite(max_price_try) or max_price_try < 0):
                 raise InputValidationError("max_price_try must be finite and nonnegative", field="max_price_try")
             if free_only and max_price_try is not None:
@@ -418,7 +427,7 @@ class EventService:
         successful_detail_checks = 0
         # Named/price/category questions need recent evidence. Check a small relevant
         # subset on demand when local fresh verified matches are below safe_limit.
-        if self.settings.events_biletinial_enabled and (query is not None or max_price_try is not None or free_only or category is not None or exclude_child_only or venue is not None or district is not None or bbox is not None or party is not None):
+        if self.settings.events_biletinial_enabled and (query is not None or max_price_try is not None or free_only or category is not None or exclude_child_only or venue is not None or district is not None or side is not None or bbox is not None or party is not None):
             now_ist = datetime.now(ISTANBUL)
             now_utc = datetime.now(timezone.utc)
             fresh_verified = 0
@@ -445,6 +454,8 @@ class EventService:
                     if row.timing_kind == "scheduled" and (clock_from and row.start_at.time() < clock_from or clock_to and row.start_at.time() > clock_to):
                         continue
                     if district and (not row.venue.district or normalize_place(row.venue.district) != normalize_place(district)):
+                        continue
+                    if side and row.venue.side != side:
                         continue
                     if venue and (row.venue.name == "Unknown venue" or search_text(venue) not in search_text(row.venue.name)):
                         continue
@@ -482,6 +493,8 @@ class EventService:
                     continue
                 if district and row.venue.district and normalize_place(row.venue.district) != normalize_place(district):
                     continue
+                if side and row.venue.side and row.venue.side != side:
+                    continue
                 if venue and row.venue.name != "Unknown venue" and search_text(venue) not in search_text(row.venue.name):
                     continue
                 if exclude_child_only and child_only_age_range(row.age_limit):
@@ -503,6 +516,13 @@ class EventService:
                 if district:
                     known=row.venue.district or district_from_text(hint)
                     return known!=district
+                if side:
+                    known_side = row.venue.side
+                    if known_side is None and hint:
+                        hint_dist = district_from_text(hint)
+                        if hint_dist:
+                            known_side = district_side(hint_dist)
+                    return known_side != side
                 return False
             possible.sort(key=lambda row: (location_priority(row),
                                             (row.age_limit is not None) if child_age is not None else False,
@@ -584,10 +604,12 @@ class EventService:
             if row.timing_kind == "scheduled" and (clock_from and row.start_at.time() < clock_from or clock_to and row.start_at.time() > clock_to):
                 counts["excluded_clock"] += 1
                 continue
-            unknown_location = bool(district and not row.venue.district or venue and row.venue.name=='Unknown venue'
+            unknown_location = bool(district and not row.venue.district or side and not row.venue.side
+                                    or venue and row.venue.name=='Unknown venue'
                                     or bbox and (row.venue.lat is None or row.venue.lon is None))
             distance = haversine_m(lat,lon,row.venue.lat,row.venue.lon) if bbox and row.venue.lat is not None and row.venue.lon is not None else None
             outside_location = bool(district and row.venue.district and normalize_place(row.venue.district)!=normalize_place(district)
+                                    or side and row.venue.side and row.venue.side != side
                                     or venue and row.venue.name!='Unknown venue' and search_text(venue) not in search_text(row.venue.name)
                                     or distance is not None and distance>radius_m)
             if outside_location:
@@ -702,6 +724,7 @@ class EventService:
                               matched=len(selected), warnings=notes, next_queries=next_queries,
                               limits=[f"limit={safe_limit}", f"date_from={first}", f"date_to={last}", f"query_scope={query_scope}",
                                       f"match_mode={match_mode}", f"include_past={str(include_past).lower()}", f"exclude_child_only={str(exclude_child_only).lower()}",
+                                      *([f"side={side}"] if side else []),
                                       *([f"category_coverage={'observed' if category_observed else 'not_observed'}; scope=indexed date/query; classification is partial"] if category else []),
                                       "On-demand detail checks: at most 3 series per search.", "No cursor; narrow filters when truncated."])
         counts.update(excluded_age=excluded_age,excluded_sold_out=excluded_sold_out,

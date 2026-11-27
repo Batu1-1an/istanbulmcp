@@ -537,3 +537,89 @@ async def test_event_search_rejects_outside_istanbul_coordinates_immediately(tmp
         assert res["ok"] is False
         assert res["error"]["code"] == "validation_error"
         assert "Istanbul bounds" in res["summary"]
+
+
+def test_normalize_side_aliases_and_district_side():
+    from app.core.events import district_side, normalize_side
+
+    for alias in ("europe", "European", "avrupa", "Avrupa Yakası", "rumeli"):
+        assert normalize_side(alias) == "europe"
+    for alias in ("asia", "Asian", "asya", "Anadolu", "Anadolu Yakası"):
+        assert normalize_side(alias) == "asia"
+    assert normalize_side("mars") is None
+    assert district_side("Kadıköy") == "asia"
+    assert district_side("Beşiktaş") == "europe"
+
+
+@pytest.mark.asyncio
+async def test_events_search_and_plan_side_filter_and_contradiction_guards(tmp_path):
+    from app.core.events import EventVenue
+
+    db = tmp_path / "side-filter.sqlite3"
+    repo = EventRepository(db)
+    now = datetime.now(ISTANBUL)
+    day = (now + timedelta(days=3)).date()
+    eu_1 = EventObservation(
+        source="ticketmaster", source_id="eu-1", series_key="eu-1", title="Avrupa Konseri",
+        category="concert", start_at=datetime(day.year, day.month, day.day, 19, 0, tzinfo=ISTANBUL),
+        end_at=datetime(day.year, day.month, day.day, 20, 0, tzinfo=ISTANBUL),
+        venue=EventVenue(name="Zorlu PSM", district="Beşiktaş", side="europe"), observed_at=now,
+        offers=[EventOffer(name="Tam", price=300.0, currency="TRY", availability="in_stock")],
+    )
+    eu_2 = EventObservation(
+        source="ticketmaster", source_id="eu-2", series_key="eu-2", title="Avrupa Tiyatrosu",
+        category="theatre", start_at=datetime(day.year, day.month, day.day, 21, 0, tzinfo=ISTANBUL),
+        end_at=datetime(day.year, day.month, day.day, 22, 30, tzinfo=ISTANBUL),
+        venue=EventVenue(name="Atatürk Kültür Merkezi", district="Beyoğlu", side="europe"), observed_at=now,
+        offers=[EventOffer(name="Tam", price=350.0, currency="TRY", availability="in_stock")],
+    )
+    as_1 = EventObservation(
+        source="ticketmaster", source_id="as-1", series_key="as-1", title="Anadolu Standup",
+        category="standup", start_at=datetime(day.year, day.month, day.day, 20, 0, tzinfo=ISTANBUL),
+        end_at=datetime(day.year, day.month, day.day, 21, 30, tzinfo=ISTANBUL),
+        venue=EventVenue(name="Moda Sahnesi", district="Kadıköy", side="asia"), observed_at=now,
+        offers=[EventOffer(name="Tam", price=250.0, currency="TRY", availability="in_stock")],
+    )
+    unk = EventObservation(
+        source="ticketmaster", source_id="unk-1", series_key="unk-1", title="Bilinmeyen Yaka",
+        category="concert", start_at=datetime(day.year, day.month, day.day, 20, 30, tzinfo=ISTANBUL),
+        venue=EventVenue(name="Özel Mekan", district=None, side=None), observed_at=now,
+    )
+    repo.publish("ticketmaster", [eu_1, eu_2, as_1, unk], {"complete": True})
+    settings = Settings(database_path=db, events_enabled=True, ticketmaster_api_key="fixture-only")
+    service = EventService(settings, repository=repo)
+
+    res_eu = await service.search(date_from=day.isoformat(), date_to=day.isoformat(), side="Avrupa Yakası")
+    assert res_eu["ok"] is True
+    assert {c["title"] for c in res_eu["data"]} == {"Avrupa Konseri", "Avrupa Tiyatrosu"}
+    assert res_eu["result_info"]["filter_counts"]["excluded_outside_location"] == 1
+    assert res_eu["result_info"]["filter_counts"]["excluded_unknown_location"] == 1
+    assert "side=europe" in res_eu["limits"]
+
+    res_as = await service.search(date_from=day.isoformat(), date_to=day.isoformat(), side="anadolu")
+    assert res_as["ok"] is True
+    assert [c["title"] for c in res_as["data"]] == ["Anadolu Standup"]
+
+    bad_side = await service.search(date_from=day.isoformat(), side="middle")
+    assert bad_side["ok"] is False and bad_side["error"]["field"] == "side"
+
+    contradict = await service.search(date_from=day.isoformat(), district="Kadıköy", side="europe")
+    assert contradict["ok"] is False and contradict["error"]["field"] == "side"
+
+    compatible = await service.search(date_from=day.isoformat(), date_to=day.isoformat(), district="Kadıköy", side="asia")
+    assert compatible["ok"] is True and len(compatible["data"]) == 1
+
+    plan_svc = EventPlanService(settings, events=service)
+    plan_eu = await plan_svc.plan(date=day.isoformat(), side="avrupa", min_events=2, max_events=2)
+    assert plan_eu["ok"] is True
+    root = plan_eu["data"][0]
+    assert root["side"] == "europe"
+    assert root["fulfillment"]["status"] == "complete"
+    assert len(root["options"]) == 1
+    assert all(p["venue"]["side"] == "europe" for p in root["options"][0]["performances"])
+
+    plan_conflict = await plan_svc.plan(date=day.isoformat(), side="asia", event_ids=[as_1.event_id])
+    assert plan_conflict["ok"] is False and plan_conflict["error"]["field"] == "side"
+
+    plan_contradict = await plan_svc.plan(date=day.isoformat(), district="Beşiktaş", side="anadolu")
+    assert plan_contradict["ok"] is False and plan_contradict["error"]["field"] == "side"

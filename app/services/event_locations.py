@@ -1,14 +1,10 @@
 """Reuse only non-conflicting, explicitly verified facts for the same named venue."""
 from collections import defaultdict
-from app.core.events import search_text
+from app.core.events import ASIA_DISTRICTS, search_text
 from app.core.geo import haversine_m
 from app.services.places import normalize_place
 
 GENERIC = {"istanbul", "istanbul avrupa", "istanbul anadolu"}
-ASIA_DISTRICTS = frozenset({
-    "adalar", "atasehir", "beykoz", "cekmekoy", "kadikoy", "kartal", "maltepe",
-    "pendik", "sancaktepe", "sultanbeyli", "sile", "tuzla", "umraniye", "uskudar",
-})
 
 # Canonical Istanbul arts/culture venues whose provider feeds frequently omit district.
 # Matched by normalized venue name prefix/containment only when source district is missing.
