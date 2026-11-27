@@ -179,7 +179,7 @@ class MarmarayClient:
             "Authorization": self._authorization_header(),
         }
         if self._client is None:
-            async with ibb_http_client(timeout=self.timeout) as client:
+            async with ibb_http_client(timeout=min(self.timeout, 10.0)) as client:
                 response = await request_with_retries(
                     client,
                     "GET",
@@ -187,6 +187,7 @@ class MarmarayClient:
                     rate_limiter=self._rate_limiter,
                     headers=headers,
                     follow_redirects=True,
+                    attempts=2,
                 )
         else:
             response = await request_with_retries(
@@ -196,6 +197,7 @@ class MarmarayClient:
                 rate_limiter=self._rate_limiter,
                 headers=headers,
                 follow_redirects=True,
+                attempts=2,
             )
         _log_response("api", response)
         response.raise_for_status()
@@ -244,8 +246,9 @@ class MarmarayClient:
 
     async def _get_html(self) -> str:
         await self._rate_limiter.acquire("marmaray")
+        attempts = 1 if self.api_basic_token else 2
         if self._client is None:
-            async with ibb_http_client(timeout=self.timeout) as client:
+            async with ibb_http_client(timeout=min(self.timeout, 10.0)) as client:
                 response = await request_with_retries(
                     client,
                     "GET",
@@ -253,6 +256,7 @@ class MarmarayClient:
                     rate_limiter=self._rate_limiter,
                     headers=OFFICIAL_PAGE_HEADERS,
                     follow_redirects=True,
+                    attempts=attempts,
                 )
         else:
             response = await request_with_retries(
@@ -262,6 +266,7 @@ class MarmarayClient:
                 rate_limiter=self._rate_limiter,
                 headers=OFFICIAL_PAGE_HEADERS,
                 follow_redirects=True,
+                attempts=attempts,
             )
         _log_response("page", response)
         response.raise_for_status()

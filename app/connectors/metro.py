@@ -379,7 +379,7 @@ class MetroClient:
     async def _get_text_url(self, url: str) -> str:
         await self._rate_limiter.acquire("metro")
         if self._client is None:
-            async with ibb_http_client(timeout=self.timeout) as client:
+            async with ibb_http_client(timeout=min(self.timeout, 10.0)) as client:
                 response = await self._request_text(client, "GET", url)
         else:
             response = await self._request_text(self._client, "GET", url)
@@ -394,6 +394,7 @@ class MetroClient:
             method,
             url,
             rate_limiter=self._rate_limiter,
+            attempts=2,
         )
 
     @classmethod

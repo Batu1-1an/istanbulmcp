@@ -384,8 +384,7 @@ async def test_sehir_hatlari_client_falls_back_to_official_page_after_relay_fail
         ).cancellations()
 
     assert rows == []
-    assert calls[:3] == [(relay_url, "Bearer relay-token")] * 3
-    assert calls[3:] == [(official_url, None)]
+    assert calls == [(relay_url, "Bearer relay-token"), (official_url, None)]
 
 
 @pytest.mark.asyncio

@@ -85,6 +85,18 @@ ISTANBUL_DISTRICTS = [
     "ÜSKÜDAR",
     "ZEYTİNBURNU",
 ]
+COLLOQUIAL_NEIGHBORHOOD_HINTS: dict[tuple[str, str], str] = {
+    ("kadikoy", "moda"): "Caferağa",
+    ("kadikoy", "kalamis"): "Fenerbahçe",
+    ("kadikoy", "bagdat caddesi"): "Caddebostan, Suadiye, Fenerbahçe",
+    ("sisli", "nisantasi"): "Teşvikiye, Harbiye",
+    ("beyoglu", "karakoy"): "Kemankeş Karamustafapaşa",
+    ("beyoglu", "galata"): "Bereketzade, Müeyyetzade",
+    ("beyoglu", "taksim"): "Gümüşsuyu, Kocatepe",
+    ("fatih", "sultanahmet"): "Sultan Ahmet, Cankurtaran",
+    ("besiktas", "akaretler"): "Vişnezade",
+    ("bakirkoy", "florya"): "Şenlikköy, Basınköy",
+}
 NEIGHBORHOOD_SOURCES = [
     Source(
         name="IBB Open Data Portal - Social assistance households 2023",
@@ -244,9 +256,16 @@ class NeighborhoodService:
         )
         if not rows:
             examples = ", ".join(self._neighborhood_examples(district_entries))
+            colloquial = COLLOQUIAL_NEIGHBORHOOD_HINTS.get((canonical_district_key(source_district), neighborhood_key))
+            prefix = (
+                f"'{neighborhood_query}' is a colloquial area name in {source_district}; "
+                f"try official neighborhood(s): {colloquial}. "
+                if colloquial
+                else "Unknown neighborhood for this district. "
+            )
             return validation_error_envelope(
                 InputValidationError(
-                    f"Unknown neighborhood for this district. Known examples: {examples}",
+                    f"{prefix}Known examples: {examples}",
                     field="neighborhood",
                 ),
                 sources=NEIGHBORHOOD_SOURCES,

@@ -288,3 +288,8 @@ async def test_validation_hardening_turkish_lines_market_district_equipment_and_
     iski_bad = await IskiService(settings=s).active_faults(district="Ankara")
     assert iski_bad["ok"] is False and iski_bad["error"]["field"] == "district"
     assert DISTRICTS_BY_NORMALIZED[normalize_neighborhood_text(resolve_district("Eyüp"))] == "EYÜPSULTAN"
+
+    from app.services.neighborhood import COLLOQUIAL_NEIGHBORHOOD_HINTS
+
+    assert COLLOQUIAL_NEIGHBORHOOD_HINTS[("kadikoy", "moda")] == "Caferağa"
+    assert "Teşvikiye" in COLLOQUIAL_NEIGHBORHOOD_HINTS[("sisli", "nisantasi")]

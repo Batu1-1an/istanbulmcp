@@ -380,7 +380,8 @@ class SehirHatlariClient:
         for candidate in candidates:
             try:
                 headers = request_headers if candidate == request_url else OFFICIAL_PAGE_HEADERS
-                response = await self._request(candidate, headers)
+                has_fallback = candidate != candidates[-1]
+                response = await self._request(candidate, headers, attempts=1 if has_fallback else 2)
                 response.raise_for_status()
                 return response.text
             except Exception as exc:
@@ -519,7 +520,7 @@ class SehirHatlariClient:
             return _clean_text(match.group(1))
         return None
 
-    async def _request(self, url: str, headers: dict[str, str]) -> httpx.Response:
+    async def _request(self, url: str, headers: dict[str, str], *, attempts: int = 2) -> httpx.Response:
         if self._client is None:
             async with ibb_http_client(timeout=self.timeout) as client:
                 return await request_with_retries(
@@ -528,6 +529,7 @@ class SehirHatlariClient:
                     url,
                     rate_limiter=self._rate_limiter,
                     headers=headers,
+                    attempts=attempts,
                 )
         return await request_with_retries(
             self._client,
@@ -535,4 +537,5 @@ class SehirHatlariClient:
             url,
             rate_limiter=self._rate_limiter,
             headers=headers,
+            attempts=attempts,
         )
