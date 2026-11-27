@@ -248,6 +248,8 @@ class SocialFacilitiesService:
     def _public_row(self, row: dict[str, Any]) -> dict[str, Any]:
         data = {
             "name": row["name"],
+            "lat": row["latitude"],
+            "lon": row["longitude"],
             "latitude": row["latitude"],
             "longitude": row["longitude"],
             "distance_m": 0.0,
