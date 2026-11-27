@@ -55,6 +55,8 @@ class SocialFacilityRecord:
         # the MCP boundary.
         return {
             "name": self.name,
+            "lat": self.latitude,
+            "lon": self.longitude,
             "latitude": self.latitude,
             "longitude": self.longitude,
             "distance_m": self.distance_m,

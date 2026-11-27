@@ -645,3 +645,19 @@ async def test_events_search_and_plan_side_filter_and_contradiction_guards(tmp_p
     assert len(broot["options"]) == 2
     assert broot["unverified_budget"] == []
     assert broot.get("unverified_budget_omitted", 0) >= 1
+    assert len(plan_budget["warnings"]) == len(set(plan_budget["warnings"]))
+    assert len(plan_budget["limits"]) == len(set(plan_budget["limits"]))
+    perf0 = broot["options"][0]["performances"][0]
+    for absent in ("source_start_at", "admission_window", "distance_m", "distance_kind", "excluded_weekdays"):
+        assert absent not in perf0
+
+
+def test_response_quality_refinements_social_coords_and_museum_category():
+    from app.core.events import category_for
+    from app.services.social_facilities import SocialFacilityRecord
+
+    rec = SocialFacilityRecord(name="Paşalimanı", latitude=41.03, longitude=29.02).as_dict()
+    assert (rec["lat"], rec["lon"]) == (41.03, 29.02)
+    assert (rec["latitude"], rec["longitude"]) == (41.03, 29.02)
+    assert category_for("Pera Müzesi Gezisi") == "exhibition"
+    assert category_for("Modern Art Museum Tour") == "exhibition"

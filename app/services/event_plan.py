@@ -426,6 +426,11 @@ class EventPlanService:
                 gaq = price_block.get("general_admission_quote")
                 if isinstance(gaq, dict) and gaq.get("status") == "unknown":
                     out["price"] = {**price_block, "general_admission_quote": {"status": "unknown", "reason": gaq.get("reason")}}
+            for opt_key in ("source_start_at", "admission_window", "distance_m", "distance_kind"):
+                if out.get(opt_key) is None:
+                    out.pop(opt_key, None)
+            if out.get("excluded_weekdays") == []:
+                out.pop("excluded_weekdays", None)
             return out
         for group in (options, unverified, partials):
             for option in group:
@@ -519,6 +524,8 @@ class EventPlanService:
             envelope['warnings'].append('Plan prices use the requested party ticket baskets. Fees, eligibility, live group quantities and adjacent seats remain unverified unless explicitly observed; this is not a checkout confirmation.')
         if not options:
             envelope["warnings"].append("No verified plan was found; inspect unverified_budget and rejected sessions.")
+        envelope["warnings"] = list(dict.fromkeys(envelope["warnings"]))
+        envelope["limits"] = list(dict.fromkeys(envelope["limits"]))
         return envelope
 
 
