@@ -487,3 +487,43 @@ def test_remaining_verified_venues_and_single_person_budget_price_try():
     card = event_card(enriched[0], max_price=250.0)
     assert card["budget_status"] == "within"
     assert card["budget_price_try"] == 145.0
+
+
+@pytest.mark.asyncio
+async def test_event_detail_caps_large_multi_session_series_and_prioritizes_selected_perf(tmp_path):
+    from app.core.events import EventVenue
+
+    db = tmp_path / "detail-cap.sqlite3"
+    repo = EventRepository(db)
+    now = datetime.now(ISTANBUL)
+    rows = [
+        EventObservation(
+            source="ticketmaster", source_id=f"s-{i}", series_key="big-series",
+            title="50 Seanslı Gösteri", category="theatre",
+            start_at=now + timedelta(days=1, hours=i),
+            venue=EventVenue(name="Akatlar Kültür Merkezi", side="europe"),
+            observed_at=now,
+            offers=[EventOffer(name="Tam", price=300.0, currency="TRY", availability="in_stock")],
+        )
+        for i in range(30)
+    ]
+    repo.publish("ticketmaster", rows, {"complete": True})
+    service = EventService(Settings(database_path=db, events_enabled=True, ticketmaster_api_key="fixture-only"), repository=repo)
+
+    by_event = await service.detail(rows[0].event_id)
+    assert by_event["ok"] is True
+    d0 = by_event["data"][0]
+    assert d0["total_performances"] == 30
+    assert d0["performances_truncated"] is True
+    assert len(d0["performances"]) == 12
+    assert d0["performances"][0]["venue"]["district"] == "Beşiktaş"
+
+    target = rows[20]
+    by_perf = await service.detail(target.performance_id)
+    assert by_perf["ok"] is True
+    dp = by_perf["data"][0]
+    assert dp["total_performances"] == 30
+    assert dp["performances_truncated"] is True
+    assert len(dp["performances"]) == 6
+    assert dp["selected_performance_ids"] == [target.performance_id]
+    assert dp["performances"][0]["performance_id"] == target.performance_id

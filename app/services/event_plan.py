@@ -305,7 +305,10 @@ class EventPlanService:
         if event_ids is not None:
             cards = []
             for identifier in sorted(set(event_ids)):
-                detail = await self.events.detail(identifier)
+                if getattr(self.events.detail, "__func__", None) is EventService.detail:
+                    detail = await self.events.detail(identifier, _max_performances=None)
+                else:
+                    detail = await self.events.detail(identifier)
                 if not detail["ok"]:
                     return detail
                 value = detail["data"][0]
