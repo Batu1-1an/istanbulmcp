@@ -34,6 +34,9 @@ KNOWN_VENUE_DISTRICTS: tuple[tuple[str, str], ...] = (
     ("bkm mutfak", "Beşiktaş"),
     ("if performance hall besiktas", "Beşiktaş"),
     ("ataturk kultur merkezi", "Beyoğlu"),
+    ("akm cocuk sanat merkezi", "Beyoğlu"),
+    ("turk telekom opera salonu", "Beyoğlu"),
+    ("sanat performance", "Beyoğlu"),
     ("salon iksv", "Beyoğlu"),
     ("pera muzesi", "Beyoğlu"),
     ("istanbul modern", "Beyoğlu"),
@@ -54,16 +57,21 @@ KNOWN_VENUE_DISTRICTS: tuple[tuple[str, str], ...] = (
     ("toy istanbul", "Şişli"),
     ("jj pub kanyon", "Şişli"),
     ("babylon", "Şişli"),
+    ("craft tiyatro", "Şişli"),
+    ("mecidiyekoy buyuk sahnesi", "Şişli"),
     ("maximum uniq", "Sarıyer"),
     ("volkswagen arena", "Sarıyer"),
     ("sakip sabanci muzesi", "Sarıyer"),
     ("borusan contemporary", "Sarıyer"),
+    ("dasdas istinyepark", "Sarıyer"),
     ("dasdas", "Ataşehir"),
     ("watergarden performans", "Ataşehir"),
     ("duru tiyatro", "Ataşehir"),
     ("fisekhane", "Zeytinburnu"),
     ("sahne khas", "Fatih"),
     ("ali emiri efendi kultur merkezi", "Fatih"),
+    ("legends of istanbul", "Fatih"),
+    ("yucel art center", "Fatih"),
     ("bulent ecevit kultur merkezi", "Kartal"),
     ("hoca ahmet yesevi kultur merkezi", "Sultangazi"),
     ("idris gulluce kultur merkezi", "Tuzla"),
@@ -73,16 +81,26 @@ KNOWN_VENUE_DISTRICTS: tuple[tuple[str, str], ...] = (
     ("moi sahne", "Başakşehir"),
     ("tekel sahnesi", "Üsküdar"),
     ("baglarbasi kongre", "Üsküdar"),
+    ("akasya kultur sanat", "Üsküdar"),
+)
+
+# Venues with distinct Istanbul locations on opposite sides (never guessed without side).
+SIDE_DISAMBIGUATED_VENUE_DISTRICTS: tuple[tuple[str, dict[str, str]], ...] = (
+    ("yasar kemal kultur merkezi", {"asia": "Maltepe", "europe": "Sarıyer"}),
 )
 
 
-def _known_venue_district(venue_name: str) -> str | None:
+def _known_venue_district(venue_name: str, side: str | None = None) -> str | None:
     folded = search_text(venue_name)
     if not folded or folded == "unknown venue":
         return None
     for needle, district in KNOWN_VENUE_DISTRICTS:
         if needle == folded or f" {needle} " in f" {folded} ":
             return district
+    if side in {"asia", "europe"}:
+        for needle, by_side in SIDE_DISAMBIGUATED_VENUE_DISTRICTS:
+            if needle == folded or f" {needle} " in f" {folded} ":
+                return by_side.get(side)
     return None
 
 
@@ -115,7 +133,7 @@ def enrich_verified_venues(rows, usable_sources=None):
                         updated = updated.model_copy(update={"venue": a})
                         filled += len(changes)
         if a.district is None and a.name != "Unknown venue":
-            known_district = _known_venue_district(a.name)
+            known_district = _known_venue_district(a.name, a.side)
             if known_district is not None:
                 side = "asia" if normalize_place(known_district) in ASIA_DISTRICTS else "europe"
                 # Never contradict an explicitly published opposite side.

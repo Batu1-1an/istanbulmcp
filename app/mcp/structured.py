@@ -41,15 +41,13 @@ STRUCTURED_LEGACY_TOOL_NAMES = frozenset({
 })
 
 
-def _to_mcp_result(raw: dict[str, Any]) -> ResponseEnvelope | CallToolResult:
+def _to_mcp_result(raw: dict[str, Any]) -> CallToolResult:
     envelope = ResponseEnvelope.model_validate(raw)
-    if envelope.ok:
-        return envelope
     dumped = envelope.model_dump(mode="json")
     return CallToolResult(
         content=[TextContent(type="text", text=json.dumps(dumped, ensure_ascii=False, separators=(",", ":")))],
         structured_content=dumped,
-        is_error=True,
+        is_error=not envelope.ok,
     )
 
 

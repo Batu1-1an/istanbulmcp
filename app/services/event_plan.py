@@ -244,7 +244,7 @@ class EventPlanService:
     def __init__(self, settings, *, events=None):
         self.events = events or EventService(settings)
 
-    async def plan(self, *, date=None, start_time="18:00", end_time="23:59", interests=None,
+    async def plan(self, *, date=None, start_time=None, end_time="23:59", interests=None,
                    district=None, event_ids=None, max_price_try=None, min_gap_minutes=30, max_events=3, limit=None,
                    child_age=None, require_known_end=False, exclude_child_only=False,
                    min_events=1, required_categories=None, party_size=None, ticket_profile=None,
@@ -255,7 +255,13 @@ class EventPlanService:
             party=resolve_party(party_size,ticket_profile,party)
             if budget_includes_fees and party is None:party={'general':1}
             day = event_date(date, field="date")
-            start, end = event_clock(start_time, "start_time"), event_clock(end_time, "end_time")
+            end = event_clock(end_time, "end_time")
+            if start_time is None:
+                if end is not None and end <= time(18, 0):
+                    start_time = "00:00" if end <= time(9, 0) else "09:00"
+                else:
+                    start_time = "18:00"
+            start = event_clock(start_time, "start_time")
             if start is None or end is None or end <= start:
                 raise InputValidationError("Provide an increasing same-day HH:MM window", field="end_time")
             if isinstance(max_events, bool) or not isinstance(max_events, int) or not 1 <= max_events <= 3:
@@ -405,6 +411,25 @@ class EventPlanService:
             for option in group:
                 if isinstance(option.get("performances"), list):
                     option["performances"] = [_compact_perf(card) for card in option["performances"]]
+        def _compact_flexible(card: dict) -> dict:
+            venue = card.get("venue") or {}
+            price_block = card.get("price") if isinstance(card.get("price"), dict) else {}
+            about = card.get("about") if isinstance(card.get("about"), dict) else None
+            return {
+                "event_id": card.get("event_id"),
+                "performance_id": card.get("performance_id"),
+                "title": card.get("title"),
+                "category": card.get("category"),
+                "event_date": card.get("event_date"),
+                "start_at": None,
+                "timing_kind": card.get("timing_kind"),
+                "venue": {k: venue.get(k) for k in ("name", "district", "side") if venue.get(k) is not None},
+                "ticket_url": card.get("ticket_url"),
+                "ticket_links": card.get("ticket_links") or [],
+                "price": {k: price_block.get(k) for k in ("minimum_observed_try", "currency", "status") if k in price_block},
+                "about": {"status": about.get("status"), "text": about.get("text")} if about else None,
+            }
+        compact_flexible = [_compact_flexible(card) for card in flexible_entries[:10]]
         rejected_total = len(rejected)
         rejected_truncated = rejected_total > 25
         envelope["data"] = [{"date": day.isoformat(), "window": {"start": start_time, "end": end_time},
@@ -415,8 +440,8 @@ class EventPlanService:
                                             "requested_min_events":min_events,"requested_max_events":max_events,
                                             "required_categories":required_categories or [],"complete_option_count":len(options),
                                             "partial_option_count":len(partials)},"party":party,"budget_includes_fees":budget_includes_fees,
-                             "flexible_entries": flexible_entries[:20],
-                             "flexible_entry_count": len(flexible_entries), "flexible_entries_truncated": len(flexible_entries) > 20,
+                             "flexible_entries": compact_flexible,
+                             "flexible_entry_count": len(flexible_entries), "flexible_entries_truncated": len(flexible_entries) > 10,
                              "age_incompatible_combinations": diagnostics["age_incompatible_combinations"],
                              "candidate_count": candidate_count, "evaluated_candidates": min(candidate_count, 20),
                              "candidate_truncated": bool(truncated or candidate_count > 20),

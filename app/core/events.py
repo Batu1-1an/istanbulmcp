@@ -17,9 +17,12 @@ ISTANBUL = ZoneInfo("Europe/Istanbul")
 Category = Literal["concert", "theatre", "opera_ballet", "standup", "family", "festival", "exhibition", "workshop", "sport", "seminar", "other"]
 CATEGORIES = ("concert", "theatre", "opera_ballet", "standup", "family", "festival", "exhibition", "workshop", "sport", "seminar", "other")
 CATEGORY_ALIASES = {"tiyatro": "theatre", "theater": "theatre", "konser": "concert", "muzik": "concert",
-                    "opera": "opera_ballet", "bale": "opera_ballet", "opera bale": "opera_ballet",
-                    "stand up": "standup", "stand-up": "standup", "cocuk": "family", "aile": "family",
-                    "sergi": "exhibition", "atolye": "workshop", "spor": "sport", "seminer": "seminar",
+                    "music": "concert", "opera": "opera_ballet", "bale": "opera_ballet", "ballet": "opera_ballet",
+                    "opera bale": "opera_ballet", "dance": "opera_ballet", "dans": "opera_ballet",
+                    "stand up": "standup", "stand-up": "standup", "comedy": "standup", "komedi": "standup",
+                    "cocuk": "family", "aile": "family", "children": "family", "child": "family", "kids": "family",
+                    "sergi": "exhibition", "atolye": "workshop", "spor": "sport", "sports": "sport",
+                    "seminer": "seminar", "soylesi": "seminar", "talk": "seminar",
                     "muzikal": "theatre", "musical": "theatre"}
 
 

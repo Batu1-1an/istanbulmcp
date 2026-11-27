@@ -228,3 +228,49 @@ def test_legacy_clients_read_skill_resources_but_cannot_call_modern_skill_method
         # skills/list is gated to modern 2026-07-28 revision
         legacy_skills = _legacy(client, "skills/list").json()
         assert legacy_skills["error"]["code"] == -32601
+
+
+def test_skill_docs_match_live_tool_parameter_names(monkeypatch):
+    monkeypatch.setenv("EVENTS_ENABLED", "true")
+    with TestClient(create_app(), base_url="http://localhost") as client:
+        transit = _modern(client, "resources/read", {"uri": "skill://istanbul-transit-guide/SKILL.md"}).json()["result"]["contents"][0]["text"]
+        assert 'action="info"' in transit
+        assert 'view="info"' not in transit
+        assert "equipment_type" in transit
+
+        events = _modern(client, "resources/read", {"uri": "skill://istanbul-events-planner/SKILL.md"}).json()["result"]["contents"][0]["text"]
+        assert "`time_from`/`time_to`" in events
+        rules = _modern(client, "resources/read", {"uri": "skill://istanbul-events-planner/references/rules.md"}).json()["result"]["contents"][0]["text"]
+        assert "`price_quote`" in rules
+        assert "party_quote" not in rules
+        assert 'fulfillment.status="partial"' in rules
+
+
+def test_structured_tool_text_output_is_compact_utf8():
+    with TestClient(create_app(), base_url="http://localhost") as client:
+        res = client.post(
+            "/mcp/",
+            headers={
+                "accept": "application/json, text/event-stream",
+                "mcp-protocol-version": "2026-07-28",
+                "mcp-method": "tools/call",
+                "mcp-name": "istanbul_health",
+            },
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {
+                    "name": "istanbul_health",
+                    "arguments": {},
+                    "_meta": {
+                        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                        "io.modelcontextprotocol/clientCapabilities": {},
+                    },
+                },
+            },
+        ).json()["result"]
+        text = res["content"][0]["text"]
+        assert "\n" not in text
+        assert "\\u" not in text
+        assert res["structuredContent"] == __import__("json").loads(text)

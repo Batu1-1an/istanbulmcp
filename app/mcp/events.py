@@ -83,7 +83,7 @@ async def istanbul_event_detail(
 
 async def istanbul_events_plan(
     date: Annotated[str | None, Field(description="Plan date: YYYY-MM-DD, today or tomorrow (default today in Europe/Istanbul).")] = None,
-    start_time: Annotated[str, Field(description="Earliest plan window clock (HH:MM, default '18:00').")] = "18:00",
+    start_time: Annotated[str | None, Field(description="Earliest plan window clock (HH:MM, default '18:00', or '09:00' when only a daytime end_time <= 18:00 is given).")] = None,
     end_time: Annotated[str, Field(description="Latest plan window clock (HH:MM, default '23:59').")] = "23:59",
     interests: Annotated[list[str] | None, Field(description="Up to 5 allowed event categories.")] = None,
     district: Annotated[str | None, Field(description="District for candidate discovery when event_ids is omitted.")] = None,

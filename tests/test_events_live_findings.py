@@ -338,3 +338,116 @@ async def test_search_skips_on_demand_detail_checks_when_enough_fresh_verified_m
     assert res["ok"] and len(res["data"]) == 3
     assert res["result_info"]["filter_counts"]["detail_checks_attempted"] == 0
     assert called == []
+
+
+def test_new_venue_directory_entries_and_side_disambiguation():
+    from app.core.events import EventVenue
+    from app.services.event_locations import enrich_verified_venues
+
+    now = datetime.now(ISTANBUL)
+    start = now + timedelta(days=2)
+    rows = [
+        EventObservation(
+            source="biletinial", source_id="v1", series_key="v1", title="E1", category="theatre",
+            start_at=start, venue=EventVenue(name="DasDas İstinyePark Açık Sahne", side="europe"), observed_at=now,
+        ),
+        EventObservation(
+            source="biletinial", source_id="v2", series_key="v2", title="E2", category="theatre",
+            start_at=start, venue=EventVenue(name="DasDas", side="asia"), observed_at=now,
+        ),
+        EventObservation(
+            source="biletinial", source_id="v3", series_key="v3", title="E3", category="theatre",
+            start_at=start, venue=EventVenue(name="Craft Tiyatro", side="europe"), observed_at=now,
+        ),
+        EventObservation(
+            source="biletinial", source_id="v4", series_key="v4", title="E4", category="opera_ballet",
+            start_at=start, venue=EventVenue(name="Türk Telekom Opera Salonu - Alt Fuaye", side="europe"), observed_at=now,
+        ),
+        EventObservation(
+            source="biletinial", source_id="v5", series_key="v5", title="E5", category="family",
+            start_at=start, venue=EventVenue(name="AKM Çocuk Sanat Merkezi", side="europe"), observed_at=now,
+        ),
+        EventObservation(
+            source="biletinial", source_id="v6", series_key="v6", title="E6", category="exhibition",
+            start_at=start, venue=EventVenue(name="Akasya Kültür Sanat - 3. Kat", side="asia"), observed_at=now,
+        ),
+        EventObservation(
+            source="biletinial", source_id="v7", series_key="v7", title="E7", category="theatre",
+            start_at=start, venue=EventVenue(name="Yaşar Kemal Kültür Merkezi Tiyatro Salonu", side="asia"), observed_at=now,
+        ),
+        EventObservation(
+            source="biletinial", source_id="v8", series_key="v8", title="E8", category="theatre",
+            start_at=start, venue=EventVenue(name="Yaşar Kemal Kültür Merkezi", side="europe"), observed_at=now,
+        ),
+        EventObservation(
+            source="biletinial", source_id="v9", series_key="v9", title="E9", category="theatre",
+            start_at=start, venue=EventVenue(name="Yaşar Kemal Kültür Merkezi", side=None), observed_at=now,
+        ),
+    ]
+    enriched, _ = enrich_verified_venues(rows)
+    by_id = {r.source_id: r.venue.district for r in enriched}
+    assert by_id == {
+        "v1": "Sarıyer",
+        "v2": "Ataşehir",
+        "v3": "Şişli",
+        "v4": "Beyoğlu",
+        "v5": "Beyoğlu",
+        "v6": "Üsküdar",
+        "v7": "Maltepe",
+        "v8": "Sarıyer",
+        "v9": None,
+    }
+
+
+def test_english_and_turkish_category_aliases():
+    from app.core.events import normalize_category
+
+    assert normalize_category("children") == "family"
+    assert normalize_category("kids") == "family"
+    assert normalize_category("dance") == "opera_ballet"
+    assert normalize_category("dans") == "opera_ballet"
+    assert normalize_category("comedy") == "standup"
+    assert normalize_category("music") == "concert"
+
+
+@pytest.mark.asyncio
+async def test_plan_daytime_end_time_without_start_time_and_compact_flexible_entries(tmp_path):
+    from app.core.events import PublishedEventCondition
+
+    db = tmp_path / "plan-day.sqlite3"
+    repo = EventRepository(db)
+    now = datetime.now(ISTANBUL)
+    day = (now + timedelta(days=3)).date()
+    start = datetime(day.year, day.month, day.day, 14, 0, tzinfo=ISTANBUL)
+    scheduled = EventObservation(
+        source="ticketmaster", source_id="day-1", series_key="day-1", title="Gündüz Çocuk Oyunu",
+        category="family", start_at=start, end_at=start + timedelta(hours=1),
+        age_limit="4-10", venue=venue_from("Moda Sahnesi", "Kadıköy"), observed_at=now,
+        offers=[EventOffer(name="Genel Giriş", price=150.0, currency="TRY", availability="in_stock")],
+    )
+    flex = EventObservation(
+        source="ticketmaster", source_id="flex-1", series_key="flex-1", title="Esnek Sergi",
+        category="family", start_at=datetime(day.year, day.month, day.day, 0, 0, tzinfo=ISTANBUL),
+        timing_kind="flexible_entry", age_limit="4-10",
+        venue=venue_from("Akasya Kültür Sanat - 3. Kat", "Üsküdar"), observed_at=now,
+        conditions=[
+            PublishedEventCondition(
+                topic="other", statement=f"Uzun kural {i} geçerlidir.",
+                source_url="https://biletinial.com/tr-tr/sergi/flex-1", source_section="rules",
+            )
+            for i in range(10)
+        ],
+    )
+    repo.publish("ticketmaster", [scheduled, flex], {"complete": True})
+    settings = Settings(database_path=db, events_enabled=True, ticketmaster_api_key="fixture-only")
+    service = EventService(settings, repository=repo)
+    plan = await EventPlanService(settings, events=service).plan(
+        date=day.isoformat(), end_time="18:00", child_age=6, require_known_end=True, max_events=1,
+    )
+    assert plan["ok"] is True
+    root = plan["data"][0]
+    assert root["window"] == {"start": "09:00", "end": "18:00"}
+    assert len(root["options"]) == 1
+    assert len(root["flexible_entries"]) == 1
+    assert root["flexible_entries"][0]["start_at"] is None
+    assert "participation_conditions" not in root["flexible_entries"][0]
